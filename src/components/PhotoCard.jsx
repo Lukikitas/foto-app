@@ -23,7 +23,7 @@ function PhotoBadges({ photo }) {
   );
 }
 
-export default function PhotoCard({ photo, onUpdated, onDeleted }) {
+export default function PhotoCard({ photo, variant = 'grid', onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     orderDigits: photo.name,
@@ -104,7 +104,13 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
 
   return (
     <>
-      <article className={`photo-card${photo.has_complaint ? ' photo-card--complaint' : ''}`}>
+      <article
+        className={[
+          'photo-card',
+          variant === 'list' ? 'photo-card--list' : '',
+          photo.has_complaint ? 'photo-card--complaint' : '',
+        ].filter(Boolean).join(' ')}
+      >
         <div className="photo-card__image-wrap">
           <PhotoBadges photo={photo} />
           <button

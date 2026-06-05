@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { formatDateTime } from '../lib/date';
-import { isValidOrderDigits, uploadPhoto } from '../lib/photos';
+import { isValidOrderDigits } from '../lib/photos';
 import { getLastTakenBy, saveLastTakenBy } from '../lib/storage';
+import { enqueue } from '../lib/uploadQueue';
 
 const EMPTY_META = {
   notes: '',
@@ -10,33 +10,32 @@ const EMPTY_META = {
   is_refutado: false,
 };
 
-export default function PhotoUploader({ onUploaded }) {
+export default function PhotoUploader() {
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [orderDigits, setOrderDigits] = useState('');
   const [meta, setMeta] = useState(EMPTY_META);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [queuedMessage, setQueuedMessage] = useState(null);
 
   function updateMeta(key, value) {
     setMeta((prev) => ({ ...prev, [key]: value }));
     setError(null);
-    setSuccess(null);
+    setQueuedMessage(null);
   }
 
   function handleDigitsChange(e) {
     const value = e.target.value.replace(/\D/g, '').slice(0, 4);
     setOrderDigits(value);
     setError(null);
-    setSuccess(null);
+    setQueuedMessage(null);
   }
 
   function handleFileChange(e) {
     const selected = e.target.files?.[0];
     setError(null);
-    setSuccess(null);
+    setQueuedMessage(null);
 
     if (!selected) return;
 
@@ -52,21 +51,24 @@ export default function PhotoUploader({ onUploaded }) {
     setFile(selected);
   }
 
-  function resetForm() {
+  function resetForm(keepTakenBy = true) {
     setPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
     setFile(null);
     setOrderDigits('');
-    setMeta({ ...EMPTY_META, taken_by: getLastTakenBy() });
+    setMeta({
+      ...EMPTY_META,
+      taken_by: keepTakenBy ? getLastTakenBy() : '',
+    });
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  async function handleSubmit(e) {
+  function handleSubmit(e) {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
+    setQueuedMessage(null);
 
     if (!file) {
       setError('Sacá la foto del pedido primero.');
@@ -78,27 +80,26 @@ export default function PhotoUploader({ onUploaded }) {
       return;
     }
 
-    setLoading(true);
-    try {
-      saveLastTakenBy(meta.taken_by);
-      const photo = await uploadPhoto(file, orderDigits, meta);
-      const when = formatDateTime(photo.created_at);
-      setSuccess(`Pedido #${photo.name} guardado el ${when}.`);
-      resetForm();
-      onUploaded?.(photo);
-    } catch (err) {
-      setError(err.message || 'Error al subir la foto.');
-    } finally {
-      setLoading(false);
-    }
+    saveLastTakenBy(meta.taken_by);
+
+    enqueue({
+      file,
+      orderDigits,
+      meta: { ...meta },
+    });
+
+    setQueuedMessage(
+      `Pedido #${orderDigits} en cola. Podés seguir sacando fotos.`
+    );
+    resetForm();
   }
 
   return (
     <section className="uploader">
       <h2>Foto del pedido</h2>
       <p className="uploader__hint">
-        Sacá la foto, ingresá los 4 dígitos y agregá anotaciones si hace falta.
-        La fecha y hora se guardan automáticamente.
+        Sacá la foto, completá los datos y guardá. La subida sigue en segundo
+        plano para que puedas continuar con el siguiente pedido.
       </p>
 
       <form className="uploader__form" onSubmit={handleSubmit}>
@@ -109,7 +110,6 @@ export default function PhotoUploader({ onUploaded }) {
             accept="image/*"
             capture="environment"
             onChange={handleFileChange}
-            disabled={loading}
             className="uploader__file-input"
           />
           <span className="uploader__file-btn">
@@ -132,7 +132,6 @@ export default function PhotoUploader({ onUploaded }) {
             value={orderDigits}
             onChange={handleDigitsChange}
             placeholder="Ej: 4821"
-            disabled={loading}
             maxLength={4}
             className="uploader__digits-input"
             autoComplete="off"
@@ -146,7 +145,6 @@ export default function PhotoUploader({ onUploaded }) {
             value={meta.taken_by}
             onChange={(e) => updateMeta('taken_by', e.target.value)}
             placeholder="Ej: Lucas, María…"
-            disabled={loading}
             maxLength={80}
             autoComplete="name"
           />
@@ -158,7 +156,6 @@ export default function PhotoUploader({ onUploaded }) {
             value={meta.notes}
             onChange={(e) => updateMeta('notes', e.target.value)}
             placeholder="Detalles del pedido, observaciones, etc."
-            disabled={loading}
             maxLength={500}
             rows={3}
             className="uploader__textarea"
@@ -171,7 +168,6 @@ export default function PhotoUploader({ onUploaded }) {
               type="checkbox"
               checked={meta.has_complaint}
               onChange={(e) => updateMeta('has_complaint', e.target.checked)}
-              disabled={loading}
             />
             <span>Pedido con reclamo</span>
           </label>
@@ -181,7 +177,6 @@ export default function PhotoUploader({ onUploaded }) {
               type="checkbox"
               checked={meta.is_refutado}
               onChange={(e) => updateMeta('is_refutado', e.target.checked)}
-              disabled={loading}
             />
             <span>Es un refutado</span>
           </label>
@@ -192,18 +187,18 @@ export default function PhotoUploader({ onUploaded }) {
             {error}
           </p>
         )}
-        {success && (
+        {queuedMessage && (
           <p className="message message--success" role="status">
-            {success}
+            {queuedMessage}
           </p>
         )}
 
         <button
           type="submit"
-          className="btn btn--primary"
-          disabled={loading || !file || orderDigits.length !== 4}
+          className="btn btn--primary btn--large"
+          disabled={!file || orderDigits.length !== 4}
         >
-          {loading ? 'Guardando…' : 'Guardar foto del pedido'}
+          Guardar y seguir
         </button>
       </form>
     </section>

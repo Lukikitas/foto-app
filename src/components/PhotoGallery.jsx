@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
 import { fetchPhotos } from '../lib/photos';
+import { getGalleryViewMode, saveGalleryViewMode } from '../lib/storage';
 import PhotoCard from './PhotoCard';
 
 const EMPTY_FILTERS = {
@@ -19,6 +20,7 @@ export default function PhotoGallery({ refreshKey }) {
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const [viewMode, setViewMode] = useState(getGalleryViewMode);
 
   const loadPhotos = useCallback(async (nextFilters = appliedFilters) => {
     setLoading(true);
@@ -87,6 +89,11 @@ export default function PhotoGallery({ refreshKey }) {
     setPhotos((prev) => prev.filter((p) => p.id !== id));
   }
 
+  function changeViewMode(mode) {
+    setViewMode(mode);
+    saveGalleryViewMode(mode);
+  }
+
   return (
     <section className="gallery">
       <div className="gallery__header">
@@ -99,14 +106,34 @@ export default function PhotoGallery({ refreshKey }) {
             </p>
           )}
         </div>
-        <button
-          type="button"
-          className="btn btn--ghost btn--small"
-          onClick={() => loadPhotos(appliedFilters)}
-          disabled={loading}
-        >
-          Actualizar
-        </button>
+        <div className="gallery__header-actions">
+          <div className="gallery__view-toggle" role="group" aria-label="Modo de vista">
+            <button
+              type="button"
+              className={`gallery__view-btn${viewMode === 'grid' ? ' gallery__view-btn--active' : ''}`}
+              onClick={() => changeViewMode('grid')}
+              aria-pressed={viewMode === 'grid'}
+            >
+              Fotos
+            </button>
+            <button
+              type="button"
+              className={`gallery__view-btn${viewMode === 'list' ? ' gallery__view-btn--active' : ''}`}
+              onClick={() => changeViewMode('list')}
+              aria-pressed={viewMode === 'list'}
+            >
+              Listado
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => loadPhotos(appliedFilters)}
+            disabled={loading}
+          >
+            Actualizar
+          </button>
+        </div>
       </div>
 
       <form className="gallery__filters" onSubmit={handleSearchSubmit}>
@@ -250,11 +277,12 @@ export default function PhotoGallery({ refreshKey }) {
       )}
 
       {photos.length > 0 && (
-        <div className="gallery__grid">
+        <div className={viewMode === 'grid' ? 'gallery__grid' : 'gallery__list'}>
           {photos.map((photo) => (
             <PhotoCard
               key={photo.id}
               photo={photo}
+              variant={viewMode}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
             />
