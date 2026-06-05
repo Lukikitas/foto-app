@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import InstallPrompt from './components/InstallPrompt';
 import PhotoGallery from './components/PhotoGallery';
 import PhotoUploader from './components/PhotoUploader';
 import './App.css';
@@ -12,9 +13,10 @@ export default function App() {
 
   return (
     <div className="app">
+      <InstallPrompt />
       <header className="app__header">
         <h1>Fotos de Delivery</h1>
-        <p>Registrá cada pedido con foto, número y fecha/hora</p>
+        <p>Registrá cada pedido con foto, número, anotaciones y fecha/hora</p>
       </header>
 
       <main className="app__main">

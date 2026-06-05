@@ -7,6 +7,10 @@ const EMPTY_FILTERS = {
   search: '',
   dateFrom: '',
   dateTo: '',
+  hasComplaint: false,
+  isRefutado: false,
+  takenBy: '',
+  notes: '',
 };
 
 export default function PhotoGallery({ refreshKey }) {
@@ -57,15 +61,21 @@ export default function PhotoGallery({ refreshKey }) {
     loadPhotos(next);
   }
 
+  function applyComplaints() {
+    const next = { ...filters, hasComplaint: true, isRefutado: false };
+    setFilters(next);
+    loadPhotos(next);
+  }
+
   function clearFilters() {
     setFilters(EMPTY_FILTERS);
     loadPhotos(EMPTY_FILTERS);
   }
 
-  const hasActiveFilters =
-    appliedFilters.search ||
-    appliedFilters.dateFrom ||
-    appliedFilters.dateTo;
+  const hasActiveFilters = Object.entries(appliedFilters).some(([key, value]) => {
+    if (typeof value === 'boolean') return value;
+    return Boolean(value);
+  });
 
   function handleUpdated(updated) {
     setPhotos((prev) =>
@@ -130,6 +140,46 @@ export default function PhotoGallery({ refreshKey }) {
           />
         </label>
 
+        <label className="gallery__filter-field">
+          Quién sacó la foto
+          <input
+            type="search"
+            value={filters.takenBy}
+            onChange={(e) => updateFilter('takenBy', e.target.value)}
+            placeholder="Ej: Lucas"
+          />
+        </label>
+
+        <label className="gallery__filter-field gallery__filter-field--wide">
+          Buscar en anotaciones
+          <input
+            type="search"
+            value={filters.notes}
+            onChange={(e) => updateFilter('notes', e.target.value)}
+            placeholder="Palabra clave en las notas"
+          />
+        </label>
+
+        <div className="gallery__filter-checks">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={filters.hasComplaint}
+              onChange={(e) => updateFilter('hasComplaint', e.target.checked)}
+            />
+            <span>Solo reclamos</span>
+          </label>
+
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={filters.isRefutado}
+              onChange={(e) => updateFilter('isRefutado', e.target.checked)}
+            />
+            <span>Solo refutados</span>
+          </label>
+        </div>
+
         <div className="gallery__filter-actions">
           <button type="submit" className="btn btn--primary btn--small">
             Buscar
@@ -147,6 +197,13 @@ export default function PhotoGallery({ refreshKey }) {
             onClick={applyYesterday}
           >
             Ayer
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={applyComplaints}
+          >
+            Reclamos
           </button>
           {hasActiveFilters && (
             <button

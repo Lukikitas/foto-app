@@ -8,7 +8,24 @@ export function isValidOrderDigits(value) {
   return ORDER_DIGITS.test(value);
 }
 
-export async function fetchPhotos({ search, dateFrom, dateTo } = {}) {
+export function normalizePhotoMeta(meta = {}) {
+  return {
+    notes: meta.notes?.trim() || null,
+    has_complaint: Boolean(meta.has_complaint),
+    taken_by: meta.taken_by?.trim() || null,
+    is_refutado: Boolean(meta.is_refutado),
+  };
+}
+
+export async function fetchPhotos({
+  search,
+  dateFrom,
+  dateTo,
+  hasComplaint,
+  isRefutado,
+  takenBy,
+  notes,
+} = {}) {
   let query = supabase
     .from('photos')
     .select('*')
@@ -27,17 +44,36 @@ export async function fetchPhotos({ search, dateFrom, dateTo } = {}) {
     query = query.lte('created_at', endOfDay(dateTo));
   }
 
+  if (hasComplaint) {
+    query = query.eq('has_complaint', true);
+  }
+
+  if (isRefutado) {
+    query = query.eq('is_refutado', true);
+  }
+
+  const trimmedTakenBy = takenBy?.trim();
+  if (trimmedTakenBy) {
+    query = query.ilike('taken_by', `%${trimmedTakenBy}%`);
+  }
+
+  const trimmedNotes = notes?.trim();
+  if (trimmedNotes) {
+    query = query.ilike('notes', `%${trimmedNotes}%`);
+  }
+
   const { data, error } = await query;
 
   if (error) throw error;
   return data ?? [];
 }
 
-export async function uploadPhoto(file, orderDigits) {
+export async function uploadPhoto(file, orderDigits, meta = {}) {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('El pedido debe tener exactamente 4 dígitos.');
   }
 
+  const photoMeta = normalizePhotoMeta(meta);
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const filePath = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
@@ -57,6 +93,7 @@ export async function uploadPhoto(file, orderDigits) {
       name: orderDigits,
       file_path: filePath,
       public_url: urlData.publicUrl,
+      ...photoMeta,
     })
     .select()
     .single();
@@ -69,14 +106,19 @@ export async function uploadPhoto(file, orderDigits) {
   return data;
 }
 
-export async function renamePhoto(id, orderDigits) {
+export async function updatePhoto(id, orderDigits, meta = {}) {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('El pedido debe tener exactamente 4 dígitos.');
   }
 
+  const photoMeta = normalizePhotoMeta(meta);
+
   const { data, error } = await supabase
     .from('photos')
-    .update({ name: orderDigits })
+    .update({
+      name: orderDigits,
+      ...photoMeta,
+    })
     .eq('id', id)
     .select()
     .single();

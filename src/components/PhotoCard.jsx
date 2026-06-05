@@ -5,12 +5,33 @@ import {
   downloadPhoto,
   getPhotoTimestamp,
   isValidOrderDigits,
-  renamePhoto,
+  updatePhoto,
 } from '../lib/photos';
 
+function PhotoBadges({ photo }) {
+  if (!photo.has_complaint && !photo.is_refutado) return null;
+
+  return (
+    <div className="photo-card__badges">
+      {photo.has_complaint && (
+        <span className="badge badge--complaint">Reclamo</span>
+      )}
+      {photo.is_refutado && (
+        <span className="badge badge--refutado">Refutado</span>
+      )}
+    </div>
+  );
+}
+
 export default function PhotoCard({ photo, onUpdated, onDeleted }) {
-  const [renaming, setRenaming] = useState(false);
-  const [newDigits, setNewDigits] = useState(photo.name);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    orderDigits: photo.name,
+    notes: photo.notes || '',
+    has_complaint: Boolean(photo.has_complaint),
+    taken_by: photo.taken_by || '',
+    is_refutado: Boolean(photo.is_refutado),
+  });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,13 +39,17 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
 
   const timestamp = getPhotoTimestamp(photo);
 
-  function handleDigitsChange(e) {
-    setNewDigits(e.target.value.replace(/\D/g, '').slice(0, 4));
+  function updateForm(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleRename(e) {
+  function handleDigitsChange(e) {
+    updateForm('orderDigits', e.target.value.replace(/\D/g, '').slice(0, 4));
+  }
+
+  async function handleEdit(e) {
     e.preventDefault();
-    if (!isValidOrderDigits(newDigits)) {
+    if (!isValidOrderDigits(form.orderDigits)) {
       setError('El pedido debe tener exactamente 4 dígitos.');
       return;
     }
@@ -32,11 +57,11 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
     setLoading(true);
     setError(null);
     try {
-      const updated = await renamePhoto(photo.id, newDigits);
+      const updated = await updatePhoto(photo.id, form.orderDigits, form);
       onUpdated?.(updated);
-      setRenaming(false);
+      setEditing(false);
     } catch (err) {
-      setError(err.message || 'Error al corregir el número.');
+      setError(err.message || 'Error al guardar los cambios.');
     } finally {
       setLoading(false);
     }
@@ -65,43 +90,102 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
     }
   }
 
+  function startEditing() {
+    setForm({
+      orderDigits: photo.name,
+      notes: photo.notes || '',
+      has_complaint: Boolean(photo.has_complaint),
+      taken_by: photo.taken_by || '',
+      is_refutado: Boolean(photo.is_refutado),
+    });
+    setEditing(true);
+    setError(null);
+  }
+
   return (
     <>
-      <article className="photo-card">
-        <button
-          type="button"
-          className="photo-card__image-btn"
-          onClick={() => setLightbox(true)}
-          aria-label={`Ver pedido ${photo.name} en grande`}
-        >
-          <img
-            src={photo.public_url}
-            alt={`Pedido ${photo.name}`}
-            className="photo-card__image"
-            loading="lazy"
-          />
-        </button>
+      <article className={`photo-card${photo.has_complaint ? ' photo-card--complaint' : ''}`}>
+        <div className="photo-card__image-wrap">
+          <PhotoBadges photo={photo} />
+          <button
+            type="button"
+            className="photo-card__image-btn"
+            onClick={() => setLightbox(true)}
+            aria-label={`Ver pedido ${photo.name} en grande`}
+          >
+            <img
+              src={photo.public_url}
+              alt={`Pedido ${photo.name}`}
+              className="photo-card__image"
+              loading="lazy"
+            />
+          </button>
+        </div>
 
         <div className="photo-card__body">
-          {renaming ? (
-            <form className="photo-card__rename-form" onSubmit={handleRename}>
+          {editing ? (
+            <form className="photo-card__edit-form" onSubmit={handleEdit}>
               <label>
-                Corregir dígitos
+                Dígitos del pedido
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={newDigits}
+                  value={form.orderDigits}
                   onChange={handleDigitsChange}
                   disabled={loading}
                   maxLength={4}
                   autoFocus
                 />
               </label>
+
+              <label>
+                Quién sacó la foto
+                <input
+                  type="text"
+                  value={form.taken_by}
+                  onChange={(e) => updateForm('taken_by', e.target.value)}
+                  disabled={loading}
+                  maxLength={80}
+                />
+              </label>
+
+              <label>
+                Anotaciones
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => updateForm('notes', e.target.value)}
+                  disabled={loading}
+                  maxLength={500}
+                  rows={2}
+                />
+              </label>
+
+              <div className="photo-card__edit-flags">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={form.has_complaint}
+                    onChange={(e) => updateForm('has_complaint', e.target.checked)}
+                    disabled={loading}
+                  />
+                  <span>Pedido con reclamo</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={form.is_refutado}
+                    onChange={(e) => updateForm('is_refutado', e.target.checked)}
+                    disabled={loading}
+                  />
+                  <span>Es un refutado</span>
+                </label>
+              </div>
+
               <div className="photo-card__rename-actions">
                 <button
                   type="submit"
                   className="btn btn--small btn--primary"
-                  disabled={loading || newDigits.length !== 4}
+                  disabled={loading || form.orderDigits.length !== 4}
                 >
                   Guardar
                 </button>
@@ -109,8 +193,7 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
                   type="button"
                   className="btn btn--small btn--ghost"
                   onClick={() => {
-                    setRenaming(false);
-                    setNewDigits(photo.name);
+                    setEditing(false);
                     setError(null);
                   }}
                   disabled={loading}
@@ -125,6 +208,14 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
               <time className="photo-card__date" dateTime={timestamp}>
                 {formatDateTime(timestamp)}
               </time>
+              {photo.taken_by && (
+                <p className="photo-card__meta">
+                  Sacó: <strong>{photo.taken_by}</strong>
+                </p>
+              )}
+              {photo.notes && (
+                <p className="photo-card__notes">{photo.notes}</p>
+              )}
             </>
           )}
 
@@ -156,7 +247,7 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : !editing && (
             <div className="photo-card__actions">
               <button
                 type="button"
@@ -175,14 +266,10 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
               <button
                 type="button"
                 className="btn btn--small btn--ghost"
-                onClick={() => {
-                  setRenaming(true);
-                  setNewDigits(photo.name);
-                  setError(null);
-                }}
+                onClick={startEditing}
                 disabled={loading}
               >
-                Corregir
+                Editar
               </button>
               <button
                 type="button"
@@ -220,6 +307,15 @@ export default function PhotoCard({ photo, onUpdated, onDeleted }) {
             <img src={photo.public_url} alt={`Pedido ${photo.name}`} />
             <p className="lightbox__caption">Pedido #{photo.name}</p>
             <p className="lightbox__date">{formatDateTime(timestamp)}</p>
+            {photo.taken_by && (
+              <p className="lightbox__meta">Sacó: {photo.taken_by}</p>
+            )}
+            {photo.notes && (
+              <p className="lightbox__notes">{photo.notes}</p>
+            )}
+            <div className="lightbox__badges">
+              <PhotoBadges photo={photo} />
+            </div>
             <div className="lightbox__actions">
               <button
                 type="button"
