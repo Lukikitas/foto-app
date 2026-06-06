@@ -82,6 +82,55 @@ export async function fetchPhotos({
   return data ?? [];
 }
 
+function includesInsensitive(value, query) {
+  if (!query) return true;
+  if (!value) return false;
+  return value.toLowerCase().includes(query.toLowerCase());
+}
+
+export function photoMatchesFilters(
+  photo,
+  {
+    search,
+    dateFrom,
+    dateTo,
+    hasComplaint,
+    isRefutado,
+    takenBy,
+    notes,
+  } = {},
+) {
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch && !includesInsensitive(photo.name, trimmedSearch)) {
+    return false;
+  }
+
+  if (dateFrom) {
+    const start = new Date(startOfDay(dateFrom));
+    if (new Date(photo.created_at) < start) return false;
+  }
+
+  if (dateTo) {
+    const end = new Date(endOfDay(dateTo));
+    if (new Date(photo.created_at) > end) return false;
+  }
+
+  if (hasComplaint && !photo.has_complaint) return false;
+  if (isRefutado && !photo.is_refutado) return false;
+
+  const trimmedTakenBy = takenBy?.trim();
+  if (trimmedTakenBy && !includesInsensitive(photo.taken_by, trimmedTakenBy)) {
+    return false;
+  }
+
+  const trimmedNotes = notes?.trim();
+  if (trimmedNotes && !includesInsensitive(photo.notes, trimmedNotes)) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function uploadPhoto(file, orderDigits, meta = {}) {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('El pedido debe tener exactamente 4 dígitos.');

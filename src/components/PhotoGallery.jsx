@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
-import { fetchPhotos } from '../lib/photos';
+import { fetchPhotos, photoMatchesFilters } from '../lib/photos';
+import { supabase } from '../lib/supabase';
 import {
   getFiltersOpen,
   getGalleryViewMode,
@@ -21,6 +22,12 @@ const EMPTY_FILTERS = {
   notes: '',
 };
 
+function sortPhotosNewestFirst(items) {
+  return [...items].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+}
+
 export default function PhotoGallery({ refreshKey }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,29 +37,167 @@ export default function PhotoGallery({ refreshKey }) {
   const [viewMode, setViewMode] = useState(getGalleryViewMode);
   const [filtersOpen, setFiltersOpen] = useState(getFiltersOpen);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [liveStatus, setLiveStatus] = useState('connecting');
+  const [liveNotice, setLiveNotice] = useState(null);
+  const [pendingNewPhoto, setPendingNewPhoto] = useState(null);
 
-  const loadPhotos = useCallback(async (nextFilters = appliedFilters) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchPhotos(nextFilters);
-      setPhotos(data);
-      setAppliedFilters(nextFilters);
-      setSelectedIds(new Set());
-    } catch (err) {
-      setError(err.message || 'No se pudieron cargar las fotos.');
-    } finally {
-      setLoading(false);
+  const appliedFiltersRef = useRef(appliedFilters);
+  const selectedIdsRef = useRef(selectedIds);
+  const noticeTimerRef = useRef(null);
+
+  appliedFiltersRef.current = appliedFilters;
+  selectedIdsRef.current = selectedIds;
+
+  const clearLiveNoticeTimer = useCallback(() => {
+    if (noticeTimerRef.current) {
+      window.clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = null;
     }
-  }, [appliedFilters]);
+  }, []);
+
+  const showLiveNotice = useCallback(
+    (message) => {
+      clearLiveNoticeTimer();
+      setLiveNotice(message);
+      noticeTimerRef.current = window.setTimeout(() => {
+        setLiveNotice(null);
+        noticeTimerRef.current = null;
+      }, 3500);
+    },
+    [clearLiveNoticeTimer],
+  );
+
+  const prependPhoto = useCallback((photo) => {
+    setPhotos((prev) => {
+      if (prev.some((item) => item.id === photo.id)) return prev;
+      return sortPhotosNewestFirst([photo, ...prev]);
+    });
+  }, []);
+
+  const loadPhotos = useCallback(
+    async (nextFilters = appliedFilters, { silent = false, keepSelection = false } = {}) => {
+      if (!silent) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const data = await fetchPhotos(nextFilters);
+        setPhotos(data);
+        setAppliedFilters(nextFilters);
+        if (!keepSelection) {
+          setSelectedIds(new Set());
+        }
+      } catch (err) {
+        setError(err.message || 'No se pudieron cargar las fotos.');
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [appliedFilters],
+  );
+
+  const handleRealtimeInsert = useCallback(
+    (photo) => {
+      if (!photoMatchesFilters(photo, appliedFiltersRef.current)) return;
+
+      if (selectedIdsRef.current.size > 0) {
+        setPendingNewPhoto(photo);
+        return;
+      }
+
+      prependPhoto(photo);
+      showLiveNotice(`Nueva foto — Pedido #${photo.name}`);
+    },
+    [prependPhoto, showLiveNotice],
+  );
+
+  const handleRealtimeUpdate = useCallback((photo) => {
+    const matches = photoMatchesFilters(photo, appliedFiltersRef.current);
+
+    setPhotos((prev) => {
+      const exists = prev.some((item) => item.id === photo.id);
+
+      if (!matches) {
+        return exists ? prev.filter((item) => item.id !== photo.id) : prev;
+      }
+
+      if (!exists) {
+        return sortPhotosNewestFirst([photo, ...prev]);
+      }
+
+      return sortPhotosNewestFirst(
+        prev.map((item) => (item.id === photo.id ? photo : item)),
+      );
+    });
+  }, []);
+
+  const handleRealtimeDelete = useCallback((id) => {
+    setPhotos((prev) => prev.filter((photo) => photo.id !== id));
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setPendingNewPhoto((prev) => (prev?.id === id ? null : prev));
+  }, []);
 
   useEffect(() => {
     loadPhotos(appliedFilters);
   }, [refreshKey]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('photos-gallery')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'photos' },
+        (payload) => handleRealtimeInsert(payload.new),
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'photos' },
+        (payload) => handleRealtimeUpdate(payload.new),
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'photos' },
+        (payload) => handleRealtimeDelete(payload.old.id),
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setLiveStatus('live');
+          return;
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setLiveStatus('offline');
+          return;
+        }
+        setLiveStatus('connecting');
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [handleRealtimeDelete, handleRealtimeInsert, handleRealtimeUpdate]);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') return;
+      loadPhotos(appliedFiltersRef.current, { silent: true, keepSelection: true });
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [loadPhotos]);
+
+  useEffect(() => () => clearLiveNoticeTimer(), [clearLiveNoticeTimer]);
+
   const selectedPhotos = useMemo(
     () => photos.filter((photo) => selectedIds.has(photo.id)),
-    [photos, selectedIds]
+    [photos, selectedIds],
   );
 
   const allSelected = photos.length > 0 && selectedIds.size === photos.length;
@@ -115,7 +260,7 @@ export default function PhotoGallery({ refreshKey }) {
     }
 
     setPhotos((prev) =>
-      prev.map((photo) => (photo.id === updated.id ? updated : photo))
+      prev.map((photo) => (photo.id === updated.id ? updated : photo)),
     );
   }
 
@@ -163,8 +308,39 @@ export default function PhotoGallery({ refreshKey }) {
     setSelectedIds(new Set());
   }
 
+  function acceptPendingPhoto() {
+    if (!pendingNewPhoto) return;
+    prependPhoto(pendingNewPhoto);
+    showLiveNotice(`Nueva foto — Pedido #${pendingNewPhoto.name}`);
+    setPendingNewPhoto(null);
+  }
+
   return (
     <section className={`gallery${hasSelection ? ' gallery--selecting' : ''}`}>
+      {pendingNewPhoto && (
+        <div className="gallery__pending" role="status">
+          <span>Nueva foto — Pedido #{pendingNewPhoto.name}</span>
+          <div className="gallery__pending-actions">
+            <button type="button" className="btn btn--small btn--primary" onClick={acceptPendingPhoto}>
+              Ver
+            </button>
+            <button
+              type="button"
+              className="btn btn--small btn--ghost"
+              onClick={() => setPendingNewPhoto(null)}
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {liveNotice && !pendingNewPhoto && (
+        <div className="gallery__live-notice" role="status">
+          {liveNotice}
+        </div>
+      )}
+
       <div className="gallery__toolbar">
         <div className="gallery__toolbar-left">
           {!loading && (
@@ -174,6 +350,17 @@ export default function PhotoGallery({ refreshKey }) {
               {hasSelection ? ` · ${selectedIds.size} sel.` : ''}
             </p>
           )}
+          <span
+            className={`gallery__live${liveStatus === 'live' ? ' gallery__live--on' : ''}`}
+            title={
+              liveStatus === 'live'
+                ? 'La galería se actualiza sola'
+                : 'Reconectando actualización en vivo'
+            }
+          >
+            <span className="gallery__live-dot" aria-hidden="true" />
+            {liveStatus === 'live' ? 'En vivo' : 'Sync…'}
+          </span>
           <button
             type="button"
             className={`gallery__filters-toggle${filtersOpen ? ' gallery__filters-toggle--open' : ''}`}
@@ -211,6 +398,7 @@ export default function PhotoGallery({ refreshKey }) {
             className="btn btn--ghost btn--small"
             onClick={() => loadPhotos(appliedFilters)}
             disabled={loading}
+            aria-label="Actualizar galería"
           >
             ↻
           </button>
