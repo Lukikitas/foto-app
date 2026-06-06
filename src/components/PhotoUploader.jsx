@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { compressImage } from '../lib/compressImage';
 import { isValidOrderDigits } from '../lib/photos';
 import { getLastTakenBy, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
@@ -18,6 +19,7 @@ export default function PhotoUploader() {
   const [meta, setMeta] = useState(EMPTY_META);
   const [error, setError] = useState(null);
   const [queuedMessage, setQueuedMessage] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   function updateMeta(key, value) {
     setMeta((prev) => ({ ...prev, [key]: value }));
@@ -70,7 +72,7 @@ export default function PhotoUploader() {
     clearInputs();
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
     setQueuedMessage(null);
@@ -85,18 +87,26 @@ export default function PhotoUploader() {
       return;
     }
 
-    saveLastTakenBy(meta.taken_by);
+    setSaving(true);
+    try {
+      const compressedFile = await compressImage(file);
+      saveLastTakenBy(meta.taken_by);
 
-    enqueue({
-      file,
-      orderDigits,
-      meta: { ...meta, has_complaint: false },
-    });
+      enqueue({
+        file: compressedFile,
+        orderDigits,
+        meta: { ...meta, has_complaint: false },
+      });
 
-    setQueuedMessage(
-      `Pedido #${orderDigits} en cola. Podés seguir sacando fotos.`
-    );
-    resetForm();
+      setQueuedMessage(
+        `Pedido #${orderDigits} en cola. Podés seguir sacando fotos.`
+      );
+      resetForm();
+    } catch (err) {
+      setError(err.message || 'Error al preparar la foto.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -206,9 +216,9 @@ export default function PhotoUploader() {
         <button
           type="submit"
           className="btn btn--primary btn--large"
-          disabled={!file || orderDigits.length !== 4}
+          disabled={saving || !file || orderDigits.length !== 4}
         >
-          Guardar y seguir
+          {saving ? 'Optimizando…' : 'Guardar y seguir'}
         </button>
       </form>
     </section>

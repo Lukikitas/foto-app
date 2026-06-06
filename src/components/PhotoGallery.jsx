@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
 import { fetchPhotos } from '../lib/photos';
-import { getGalleryViewMode, saveGalleryViewMode } from '../lib/storage';
+import {
+  getFiltersOpen,
+  getGalleryViewMode,
+  saveFiltersOpen,
+  saveGalleryViewMode,
+} from '../lib/storage';
 import BulkActionBar from './BulkActionBar';
 import PhotoCard from './PhotoCard';
 import PhotoListRow from './PhotoListRow';
@@ -23,6 +28,7 @@ export default function PhotoGallery({ refreshKey }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [viewMode, setViewMode] = useState(getGalleryViewMode);
+  const [filtersOpen, setFiltersOpen] = useState(getFiltersOpen);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   const loadPhotos = useCallback(async (nextFilters = appliedFilters) => {
@@ -51,6 +57,11 @@ export default function PhotoGallery({ refreshKey }) {
 
   const allSelected = photos.length > 0 && selectedIds.size === photos.length;
   const hasSelection = selectedIds.size > 0;
+
+  const hasActiveFilters = Object.entries(appliedFilters).some(([, value]) => {
+    if (typeof value === 'boolean') return value;
+    return Boolean(value);
+  });
 
   function updateFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -86,10 +97,13 @@ export default function PhotoGallery({ refreshKey }) {
     loadPhotos(EMPTY_FILTERS);
   }
 
-  const hasActiveFilters = Object.entries(appliedFilters).some(([, value]) => {
-    if (typeof value === 'boolean') return value;
-    return Boolean(value);
-  });
+  function toggleFilters() {
+    setFiltersOpen((prev) => {
+      const next = !prev;
+      saveFiltersOpen(next);
+      return next;
+    });
+  }
 
   function handleUpdated(updated) {
     if (Array.isArray(updated)) {
@@ -151,14 +165,28 @@ export default function PhotoGallery({ refreshKey }) {
 
   return (
     <section className={`gallery${hasSelection ? ' gallery--selecting' : ''}`}>
-      <div className="gallery__header">
-        {!loading && (
-          <p className="gallery__count">
-            {photos.length} foto{photos.length !== 1 ? 's' : ''}
-            {hasActiveFilters ? ' · filtradas' : ''}
-            {hasSelection ? ` · ${selectedIds.size} seleccionada${selectedIds.size !== 1 ? 's' : ''}` : ''}
-          </p>
-        )}
+      <div className="gallery__toolbar">
+        <div className="gallery__toolbar-left">
+          {!loading && (
+            <p className="gallery__count">
+              {photos.length} foto{photos.length !== 1 ? 's' : ''}
+              {hasActiveFilters ? ' · filtradas' : ''}
+              {hasSelection ? ` · ${selectedIds.size} sel.` : ''}
+            </p>
+          )}
+          <button
+            type="button"
+            className={`gallery__filters-toggle${filtersOpen ? ' gallery__filters-toggle--open' : ''}`}
+            onClick={toggleFilters}
+            aria-expanded={filtersOpen}
+          >
+            Filtros
+            {hasActiveFilters && (
+              <span className="gallery__filters-badge" aria-label="Filtros activos" />
+            )}
+          </button>
+        </div>
+
         <div className="gallery__header-actions">
           <div className="gallery__view-toggle" role="group" aria-label="Modo de vista">
             <button
@@ -184,102 +212,107 @@ export default function PhotoGallery({ refreshKey }) {
             onClick={() => loadPhotos(appliedFilters)}
             disabled={loading}
           >
-            Actualizar
+            ↻
           </button>
         </div>
       </div>
 
-      <form className="gallery__filters" onSubmit={handleSearchSubmit}>
-        <label className="gallery__filter-field gallery__filter-field--search">
-          Buscar pedido
-          <input
-            type="search"
-            value={filters.search}
-            onChange={(e) => updateFilter('search', e.target.value.replace(/\D/g, '').slice(0, 4))}
-            placeholder="4 dígitos, ej: 4821"
-            inputMode="numeric"
-            maxLength={4}
-          />
-        </label>
+      {filtersOpen && (
+        <form className="gallery__filters gallery__filters--compact" onSubmit={handleSearchSubmit}>
+          <div className="gallery__filters-row gallery__filters-row--main">
+            <label className="gallery__filter-field gallery__filter-field--compact">
+              <span>Pedido</span>
+              <input
+                type="search"
+                value={filters.search}
+                onChange={(e) => updateFilter('search', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="4821"
+                inputMode="numeric"
+                maxLength={4}
+              />
+            </label>
 
-        <label className="gallery__filter-field">
-          Desde
-          <input
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => updateFilter('dateFrom', e.target.value)}
-          />
-        </label>
+            <label className="gallery__filter-field gallery__filter-field--compact">
+              <span>Autor</span>
+              <input
+                type="search"
+                value={filters.takenBy}
+                onChange={(e) => updateFilter('takenBy', e.target.value)}
+                placeholder="Lucas"
+              />
+            </label>
 
-        <label className="gallery__filter-field">
-          Hasta
-          <input
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => updateFilter('dateTo', e.target.value)}
-          />
-        </label>
+            <label className="gallery__filter-field gallery__filter-field--compact">
+              <span>Notas</span>
+              <input
+                type="search"
+                value={filters.notes}
+                onChange={(e) => updateFilter('notes', e.target.value)}
+                placeholder="Palabra clave"
+              />
+            </label>
+          </div>
 
-        <label className="gallery__filter-field">
-          Quién sacó la foto
-          <input
-            type="search"
-            value={filters.takenBy}
-            onChange={(e) => updateFilter('takenBy', e.target.value)}
-            placeholder="Ej: Lucas"
-          />
-        </label>
+          <div className="gallery__filters-row gallery__filters-row--secondary">
+            <label className="gallery__filter-field gallery__filter-field--compact">
+              <span>Desde</span>
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => updateFilter('dateFrom', e.target.value)}
+              />
+            </label>
 
-        <label className="gallery__filter-field gallery__filter-field--wide">
-          Buscar en anotaciones
-          <input
-            type="search"
-            value={filters.notes}
-            onChange={(e) => updateFilter('notes', e.target.value)}
-            placeholder="Palabra clave en las notas"
-          />
-        </label>
+            <label className="gallery__filter-field gallery__filter-field--compact">
+              <span>Hasta</span>
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => updateFilter('dateTo', e.target.value)}
+              />
+            </label>
 
-        <div className="gallery__filter-checks">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={filters.hasComplaint}
-              onChange={(e) => updateFilter('hasComplaint', e.target.checked)}
-            />
-            <span>Solo reclamos</span>
-          </label>
+            <div className="gallery__filter-checks gallery__filter-checks--inline">
+              <label className="checkbox-label checkbox-label--compact">
+                <input
+                  type="checkbox"
+                  checked={filters.hasComplaint}
+                  onChange={(e) => updateFilter('hasComplaint', e.target.checked)}
+                />
+                <span>Reclamos</span>
+              </label>
+              <label className="checkbox-label checkbox-label--compact">
+                <input
+                  type="checkbox"
+                  checked={filters.isRefutado}
+                  onChange={(e) => updateFilter('isRefutado', e.target.checked)}
+                />
+                <span>Refutados</span>
+              </label>
+            </div>
+          </div>
 
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={filters.isRefutado}
-              onChange={(e) => updateFilter('isRefutado', e.target.checked)}
-            />
-            <span>Solo refutados</span>
-          </label>
-        </div>
-
-        <div className="gallery__filter-actions">
-          <button type="submit" className="btn btn--primary btn--small">
-            Buscar
-          </button>
-          <button type="button" className="btn btn--ghost btn--small" onClick={applyToday}>
-            Hoy
-          </button>
-          <button type="button" className="btn btn--ghost btn--small" onClick={applyYesterday}>
-            Ayer
-          </button>
-          <button type="button" className="btn btn--ghost btn--small" onClick={applyComplaints}>
-            Reclamos
-          </button>
-          {hasActiveFilters && (
-            <button type="button" className="btn btn--ghost btn--small" onClick={clearFilters}>
-              Limpiar
+          <div className="gallery__filter-actions gallery__filter-actions--compact">
+            <button type="submit" className="btn btn--primary btn--small">
+              Buscar
             </button>
-          )}
-        </div>
-      </form>
+            <button type="button" className="btn btn--ghost btn--small" onClick={applyToday}>
+              Hoy
+            </button>
+            <button type="button" className="btn btn--ghost btn--small" onClick={applyYesterday}>
+              Ayer
+            </button>
+            <button type="button" className="btn btn--ghost btn--small" onClick={applyComplaints}>
+              Reclamos
+            </button>
+            {hasActiveFilters && (
+              <button type="button" className="btn btn--ghost btn--small" onClick={clearFilters}>
+                Limpiar
+              </button>
+            )}
+          </div>
+        </form>
+      )}
 
       {loading && photos.length === 0 && (
         <div className="gallery__state">
@@ -316,7 +349,7 @@ export default function PhotoGallery({ refreshKey }) {
             checked={allSelected}
             onChange={toggleSelectAll}
           />
-          <span>Seleccionar todas ({photos.length})</span>
+          <span>Todas ({photos.length})</span>
         </label>
       )}
 
