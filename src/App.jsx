@@ -31,20 +31,14 @@ export default function App() {
     <div className="app">
       <InstallPrompt />
 
-      <header className="app__header">
-        <div className="app__brand">
-          <span className="app__brand-mark" aria-hidden="true" />
-          <span className="app__brand-text">KFC Delivery</span>
-        </div>
-        <button
-          type="button"
-          className="app__theme-toggle"
-          onClick={handleThemeToggle}
-          aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-        >
-          {theme === 'dark' ? '☀' : '☾'}
-        </button>
-      </header>
+      <button
+        type="button"
+        className="app__theme-toggle"
+        onClick={handleThemeToggle}
+        aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      >
+        {theme === 'dark' ? '☀' : '☾'}
+      </button>
 
       <main className="app__main">
         {tab === TABS.capture && (

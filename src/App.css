@@ -4,57 +4,21 @@
   min-height: 100svh;
 }
 
-.app__header {
-  position: sticky;
-  top: 0;
-  z-index: 90;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.55rem 0.85rem;
-  background: var(--surface);
-  border-bottom: 3px solid var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-
-.app__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-width: 0;
-}
-
-.app__brand-mark {
-  width: 0.55rem;
-  height: 1.35rem;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: 0.55rem 0 0 var(--kfc-black, #202124);
-}
-
-:root[data-theme='dark'] .app__brand-mark {
-  box-shadow: 0.55rem 0 0 #f3f4f6;
-}
-
-.app__brand-text {
-  font-size: 0.92rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-h);
-}
-
 .app__theme-toggle {
+  position: fixed;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 90;
   width: 2.15rem;
   height: 2.15rem;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text-h);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
   transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
 
