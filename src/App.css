@@ -1052,6 +1052,7 @@
 }
 
 .lightbox__stage {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -1059,9 +1060,27 @@
   justify-content: center;
   padding: 0.75rem 0.75rem 0;
   overflow: hidden;
+  touch-action: none;
 }
 
-.lightbox__stage img {
+.lightbox__stage--zoomed {
+  cursor: grab;
+}
+
+.lightbox__stage--dragging {
+  cursor: grabbing;
+}
+
+.lightbox__zoom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  will-change: transform;
+}
+
+.lightbox__zoom img {
   display: block;
   max-width: 100%;
   max-height: 100%;
@@ -1069,6 +1088,78 @@
   height: auto;
   object-fit: contain;
   border-radius: var(--radius);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.lightbox__zoom-controls {
+  position: absolute;
+  top: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.lightbox__zoom-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lightbox__zoom-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.lightbox__zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lightbox__zoom-btn--label {
+  min-width: 3.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lightbox__zoom-hint {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  margin: 0;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lightbox__zoom-controls,
+  .lightbox__zoom-hint {
+    display: flex;
+  }
+
+  .lightbox__zoom-hint {
+    display: block;
+  }
 }
 
 .lightbox__footer {
