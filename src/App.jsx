@@ -25,15 +25,6 @@ export default function App() {
     <div className="app">
       <InstallPrompt />
 
-      <header className="app__header">
-        <h1>Fotos de Delivery</h1>
-        <p>
-          {tab === TABS.capture
-            ? 'Sacá fotos de pedidos sin esperar la subida'
-            : 'Buscá y revisá los pedidos registrados'}
-        </p>
-      </header>
-
       <main className="app__main">
         {tab === TABS.capture && (
           <>
@@ -51,7 +42,6 @@ export default function App() {
           onClick={() => setTab(TABS.capture)}
           aria-current={tab === TABS.capture ? 'page' : undefined}
         >
-          <span className="app-nav__icon" aria-hidden="true">📷</span>
           Sacar foto
         </button>
         <button
@@ -60,7 +50,6 @@ export default function App() {
           onClick={() => setTab(TABS.gallery)}
           aria-current={tab === TABS.gallery ? 'page' : undefined}
         >
-          <span className="app-nav__icon" aria-hidden="true">🖼️</span>
           Galería
         </button>
       </nav>

@@ -10,13 +10,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Fotos de Delivery',
+        name: 'Delivery La Plata',
         short_name: 'Delivery',
         description: 'Registro de fotos de pedidos de delivery',
-        theme_color: '#6366f1',
-        background_color: '#f4f5f7',
+        theme_color: '#111111',
+        background_color: '#111111',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/foto-app/',
@@ -31,6 +31,12 @@ export default defineConfig({
             src: 'pwa-512.png',
             sizes: '512x512',
             type: 'image/png',
+          },
+          {
+            src: 'pwa-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
           },
           {
             src: 'pwa-512.png',

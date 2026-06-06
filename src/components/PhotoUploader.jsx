@@ -101,12 +101,6 @@ export default function PhotoUploader() {
 
   return (
     <section className="uploader">
-      <h2>Foto del pedido</h2>
-      <p className="uploader__hint">
-        Sacá una foto nueva o elegí una de la galería. La subida sigue en
-        segundo plano para que puedas continuar con el siguiente pedido.
-      </p>
-
       <form className="uploader__form" onSubmit={handleSubmit}>
         <div className="uploader__file-actions">
           <label className="uploader__file-label">

@@ -156,15 +156,12 @@ export default function PhotoGallery({ refreshKey }) {
   return (
     <section className={`gallery${selectionMode ? ' gallery--selecting' : ''}`}>
       <div className="gallery__header">
-        <div>
-          <h2>Pedidos registrados</h2>
-          {!loading && (
-            <p className="gallery__count">
-              {photos.length} foto{photos.length !== 1 ? 's' : ''}
-              {hasActiveFilters ? ' con los filtros aplicados' : ''}
-            </p>
-          )}
-        </div>
+        {!loading && (
+          <p className="gallery__count">
+            {photos.length} foto{photos.length !== 1 ? 's' : ''}
+            {hasActiveFilters ? ' · filtradas' : ''}
+          </p>
+        )}
         <div className="gallery__header-actions">
           <div className="gallery__view-toggle" role="group" aria-label="Modo de vista">
             <button
