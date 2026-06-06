@@ -23,7 +23,6 @@ export default function PhotoGallery({ refreshKey }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [viewMode, setViewMode] = useState(getGalleryViewMode);
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   const loadPhotos = useCallback(async (nextFilters = appliedFilters) => {
@@ -51,6 +50,7 @@ export default function PhotoGallery({ refreshKey }) {
   );
 
   const allSelected = photos.length > 0 && selectedIds.size === photos.length;
+  const hasSelection = selectedIds.size > 0;
 
   function updateFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -118,17 +118,6 @@ export default function PhotoGallery({ refreshKey }) {
   function changeViewMode(mode) {
     setViewMode(mode);
     saveGalleryViewMode(mode);
-    if (mode === 'grid') {
-      setSelectionMode(false);
-      setSelectedIds(new Set());
-    }
-  }
-
-  function toggleSelectionMode() {
-    setSelectionMode((prev) => {
-      if (prev) setSelectedIds(new Set());
-      return !prev;
-    });
   }
 
   function toggleSelect(id) {
@@ -136,6 +125,14 @@ export default function PhotoGallery({ refreshKey }) {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  function selectPhoto(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
       return next;
     });
   }
@@ -150,16 +147,16 @@ export default function PhotoGallery({ refreshKey }) {
 
   function clearSelection() {
     setSelectedIds(new Set());
-    setSelectionMode(false);
   }
 
   return (
-    <section className={`gallery${selectionMode ? ' gallery--selecting' : ''}`}>
+    <section className={`gallery${hasSelection ? ' gallery--selecting' : ''}`}>
       <div className="gallery__header">
         {!loading && (
           <p className="gallery__count">
             {photos.length} foto{photos.length !== 1 ? 's' : ''}
             {hasActiveFilters ? ' · filtradas' : ''}
+            {hasSelection ? ` · ${selectedIds.size} seleccionada${selectedIds.size !== 1 ? 's' : ''}` : ''}
           </p>
         )}
         <div className="gallery__header-actions">
@@ -181,15 +178,6 @@ export default function PhotoGallery({ refreshKey }) {
               Listado
             </button>
           </div>
-          {viewMode === 'list' && photos.length > 0 && (
-            <button
-              type="button"
-              className={`btn btn--ghost btn--small${selectionMode ? ' btn--active' : ''}`}
-              onClick={toggleSelectionMode}
-            >
-              {selectionMode ? 'Listo' : 'Seleccionar'}
-            </button>
-          )}
           <button
             type="button"
             className="btn btn--ghost btn--small"
@@ -321,7 +309,7 @@ export default function PhotoGallery({ refreshKey }) {
         </div>
       )}
 
-      {photos.length > 0 && viewMode === 'list' && selectionMode && (
+      {photos.length > 0 && (
         <label className="gallery__select-all checkbox-label">
           <input
             type="checkbox"
@@ -339,7 +327,9 @@ export default function PhotoGallery({ refreshKey }) {
                 <PhotoCard
                   key={photo.id}
                   photo={photo}
-                  variant="grid"
+                  selected={selectedIds.has(photo.id)}
+                  onToggleSelect={toggleSelect}
+                  onLongPressSelect={selectPhoto}
                   onUpdated={handleUpdated}
                   onDeleted={handleDeleted}
                 />
@@ -349,8 +339,8 @@ export default function PhotoGallery({ refreshKey }) {
                   key={photo.id}
                   photo={photo}
                   selected={selectedIds.has(photo.id)}
-                  selectionMode={selectionMode}
                   onToggleSelect={toggleSelect}
+                  onLongPressSelect={selectPhoto}
                   onUpdated={handleUpdated}
                   onDeleted={handleDeleted}
                 />

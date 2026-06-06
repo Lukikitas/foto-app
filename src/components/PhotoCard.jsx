@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
+import { useLongPress } from '../hooks/useLongPress';
 import {
   deletePhoto,
   downloadPhoto,
@@ -23,7 +24,14 @@ function PhotoBadges({ photo }) {
   );
 }
 
-export default function PhotoCard({ photo, variant = 'grid', onUpdated, onDeleted }) {
+export default function PhotoCard({
+  photo,
+  selected = false,
+  onToggleSelect,
+  onLongPressSelect,
+  onUpdated,
+  onDeleted,
+}) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     orderDigits: photo.name,
@@ -38,6 +46,8 @@ export default function PhotoCard({ photo, variant = 'grid', onUpdated, onDelete
   const [error, setError] = useState(null);
 
   const timestamp = getPhotoTimestamp(photo);
+  const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
+  const imagePress = longPress.bind(() => setLightbox(true));
 
   function updateForm(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -107,17 +117,25 @@ export default function PhotoCard({ photo, variant = 'grid', onUpdated, onDelete
       <article
         className={[
           'photo-card',
-          variant === 'list' ? 'photo-card--list' : '',
+          selected ? 'photo-card--selected' : '',
           photo.has_complaint ? 'photo-card--complaint' : '',
         ].filter(Boolean).join(' ')}
       >
         <div className="photo-card__image-wrap">
+          <label className="photo-card__select">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect?.(photo.id)}
+              aria-label={`Seleccionar pedido ${photo.name}`}
+            />
+          </label>
           <PhotoBadges photo={photo} />
           <button
             type="button"
             className="photo-card__image-btn"
-            onClick={() => setLightbox(true)}
             aria-label={`Ver pedido ${photo.name} en grande`}
+            {...imagePress}
           >
             <img
               src={photo.public_url}

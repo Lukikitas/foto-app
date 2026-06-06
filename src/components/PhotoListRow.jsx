@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
+import { useLongPress } from '../hooks/useLongPress';
 import {
   deletePhoto,
   downloadPhoto,
@@ -20,15 +21,16 @@ function RowBadges({ photo }) {
 export default function PhotoListRow({
   photo,
   selected,
-  selectionMode,
   onToggleSelect,
-  onUpdated,
+  onLongPressSelect,
   onDeleted,
 }) {
   const [lightbox, setLightbox] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const timestamp = getPhotoTimestamp(photo);
+
+  const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
 
   async function handleDownload() {
     setError(null);
@@ -54,34 +56,26 @@ export default function PhotoListRow({
     }
   }
 
-  function handleRowClick() {
-    if (selectionMode) {
-      onToggleSelect(photo.id);
-      return;
-    }
-    setLightbox(true);
-  }
+  const pressHandlers = longPress.bind(() => setLightbox(true));
 
   return (
     <>
       <div
         className={`photo-row${selected ? ' photo-row--selected' : ''}${photo.has_complaint ? ' photo-row--complaint' : ''}`}
       >
-        {selectionMode && (
-          <input
-            type="checkbox"
-            className="photo-row__checkbox"
-            checked={selected}
-            onChange={() => onToggleSelect(photo.id)}
-            aria-label={`Seleccionar pedido ${photo.name}`}
-          />
-        )}
+        <input
+          type="checkbox"
+          className="photo-row__checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(photo.id)}
+          aria-label={`Seleccionar pedido ${photo.name}`}
+        />
 
         <button
           type="button"
           className="photo-row__thumb"
-          onClick={handleRowClick}
           aria-label={`Ver pedido ${photo.name}`}
+          {...pressHandlers}
         >
           <img src={photo.public_url} alt="" loading="lazy" />
         </button>
@@ -89,7 +83,7 @@ export default function PhotoListRow({
         <button
           type="button"
           className="photo-row__main"
-          onClick={handleRowClick}
+          {...pressHandlers}
         >
           <span className="photo-row__digits">#{photo.name}</span>
           <span className="photo-row__date">{formatDateTime(timestamp)}</span>
@@ -102,33 +96,31 @@ export default function PhotoListRow({
           <RowBadges photo={photo} />
         </button>
 
-        {!selectionMode && (
-          <div className="photo-row__actions">
-            <button
-              type="button"
-              className="btn btn--icon"
-              onClick={handleDownload}
-              title="Descargar"
-              disabled={loading}
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              className="btn btn--icon btn--icon-danger"
-              onClick={handleDelete}
-              title="Borrar"
-              disabled={loading}
-            >
-              ×
-            </button>
-          </div>
-        )}
+        <div className="photo-row__actions">
+          <button
+            type="button"
+            className="btn btn--icon"
+            onClick={handleDownload}
+            title="Descargar"
+            disabled={loading}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className="btn btn--icon btn--icon-danger"
+            onClick={handleDelete}
+            title="Borrar"
+            disabled={loading}
+          >
+            ×
+          </button>
+        </div>
 
         {error && <span className="photo-row__error">{error}</span>}
       </div>
 
-      {lightbox && !selectionMode && (
+      {lightbox && (
         <div
           className="lightbox"
           role="dialog"
