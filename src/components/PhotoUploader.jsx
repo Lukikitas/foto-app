@@ -5,13 +5,13 @@ import { enqueue } from '../lib/uploadQueue';
 
 const EMPTY_META = {
   notes: '',
-  has_complaint: false,
   taken_by: getLastTakenBy(),
   is_refutado: false,
 };
 
 export default function PhotoUploader() {
-  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [orderDigits, setOrderDigits] = useState('');
@@ -51,7 +51,12 @@ export default function PhotoUploader() {
     setFile(selected);
   }
 
-  function resetForm(keepTakenBy = true) {
+  function clearInputs() {
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+  }
+
+  function resetForm() {
     setPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -60,9 +65,9 @@ export default function PhotoUploader() {
     setOrderDigits('');
     setMeta({
       ...EMPTY_META,
-      taken_by: keepTakenBy ? getLastTakenBy() : '',
+      taken_by: getLastTakenBy(),
     });
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    clearInputs();
   }
 
   function handleSubmit(e) {
@@ -71,7 +76,7 @@ export default function PhotoUploader() {
     setQueuedMessage(null);
 
     if (!file) {
-      setError('Sacá la foto del pedido primero.');
+      setError('Sacá o elegí una foto primero.');
       return;
     }
 
@@ -85,7 +90,7 @@ export default function PhotoUploader() {
     enqueue({
       file,
       orderDigits,
-      meta: { ...meta },
+      meta: { ...meta, has_complaint: false },
     });
 
     setQueuedMessage(
@@ -98,28 +103,48 @@ export default function PhotoUploader() {
     <section className="uploader">
       <h2>Foto del pedido</h2>
       <p className="uploader__hint">
-        Sacá la foto, completá los datos y guardá. La subida sigue en segundo
-        plano para que puedas continuar con el siguiente pedido.
+        Sacá una foto nueva o elegí una de la galería. La subida sigue en
+        segundo plano para que puedas continuar con el siguiente pedido.
       </p>
 
       <form className="uploader__form" onSubmit={handleSubmit}>
-        <label className="uploader__file-label">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileChange}
-            className="uploader__file-input"
-          />
-          <span className="uploader__file-btn">
-            {file ? 'Cambiar foto' : 'Sacar foto del pedido'}
-          </span>
-        </label>
+        <div className="uploader__file-actions">
+          <label className="uploader__file-label">
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+              className="uploader__file-input"
+            />
+            <span className="uploader__file-btn">Sacar foto</span>
+          </label>
+
+          <label className="uploader__file-label">
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="uploader__file-input"
+            />
+            <span className="uploader__file-btn uploader__file-btn--secondary">
+              Elegir de galería
+            </span>
+          </label>
+        </div>
 
         {preview && (
           <div className="uploader__preview">
             <img src={preview} alt="Vista previa del pedido" />
+            <button
+              type="button"
+              className="btn btn--ghost btn--small uploader__change-photo"
+              onClick={resetForm}
+            >
+              Quitar foto
+            </button>
           </div>
         )}
 
@@ -163,15 +188,6 @@ export default function PhotoUploader() {
         </label>
 
         <div className="uploader__flags">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={meta.has_complaint}
-              onChange={(e) => updateMeta('has_complaint', e.target.checked)}
-            />
-            <span>Pedido con reclamo</span>
-          </label>
-
           <label className="checkbox-label">
             <input
               type="checkbox"

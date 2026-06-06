@@ -17,6 +17,20 @@ export function normalizePhotoMeta(meta = {}) {
   };
 }
 
+export function getDownloadFilename(photo, usedNames = new Set()) {
+  const ext = photo.file_path.split('.').pop() || 'jpg';
+  let filename = `${photo.name}.${ext}`;
+  let counter = 2;
+
+  while (usedNames.has(filename)) {
+    filename = `${photo.name}-${counter}.${ext}`;
+    counter += 1;
+  }
+
+  usedNames.add(filename);
+  return filename;
+}
+
 export async function fetchPhotos({
   search,
   dateFrom,
@@ -127,6 +141,23 @@ export async function updatePhoto(id, orderDigits, meta = {}) {
   return data;
 }
 
+export async function bulkUpdateTakenBy(photos, takenBy) {
+  const trimmed = takenBy?.trim();
+  if (!trimmed) {
+    throw new Error('Ingresá quién sacó la foto.');
+  }
+
+  const ids = photos.map((photo) => photo.id);
+  const { data, error } = await supabase
+    .from('photos')
+    .update({ taken_by: trimmed })
+    .in('id', ids)
+    .select();
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function deletePhoto(id, filePath) {
   const { error: storageError } = await supabase.storage
     .from(BUCKET)
@@ -139,24 +170,43 @@ export async function deletePhoto(id, filePath) {
   if (dbError) throw dbError;
 }
 
-export async function downloadPhoto(photo) {
+export async function bulkDeletePhotos(photos) {
+  const filePaths = photos.map((photo) => photo.file_path);
+  const ids = photos.map((photo) => photo.id);
+
+  const { error: storageError } = await supabase.storage
+    .from(BUCKET)
+    .remove(filePaths);
+
+  if (storageError) throw storageError;
+
+  const { error: dbError } = await supabase.from('photos').delete().in('id', ids);
+
+  if (dbError) throw dbError;
+}
+
+export async function downloadPhoto(photo, usedNames = new Set()) {
   const response = await fetch(photo.public_url);
   if (!response.ok) throw new Error('No se pudo descargar la foto');
 
   const blob = await response.blob();
-  const ext = photo.file_path.split('.').pop() || 'jpg';
-  const timestamp = (photo.created_at || '')
-    .slice(0, 16)
-    .replace('T', '_')
-    .replace(/:/g, '-');
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `pedido-${photo.name}${timestamp ? `-${timestamp}` : ''}.${ext}`;
+  link.download = getDownloadFilename(photo, usedNames);
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+export async function downloadPhotos(photos) {
+  const usedNames = new Set();
+
+  for (const photo of photos) {
+    await downloadPhoto(photo, usedNames);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }
 
 export function getPhotoTimestamp(photo) {

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
 import { fetchPhotos } from '../lib/photos';
 import { getGalleryViewMode, saveGalleryViewMode } from '../lib/storage';
+import BulkActionBar from './BulkActionBar';
 import PhotoCard from './PhotoCard';
+import PhotoListRow from './PhotoListRow';
 
 const EMPTY_FILTERS = {
   search: '',
@@ -21,6 +23,8 @@ export default function PhotoGallery({ refreshKey }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [viewMode, setViewMode] = useState(getGalleryViewMode);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   const loadPhotos = useCallback(async (nextFilters = appliedFilters) => {
     setLoading(true);
@@ -29,6 +33,7 @@ export default function PhotoGallery({ refreshKey }) {
       const data = await fetchPhotos(nextFilters);
       setPhotos(data);
       setAppliedFilters(nextFilters);
+      setSelectedIds(new Set());
     } catch (err) {
       setError(err.message || 'No se pudieron cargar las fotos.');
     } finally {
@@ -39,6 +44,13 @@ export default function PhotoGallery({ refreshKey }) {
   useEffect(() => {
     loadPhotos(appliedFilters);
   }, [refreshKey]);
+
+  const selectedPhotos = useMemo(
+    () => photos.filter((photo) => selectedIds.has(photo.id)),
+    [photos, selectedIds]
+  );
+
+  const allSelected = photos.length > 0 && selectedIds.size === photos.length;
 
   function updateFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -74,28 +86,75 @@ export default function PhotoGallery({ refreshKey }) {
     loadPhotos(EMPTY_FILTERS);
   }
 
-  const hasActiveFilters = Object.entries(appliedFilters).some(([key, value]) => {
+  const hasActiveFilters = Object.entries(appliedFilters).some(([, value]) => {
     if (typeof value === 'boolean') return value;
     return Boolean(value);
   });
 
   function handleUpdated(updated) {
+    if (Array.isArray(updated)) {
+      setPhotos((prev) => {
+        const map = new Map(updated.map((photo) => [photo.id, photo]));
+        return prev.map((photo) => map.get(photo.id) || photo);
+      });
+      return;
+    }
+
     setPhotos((prev) =>
-      prev.map((p) => (p.id === updated.id ? updated : p))
+      prev.map((photo) => (photo.id === updated.id ? updated : photo))
     );
   }
 
-  function handleDeleted(id) {
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
+  function handleDeleted(ids) {
+    const idSet = new Set(Array.isArray(ids) ? ids : [ids]);
+    setPhotos((prev) => prev.filter((photo) => !idSet.has(photo.id)));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      idSet.forEach((id) => next.delete(id));
+      return next;
+    });
   }
 
   function changeViewMode(mode) {
     setViewMode(mode);
     saveGalleryViewMode(mode);
+    if (mode === 'grid') {
+      setSelectionMode(false);
+      setSelectedIds(new Set());
+    }
+  }
+
+  function toggleSelectionMode() {
+    setSelectionMode((prev) => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(photos.map((photo) => photo.id)));
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
   }
 
   return (
-    <section className="gallery">
+    <section className={`gallery${selectionMode ? ' gallery--selecting' : ''}`}>
       <div className="gallery__header">
         <div>
           <h2>Pedidos registrados</h2>
@@ -125,6 +184,15 @@ export default function PhotoGallery({ refreshKey }) {
               Listado
             </button>
           </div>
+          {viewMode === 'list' && photos.length > 0 && (
+            <button
+              type="button"
+              className={`btn btn--ghost btn--small${selectionMode ? ' btn--active' : ''}`}
+              onClick={toggleSelectionMode}
+            >
+              {selectionMode ? 'Listo' : 'Seleccionar'}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--ghost btn--small"
@@ -211,33 +279,17 @@ export default function PhotoGallery({ refreshKey }) {
           <button type="submit" className="btn btn--primary btn--small">
             Buscar
           </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={applyToday}
-          >
+          <button type="button" className="btn btn--ghost btn--small" onClick={applyToday}>
             Hoy
           </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={applyYesterday}
-          >
+          <button type="button" className="btn btn--ghost btn--small" onClick={applyYesterday}>
             Ayer
           </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={applyComplaints}
-          >
+          <button type="button" className="btn btn--ghost btn--small" onClick={applyComplaints}>
             Reclamos
           </button>
           {hasActiveFilters && (
-            <button
-              type="button"
-              className="btn btn--ghost btn--small"
-              onClick={clearFilters}
-            >
+            <button type="button" className="btn btn--ghost btn--small" onClick={clearFilters}>
               Limpiar
             </button>
           )}
@@ -256,11 +308,7 @@ export default function PhotoGallery({ refreshKey }) {
           <p className="message message--error" role="alert">
             {error}
           </p>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => loadPhotos(appliedFilters)}
-          >
+          <button type="button" className="btn btn--ghost" onClick={() => loadPhotos(appliedFilters)}>
             Reintentar
           </button>
         </div>
@@ -276,19 +324,49 @@ export default function PhotoGallery({ refreshKey }) {
         </div>
       )}
 
+      {photos.length > 0 && viewMode === 'list' && selectionMode && (
+        <label className="gallery__select-all checkbox-label">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleSelectAll}
+          />
+          <span>Seleccionar todas ({photos.length})</span>
+        </label>
+      )}
+
       {photos.length > 0 && (
         <div className={viewMode === 'grid' ? 'gallery__grid' : 'gallery__list'}>
-          {photos.map((photo) => (
-            <PhotoCard
-              key={photo.id}
-              photo={photo}
-              variant={viewMode}
-              onUpdated={handleUpdated}
-              onDeleted={handleDeleted}
-            />
-          ))}
+          {viewMode === 'grid'
+            ? photos.map((photo) => (
+                <PhotoCard
+                  key={photo.id}
+                  photo={photo}
+                  variant="grid"
+                  onUpdated={handleUpdated}
+                  onDeleted={handleDeleted}
+                />
+              ))
+            : photos.map((photo) => (
+                <PhotoListRow
+                  key={photo.id}
+                  photo={photo}
+                  selected={selectedIds.has(photo.id)}
+                  selectionMode={selectionMode}
+                  onToggleSelect={toggleSelect}
+                  onUpdated={handleUpdated}
+                  onDeleted={handleDeleted}
+                />
+              ))}
         </div>
       )}
+
+      <BulkActionBar
+        selectedPhotos={selectedPhotos}
+        onClearSelection={clearSelection}
+        onUpdated={handleUpdated}
+        onDeleted={handleDeleted}
+      />
     </section>
   );
 }
