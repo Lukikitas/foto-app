@@ -319,35 +319,39 @@ export default function PhotoCard({
           aria-label={`Pedido ${photo.name}`}
           onClick={() => setLightbox(false)}
         >
+          <button
+            type="button"
+            className="lightbox__close"
+            onClick={() => setLightbox(false)}
+            aria-label="Cerrar"
+          >
+            ×
+          </button>
           <div className="lightbox__content" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="lightbox__close"
-              onClick={() => setLightbox(false)}
-              aria-label="Cerrar"
-            >
-              ×
-            </button>
-            <img src={photo.public_url} alt={`Pedido ${photo.name}`} />
-            <p className="lightbox__caption">Pedido #{photo.name}</p>
-            <p className="lightbox__date">{formatDateTime(timestamp)}</p>
-            {photo.taken_by && (
-              <p className="lightbox__meta">Sacó: {photo.taken_by}</p>
-            )}
-            {photo.notes && (
-              <p className="lightbox__notes">{photo.notes}</p>
-            )}
-            <div className="lightbox__badges">
-              <PhotoBadges photo={photo} />
+            <div className="lightbox__stage">
+              <img src={photo.public_url} alt={`Pedido ${photo.name}`} />
             </div>
-            <div className="lightbox__actions">
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={handleDownload}
-              >
-                Descargar
-              </button>
+            <div className="lightbox__footer">
+              <p className="lightbox__caption">Pedido #{photo.name}</p>
+              <p className="lightbox__date">{formatDateTime(timestamp)}</p>
+              {photo.taken_by && (
+                <p className="lightbox__meta">Sacó: {photo.taken_by}</p>
+              )}
+              {photo.notes && (
+                <p className="lightbox__notes">{photo.notes}</p>
+              )}
+              <div className="lightbox__badges">
+                <PhotoBadges photo={photo} />
+              </div>
+              <div className="lightbox__actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={handleDownload}
+                >
+                  Descargar
+                </button>
+              </div>
             </div>
           </div>
         </div>
