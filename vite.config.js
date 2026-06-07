@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vite.dev/config/
 export default defineConfig({
   // Necesario para GitHub Pages: https://lukikitas.github.io/foto-app/
-  base: '/foto-app/',
+  base: '/',
   plugins: [
     react(),
     VitePWA({
