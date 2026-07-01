@@ -13,6 +13,7 @@ import PhotoCard from './PhotoCard';
 import PhotoListRow from './PhotoListRow';
 
 const EMPTY_FILTERS = {
+  kind: '',
   search: '',
   dateFrom: '',
   dateTo: '',
@@ -28,12 +29,21 @@ function sortPhotosNewestFirst(items) {
   );
 }
 
-export default function PhotoGallery({ refreshKey }) {
+export default function PhotoGallery({
+  refreshKey,
+  kind = '',
+  title = 'Galeria',
+  itemLabel = 'archivo',
+  emptyMessage = 'Todavia no hay archivos registrados. Subi el primero.',
+  searchLabel = 'Pedido/archivo',
+  searchPlaceholder = '4821, remito...',
+}) {
+  const baseFilters = useMemo(() => ({ ...EMPTY_FILTERS, kind }), [kind]);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const [filters, setFilters] = useState(baseFilters);
+  const [appliedFilters, setAppliedFilters] = useState(baseFilters);
   const [viewMode, setViewMode] = useState(getGalleryViewMode);
   const [filtersOpen, setFiltersOpen] = useState(getFiltersOpen);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -85,7 +95,7 @@ export default function PhotoGallery({ refreshKey }) {
       }
       setError(null);
       try {
-        const data = await fetchPhotos(filtersToLoad);
+        const data = await fetchPhotos({ ...filtersToLoad, kind });
         setPhotos(data);
         setAppliedFilters(filtersToLoad);
         if (!keepSelection) {
@@ -99,12 +109,12 @@ export default function PhotoGallery({ refreshKey }) {
         }
       }
     },
-    [],
+    [kind],
   );
 
   const handleRealtimeInsert = useCallback(
     (photo) => {
-      if (!photoMatchesFilters(photo, appliedFiltersRef.current)) return;
+      if (!photoMatchesFilters(photo, { ...appliedFiltersRef.current, kind })) return;
 
       if (selectedIdsRef.current.size > 0) {
         setPendingNewPhoto(photo);
@@ -112,13 +122,13 @@ export default function PhotoGallery({ refreshKey }) {
       }
 
       prependPhoto(photo);
-      showLiveNotice(`Nuevo archivo — ${getPhotoTitle(photo)}`);
+      showLiveNotice(`Nuevo ${itemLabel} - ${getPhotoTitle(photo)}`);
     },
-    [prependPhoto, showLiveNotice],
+    [itemLabel, kind, prependPhoto, showLiveNotice],
   );
 
   const handleRealtimeUpdate = useCallback((photo) => {
-    const matches = photoMatchesFilters(photo, appliedFiltersRef.current);
+    const matches = photoMatchesFilters(photo, { ...appliedFiltersRef.current, kind });
 
     setPhotos((prev) => {
       const exists = prev.some((item) => item.id === photo.id);
@@ -135,7 +145,7 @@ export default function PhotoGallery({ refreshKey }) {
         prev.map((item) => (item.id === photo.id ? photo : item)),
       );
     });
-  }, []);
+  }, [kind]);
 
   const handleRealtimeDelete = useCallback((id) => {
     setPhotos((prev) => prev.filter((photo) => photo.id !== id));
@@ -157,7 +167,7 @@ export default function PhotoGallery({ refreshKey }) {
 
   useEffect(() => {
     const channel = supabase
-      .channel('photos-gallery')
+      .channel(`photos-gallery-${kind || 'all'}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'photos' },
@@ -188,7 +198,7 @@ export default function PhotoGallery({ refreshKey }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [handleRealtimeDelete, handleRealtimeInsert, handleRealtimeUpdate]);
+  }, [handleRealtimeDelete, handleRealtimeInsert, handleRealtimeUpdate, kind]);
 
   useEffect(() => {
     function handleVisibilityChange() {
@@ -210,7 +220,8 @@ export default function PhotoGallery({ refreshKey }) {
   const allSelected = photos.length > 0 && selectedIds.size === photos.length;
   const hasSelection = selectedIds.size > 0;
 
-  const hasActiveFilters = Object.entries(appliedFilters).some(([, value]) => {
+  const hasActiveFilters = Object.entries(appliedFilters).some(([key, value]) => {
+    if (key === 'kind') return false;
     if (typeof value === 'boolean') return value;
     return Boolean(value);
   });
@@ -245,8 +256,8 @@ export default function PhotoGallery({ refreshKey }) {
   }
 
   function clearFilters() {
-    setFilters(EMPTY_FILTERS);
-    loadPhotos(EMPTY_FILTERS);
+    setFilters(baseFilters);
+    loadPhotos(baseFilters);
   }
 
   function toggleFilters() {
@@ -318,7 +329,7 @@ export default function PhotoGallery({ refreshKey }) {
   function acceptPendingPhoto() {
     if (!pendingNewPhoto) return;
     prependPhoto(pendingNewPhoto);
-    showLiveNotice(`Nuevo archivo — ${getPhotoTitle(pendingNewPhoto)}`);
+    showLiveNotice(`Nuevo ${itemLabel} - ${getPhotoTitle(pendingNewPhoto)}`);
     setPendingNewPhoto(null);
   }
 
@@ -348,11 +359,13 @@ export default function PhotoGallery({ refreshKey }) {
         </div>
       )}
 
+      <h2 className="gallery__title">{title}</h2>
+
       <div className="gallery__toolbar">
         <div className="gallery__toolbar-left">
           {!loading && (
             <p className="gallery__count">
-              {photos.length} archivo{photos.length !== 1 ? 's' : ''}
+              {photos.length} {itemLabel}{photos.length !== 1 ? 's' : ''}
               {hasActiveFilters ? ' · filtradas' : ''}
               {hasSelection ? ` · ${selectedIds.size} sel.` : ''}
             </p>
@@ -416,12 +429,12 @@ export default function PhotoGallery({ refreshKey }) {
         <form className="gallery__filters gallery__filters--compact" onSubmit={handleSearchSubmit}>
           <div className="gallery__filters-row gallery__filters-row--main">
             <label className="gallery__filter-field gallery__filter-field--compact">
-              <span>Pedido/archivo</span>
+              <span>{searchLabel}</span>
               <input
                 type="search"
                 value={filters.search}
                 onChange={(e) => updateFilter('search', e.target.value)}
-                placeholder="4821, remito..."
+                placeholder={searchPlaceholder}
               />
             </label>
 
@@ -510,7 +523,7 @@ export default function PhotoGallery({ refreshKey }) {
       {loading && photos.length === 0 && (
         <div className="gallery__state">
           <div className="spinner" aria-hidden="true" />
-          <p>Cargando archivos...</p>
+          <p>Cargando {itemLabel}s...</p>
         </div>
       )}
 
@@ -529,8 +542,8 @@ export default function PhotoGallery({ refreshKey }) {
         <div className="gallery__state gallery__state--empty">
           <p>
             {hasActiveFilters
-              ? 'No hay archivos que coincidan con la búsqueda.'
-              : 'Todavía no hay archivos registrados. Subí el primero.'}
+              ? `No hay ${itemLabel}s que coincidan con la busqueda.`
+              : emptyMessage}
           </p>
         </div>
       )}

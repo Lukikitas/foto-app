@@ -5,12 +5,25 @@ const BUCKET = 'photos';
 const ORDER_DIGITS = /^\d{4}$/;
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 
+export const PHOTO_GALLERY_KINDS = {
+  orders: 'orders',
+  files: 'files',
+};
+
 export function isValidOrderDigits(value) {
   return ORDER_DIGITS.test(value);
 }
 
 export function isOrderPhoto(photo) {
+  if (photo?.file_path?.startsWith('files/')) return false;
+  if (photo?.file_path?.startsWith('orders/')) return true;
   return isValidOrderDigits(photo?.name || '');
+}
+
+export function photoMatchesGalleryKind(photo, kind) {
+  if (kind === PHOTO_GALLERY_KINDS.orders) return isOrderPhoto(photo);
+  if (kind === PHOTO_GALLERY_KINDS.files) return !isOrderPhoto(photo);
+  return true;
 }
 
 export function getFileExtension(photo) {
@@ -67,6 +80,7 @@ export function getDownloadFilename(photo, usedNames = new Set()) {
 }
 
 export async function fetchPhotos({
+  kind,
   search,
   dateFrom,
   dateTo,
@@ -114,7 +128,7 @@ export async function fetchPhotos({
   const { data, error } = await query;
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).filter((photo) => photoMatchesGalleryKind(photo, kind));
 }
 
 function includesInsensitive(value, query) {
@@ -126,6 +140,7 @@ function includesInsensitive(value, query) {
 export function photoMatchesFilters(
   photo,
   {
+    kind,
     search,
     dateFrom,
     dateTo,
@@ -135,6 +150,10 @@ export function photoMatchesFilters(
     notes,
   } = {},
 ) {
+  if (!photoMatchesGalleryKind(photo, kind)) {
+    return false;
+  }
+
   const trimmedSearch = search?.trim();
   if (trimmedSearch && !includesInsensitive(photo.name, trimmedSearch)) {
     return false;
@@ -166,10 +185,11 @@ export function photoMatchesFilters(
   return true;
 }
 
-async function insertStoredFile(file, name, meta = {}) {
+async function insertStoredFile(file, name, meta = {}, folder = '') {
   const photoMeta = normalizePhotoMeta(meta);
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-  const filePath = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const filePath = folder ? `${folder}/${fileName}` : fileName;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -205,17 +225,22 @@ export async function uploadPhoto(file, orderDigits, meta = {}) {
     throw new Error('El pedido debe tener exactamente 4 dígitos.');
   }
 
-  return insertStoredFile(file, orderDigits, meta);
+  return insertStoredFile(file, orderDigits, meta, 'orders');
 }
 
 export async function uploadFile(file, title, meta = {}) {
   const fallback = file.name.replace(/\.[^.]+$/, '') || 'Archivo';
   const name = normalizePhotoName(title, fallback);
-  return insertStoredFile(file, name, {
-    ...meta,
-    has_complaint: false,
-    is_refutado: false,
-  });
+  return insertStoredFile(
+    file,
+    name,
+    {
+      ...meta,
+      has_complaint: false,
+      is_refutado: false,
+    },
+    'files',
+  );
 }
 
 export async function updatePhoto(id, name, meta = {}) {

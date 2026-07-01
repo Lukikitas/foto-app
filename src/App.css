@@ -47,7 +47,7 @@
   right: 0;
   z-index: 100;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.35rem;
   padding: 0.3rem 0.65rem calc(0.3rem + env(safe-area-inset-bottom));
   background: var(--surface);
@@ -685,6 +685,13 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.gallery__title {
+  margin: 0 0 0.45rem;
+  color: var(--text-h);
+  font-size: 1.15rem;
+  line-height: 1.2;
 }
 
 .photo-row__thumb--file {
