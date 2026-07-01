@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDateTime } from '../lib/date';
-import { getPhotoTimestamp } from '../lib/photos';
+import { getPhotoTimestamp, getPhotoTitle } from '../lib/photos';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
@@ -25,10 +25,13 @@ export default function PhotoLightbox({
   const [dragging, setDragging] = useState(false);
 
   const timestamp = getPhotoTimestamp(photo);
+  const title = getPhotoTitle(photo);
   const isZoomed = scale > 1.01;
 
-  scaleRef.current = scale;
-  offsetRef.current = offset;
+  useEffect(() => {
+    scaleRef.current = scale;
+    offsetRef.current = offset;
+  }, [scale, offset]);
 
   const applyZoom = useCallback((nextScale, anchorX, anchorY) => {
     const currentScale = scaleRef.current;
@@ -144,7 +147,7 @@ export default function PhotoLightbox({
       className="lightbox"
       role="dialog"
       aria-modal="true"
-      aria-label={`Pedido ${photo.name}`}
+      aria-label={title}
       onClick={onClose}
     >
       <button
@@ -170,7 +173,7 @@ export default function PhotoLightbox({
           >
             <img
               src={photo.public_url}
-              alt={`Pedido ${photo.name}`}
+              alt={title}
               draggable={false}
             />
           </div>
@@ -217,10 +220,10 @@ export default function PhotoLightbox({
           </p>
         </div>
         <div className="lightbox__footer">
-          <p className="lightbox__caption">Pedido #{photo.name}</p>
+          <p className="lightbox__caption">{title}</p>
           <p className="lightbox__date">{formatDateTime(timestamp)}</p>
           {photo.taken_by && (
-            <p className="lightbox__meta">Sacó: {photo.taken_by}</p>
+            <p className="lightbox__meta">Subió: {photo.taken_by}</p>
           )}
           {photo.notes && <p className="lightbox__notes">{photo.notes}</p>}
           {badges && <div className="lightbox__badges">{badges}</div>}

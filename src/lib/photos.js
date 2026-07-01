@@ -3,9 +3,33 @@ import { supabase } from './supabase';
 
 const BUCKET = 'photos';
 const ORDER_DIGITS = /^\d{4}$/;
+const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 
 export function isValidOrderDigits(value) {
   return ORDER_DIGITS.test(value);
+}
+
+export function isOrderPhoto(photo) {
+  return isValidOrderDigits(photo?.name || '');
+}
+
+export function getFileExtension(photo) {
+  return photo?.file_path?.split('.').pop()?.toLowerCase() || '';
+}
+
+export function isImagePhoto(photo) {
+  return IMAGE_EXTENSIONS.has(getFileExtension(photo));
+}
+
+export function getPhotoTitle(photo) {
+  if (isOrderPhoto(photo)) return `Pedido #${photo.name}`;
+  return photo?.name || 'Archivo';
+}
+
+export function getPhotoKind(photo) {
+  if (isOrderPhoto(photo)) return 'Pedido';
+  if (isImagePhoto(photo)) return 'Foto';
+  return 'Archivo';
 }
 
 export function normalizePhotoMeta(meta = {}) {
@@ -17,13 +41,24 @@ export function normalizePhotoMeta(meta = {}) {
   };
 }
 
+export function normalizePhotoName(value, fallback = 'Archivo') {
+  return value?.trim() || fallback;
+}
+
 export function getDownloadFilename(photo, usedNames = new Set()) {
   const ext = photo.file_path.split('.').pop() || 'jpg';
-  let filename = `${photo.name}.${ext}`;
+  const baseName = normalizePhotoName(photo.name)
+    .replace(/[<>:"/\\|?*]/g, '-')
+    .split('')
+    .filter((char) => char.charCodeAt(0) >= 32)
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+  let filename = `${baseName}.${ext}`;
   let counter = 2;
 
   while (usedNames.has(filename)) {
-    filename = `${photo.name}-${counter}.${ext}`;
+    filename = `${baseName}-${counter}.${ext}`;
     counter += 1;
   }
 
@@ -131,13 +166,9 @@ export function photoMatchesFilters(
   return true;
 }
 
-export async function uploadPhoto(file, orderDigits, meta = {}) {
-  if (!isValidOrderDigits(orderDigits)) {
-    throw new Error('El pedido debe tener exactamente 4 dígitos.');
-  }
-
+async function insertStoredFile(file, name, meta = {}) {
   const photoMeta = normalizePhotoMeta(meta);
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
   const filePath = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
@@ -153,7 +184,7 @@ export async function uploadPhoto(file, orderDigits, meta = {}) {
   const { data, error: dbError } = await supabase
     .from('photos')
     .insert({
-      name: orderDigits,
+      name,
       file_path: filePath,
       public_url: urlData.publicUrl,
       ...photoMeta,
@@ -169,9 +200,28 @@ export async function uploadPhoto(file, orderDigits, meta = {}) {
   return data;
 }
 
-export async function updatePhoto(id, orderDigits, meta = {}) {
+export async function uploadPhoto(file, orderDigits, meta = {}) {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('El pedido debe tener exactamente 4 dígitos.');
+  }
+
+  return insertStoredFile(file, orderDigits, meta);
+}
+
+export async function uploadFile(file, title, meta = {}) {
+  const fallback = file.name.replace(/\.[^.]+$/, '') || 'Archivo';
+  const name = normalizePhotoName(title, fallback);
+  return insertStoredFile(file, name, {
+    ...meta,
+    has_complaint: false,
+    is_refutado: false,
+  });
+}
+
+export async function updatePhoto(id, name, meta = {}) {
+  const nextName = normalizePhotoName(name, '');
+  if (!nextName) {
+    throw new Error('Ingresá un nombre.');
   }
 
   const photoMeta = normalizePhotoMeta(meta);
@@ -179,7 +229,7 @@ export async function updatePhoto(id, orderDigits, meta = {}) {
   const { data, error } = await supabase
     .from('photos')
     .update({
-      name: orderDigits,
+      name: nextName,
       ...photoMeta,
     })
     .eq('id', id)

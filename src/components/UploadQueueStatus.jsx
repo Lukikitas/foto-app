@@ -32,7 +32,7 @@ export default function UploadQueueStatus() {
             key={item.id}
             className={`upload-queue__item upload-queue__item--${item.status}`}
           >
-            <span className="upload-queue__order">#{item.orderDigits}</span>
+            <span className="upload-queue__order">{item.label}</span>
             <span className="upload-queue__status">{STATUS_LABEL[item.status]}</span>
             {item.error && (
               <span className="upload-queue__error">{item.error}</span>

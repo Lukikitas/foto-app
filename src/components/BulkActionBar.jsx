@@ -115,14 +115,14 @@ export default function BulkActionBar({
         </form>
       ) : confirmDelete ? (
         <div className="bulk-bar__confirm">
-          <p>¿Eliminar {count} foto{count !== 1 ? 's' : ''}?</p>
+          <p>¿Eliminar {count} archivo{count !== 1 ? 's' : ''}?</p>
           <button
             type="button"
             className="btn btn--small btn--danger"
             onClick={handleDelete}
             disabled={loading}
           >
-            {loading ? 'Eliminando…' : 'Sí, eliminar'}
+            {loading ? 'Eliminando...' : 'Sí, eliminar'}
           </button>
           <button
             type="button"

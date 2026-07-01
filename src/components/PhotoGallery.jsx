@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
-import { fetchPhotos, photoMatchesFilters } from '../lib/photos';
+import { fetchPhotos, getPhotoTitle, photoMatchesFilters } from '../lib/photos';
 import { supabase } from '../lib/supabase';
 import {
   getFiltersOpen,
@@ -45,8 +45,10 @@ export default function PhotoGallery({ refreshKey }) {
   const selectedIdsRef = useRef(selectedIds);
   const noticeTimerRef = useRef(null);
 
-  appliedFiltersRef.current = appliedFilters;
-  selectedIdsRef.current = selectedIds;
+  useEffect(() => {
+    appliedFiltersRef.current = appliedFilters;
+    selectedIdsRef.current = selectedIds;
+  }, [appliedFilters, selectedIds]);
 
   const clearLiveNoticeTimer = useCallback(() => {
     if (noticeTimerRef.current) {
@@ -75,15 +77,17 @@ export default function PhotoGallery({ refreshKey }) {
   }, []);
 
   const loadPhotos = useCallback(
-    async (nextFilters = appliedFilters, { silent = false, keepSelection = false } = {}) => {
+    async (nextFilters, { silent = false, keepSelection = false } = {}) => {
+      const filtersToLoad = nextFilters ?? appliedFiltersRef.current;
+
       if (!silent) {
         setLoading(true);
       }
       setError(null);
       try {
-        const data = await fetchPhotos(nextFilters);
+        const data = await fetchPhotos(filtersToLoad);
         setPhotos(data);
-        setAppliedFilters(nextFilters);
+        setAppliedFilters(filtersToLoad);
         if (!keepSelection) {
           setSelectedIds(new Set());
         }
@@ -95,7 +99,7 @@ export default function PhotoGallery({ refreshKey }) {
         }
       }
     },
-    [appliedFilters],
+    [],
   );
 
   const handleRealtimeInsert = useCallback(
@@ -108,7 +112,7 @@ export default function PhotoGallery({ refreshKey }) {
       }
 
       prependPhoto(photo);
-      showLiveNotice(`Nueva foto — Pedido #${photo.name}`);
+      showLiveNotice(`Nuevo archivo — ${getPhotoTitle(photo)}`);
     },
     [prependPhoto, showLiveNotice],
   );
@@ -145,8 +149,11 @@ export default function PhotoGallery({ refreshKey }) {
   }, []);
 
   useEffect(() => {
-    loadPhotos(appliedFilters);
-  }, [refreshKey]);
+    const timeout = window.setTimeout(() => {
+      loadPhotos(appliedFiltersRef.current);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadPhotos, refreshKey]);
 
   useEffect(() => {
     const channel = supabase
@@ -311,7 +318,7 @@ export default function PhotoGallery({ refreshKey }) {
   function acceptPendingPhoto() {
     if (!pendingNewPhoto) return;
     prependPhoto(pendingNewPhoto);
-    showLiveNotice(`Nueva foto — Pedido #${pendingNewPhoto.name}`);
+    showLiveNotice(`Nuevo archivo — ${getPhotoTitle(pendingNewPhoto)}`);
     setPendingNewPhoto(null);
   }
 
@@ -319,7 +326,7 @@ export default function PhotoGallery({ refreshKey }) {
     <section className={`gallery${hasSelection ? ' gallery--selecting' : ''}`}>
       {pendingNewPhoto && (
         <div className="gallery__pending" role="status">
-          <span>Nueva foto — Pedido #{pendingNewPhoto.name}</span>
+          <span>Nuevo archivo — {getPhotoTitle(pendingNewPhoto)}</span>
           <div className="gallery__pending-actions">
             <button type="button" className="btn btn--small btn--primary" onClick={acceptPendingPhoto}>
               Ver
@@ -345,7 +352,7 @@ export default function PhotoGallery({ refreshKey }) {
         <div className="gallery__toolbar-left">
           {!loading && (
             <p className="gallery__count">
-              {photos.length} foto{photos.length !== 1 ? 's' : ''}
+              {photos.length} archivo{photos.length !== 1 ? 's' : ''}
               {hasActiveFilters ? ' · filtradas' : ''}
               {hasSelection ? ` · ${selectedIds.size} sel.` : ''}
             </p>
@@ -409,14 +416,12 @@ export default function PhotoGallery({ refreshKey }) {
         <form className="gallery__filters gallery__filters--compact" onSubmit={handleSearchSubmit}>
           <div className="gallery__filters-row gallery__filters-row--main">
             <label className="gallery__filter-field gallery__filter-field--compact">
-              <span>Pedido</span>
+              <span>Pedido/archivo</span>
               <input
                 type="search"
                 value={filters.search}
-                onChange={(e) => updateFilter('search', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="4821"
-                inputMode="numeric"
-                maxLength={4}
+                onChange={(e) => updateFilter('search', e.target.value)}
+                placeholder="4821, remito..."
               />
             </label>
 
@@ -505,7 +510,7 @@ export default function PhotoGallery({ refreshKey }) {
       {loading && photos.length === 0 && (
         <div className="gallery__state">
           <div className="spinner" aria-hidden="true" />
-          <p>Cargando fotos…</p>
+          <p>Cargando archivos...</p>
         </div>
       )}
 
@@ -524,8 +529,8 @@ export default function PhotoGallery({ refreshKey }) {
         <div className="gallery__state gallery__state--empty">
           <p>
             {hasActiveFilters
-              ? 'No hay fotos que coincidan con la búsqueda.'
-              : 'Todavía no hay pedidos registrados. ¡Sacá la primera foto!'}
+              ? 'No hay archivos que coincidan con la búsqueda.'
+              : 'Todavía no hay archivos registrados. Subí el primero.'}
           </p>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { uploadPhoto } from './photos';
+import { uploadFile, uploadPhoto } from './photos';
 
 const queue = [];
 const listeners = new Set();
@@ -9,7 +9,7 @@ function snapshot() {
   return queue.map((item) => ({
     id: item.id,
     status: item.status,
-    orderDigits: item.orderDigits,
+    label: item.label,
     error: item.error,
     createdAt: item.createdAt,
   }));
@@ -30,11 +30,14 @@ export function subscribe(listener) {
   return () => listeners.delete(listener);
 }
 
-export function enqueue({ file, orderDigits, meta }) {
+export function enqueue({ file, kind = 'order', orderDigits = '', title = '', meta }) {
   const item = {
     id: crypto.randomUUID(),
     file,
+    kind,
     orderDigits,
+    title,
+    label: kind === 'order' ? `Pedido #${orderDigits}` : title || file.name,
     meta,
     status: 'pending',
     error: null,
@@ -77,7 +80,9 @@ async function processQueue() {
   notify();
 
   try {
-    const photo = await uploadPhoto(next.file, next.orderDigits, next.meta);
+    const photo = next.kind === 'file'
+      ? await uploadFile(next.file, next.title, next.meta)
+      : await uploadPhoto(next.file, next.orderDigits, next.meta);
     next.status = 'done';
     next.error = null;
     notify();

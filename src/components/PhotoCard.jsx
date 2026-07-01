@@ -5,16 +5,24 @@ import PhotoLightbox from './PhotoLightbox';
 import {
   deletePhoto,
   downloadPhoto,
+  getFileExtension,
+  getPhotoKind,
   getPhotoTimestamp,
+  getPhotoTitle,
+  isImagePhoto,
+  isOrderPhoto,
   isValidOrderDigits,
   updatePhoto,
 } from '../lib/photos';
 
 function PhotoBadges({ photo }) {
-  if (!photo.has_complaint && !photo.is_refutado) return null;
+  const isFile = !isOrderPhoto(photo);
+
+  if (!photo.has_complaint && !photo.is_refutado && !isFile) return null;
 
   return (
     <div className="photo-card__badges">
+      {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
       {photo.has_complaint && (
         <span className="badge badge--complaint">Reclamo</span>
       )}
@@ -35,7 +43,7 @@ export default function PhotoCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
-    orderDigits: photo.name,
+    name: photo.name,
     notes: photo.notes || '',
     has_complaint: Boolean(photo.has_complaint),
     taken_by: photo.taken_by || '',
@@ -47,28 +55,46 @@ export default function PhotoCard({
   const [error, setError] = useState(null);
 
   const timestamp = getPhotoTimestamp(photo);
+  const title = getPhotoTitle(photo);
+  const isOrder = isOrderPhoto(photo);
+  const isImage = isImagePhoto(photo);
+  const extension = getFileExtension(photo).toUpperCase() || 'FILE';
   const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
-  const imagePress = longPress.bind(() => setLightbox(true));
+  const imagePress = longPress.bind(() => {
+    if (isImage) setLightbox(true);
+    else window.open(photo.public_url, '_blank', 'noopener,noreferrer');
+  });
 
   function updateForm(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleDigitsChange(e) {
-    updateForm('orderDigits', e.target.value.replace(/\D/g, '').slice(0, 4));
+  function handleNameChange(e) {
+    const value = isOrder
+      ? e.target.value.replace(/\D/g, '').slice(0, 4)
+      : e.target.value;
+    updateForm('name', value);
   }
 
   async function handleEdit(e) {
     e.preventDefault();
-    if (!isValidOrderDigits(form.orderDigits)) {
+    if (isOrder && !isValidOrderDigits(form.name)) {
       setError('El pedido debe tener exactamente 4 dígitos.');
+      return;
+    }
+    if (!form.name.trim()) {
+      setError('Ingresá un nombre.');
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const updated = await updatePhoto(photo.id, form.orderDigits, form);
+      const updated = await updatePhoto(photo.id, form.name, {
+        ...form,
+        has_complaint: isOrder ? form.has_complaint : false,
+        is_refutado: isOrder ? form.is_refutado : false,
+      });
       onUpdated?.(updated);
       setEditing(false);
     } catch (err) {
@@ -103,7 +129,7 @@ export default function PhotoCard({
 
   function startEditing() {
     setForm({
-      orderDigits: photo.name,
+      name: photo.name,
       notes: photo.notes || '',
       has_complaint: Boolean(photo.has_complaint),
       taken_by: photo.taken_by || '',
@@ -128,22 +154,30 @@ export default function PhotoCard({
               type="checkbox"
               checked={selected}
               onChange={() => onToggleSelect?.(photo.id)}
-              aria-label={`Seleccionar pedido ${photo.name}`}
+              aria-label={`Seleccionar ${title}`}
             />
           </label>
           <PhotoBadges photo={photo} />
           <button
             type="button"
-            className="photo-card__image-btn"
-            aria-label={`Ver pedido ${photo.name} en grande`}
+            className={`photo-card__image-btn${!isImage ? ' photo-card__image-btn--file' : ''}`}
+            aria-label={isImage ? `Ver ${title} en grande` : `Abrir ${title}`}
             {...imagePress}
           >
-            <img
-              src={photo.public_url}
-              alt={`Pedido ${photo.name}`}
-              className="photo-card__image"
-              loading="lazy"
-            />
+            {isImage ? (
+              <img
+                src={photo.public_url}
+                alt={title}
+                className="photo-card__image"
+                loading="lazy"
+              />
+            ) : (
+              <span className="photo-card__file-preview">
+                <span className="photo-card__file-icon" aria-hidden="true">DOC</span>
+                <strong>{extension}</strong>
+                <small>Abrir archivo</small>
+              </span>
+            )}
           </button>
         </div>
 
@@ -151,20 +185,20 @@ export default function PhotoCard({
           {editing ? (
             <form className="photo-card__edit-form" onSubmit={handleEdit}>
               <label>
-                Dígitos del pedido
+                {isOrder ? 'Dígitos del pedido' : 'Nombre'}
                 <input
                   type="text"
-                  inputMode="numeric"
-                  value={form.orderDigits}
-                  onChange={handleDigitsChange}
+                  inputMode={isOrder ? 'numeric' : undefined}
+                  value={form.name}
+                  onChange={handleNameChange}
                   disabled={loading}
-                  maxLength={4}
+                  maxLength={isOrder ? 4 : 120}
                   autoFocus
                 />
               </label>
 
               <label>
-                Quién sacó la foto
+                Quién lo subió
                 <input
                   type="text"
                   value={form.taken_by}
@@ -185,32 +219,34 @@ export default function PhotoCard({
                 />
               </label>
 
-              <div className="photo-card__edit-flags">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={form.has_complaint}
-                    onChange={(e) => updateForm('has_complaint', e.target.checked)}
-                    disabled={loading}
-                  />
-                  <span>Pedido con reclamo</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={form.is_refutado}
-                    onChange={(e) => updateForm('is_refutado', e.target.checked)}
-                    disabled={loading}
-                  />
-                  <span>Es un refutado</span>
-                </label>
-              </div>
+              {isOrder && (
+                <div className="photo-card__edit-flags">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={form.has_complaint}
+                      onChange={(e) => updateForm('has_complaint', e.target.checked)}
+                      disabled={loading}
+                    />
+                    <span>Pedido con reclamo</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={form.is_refutado}
+                      onChange={(e) => updateForm('is_refutado', e.target.checked)}
+                      disabled={loading}
+                    />
+                    <span>Es un refutado</span>
+                  </label>
+                </div>
+              )}
 
               <div className="photo-card__rename-actions">
                 <button
                   type="submit"
                   className="btn btn--small btn--primary"
-                  disabled={loading || form.orderDigits.length !== 4}
+                  disabled={loading || !form.name.trim() || (isOrder && form.name.length !== 4)}
                 >
                   Guardar
                 </button>
@@ -229,13 +265,13 @@ export default function PhotoCard({
             </form>
           ) : (
             <>
-              <h3 className="photo-card__title">Pedido #{photo.name}</h3>
+              <h3 className="photo-card__title">{title}</h3>
               <time className="photo-card__date" dateTime={timestamp}>
                 {formatDateTime(timestamp)}
               </time>
               {photo.taken_by && (
                 <p className="photo-card__meta">
-                  Sacó: <strong>{photo.taken_by}</strong>
+                  Subió: <strong>{photo.taken_by}</strong>
                 </p>
               )}
               {photo.notes && (
@@ -252,7 +288,7 @@ export default function PhotoCard({
 
           {confirmDelete ? (
             <div className="photo-card__confirm">
-              <p>¿Eliminar pedido #{photo.name} del {formatDateTime(timestamp)}?</p>
+              <p>¿Eliminar {title} del {formatDateTime(timestamp)}?</p>
               <div className="photo-card__confirm-actions">
                 <button
                   type="button"
@@ -260,7 +296,7 @@ export default function PhotoCard({
                   onClick={handleDelete}
                   disabled={loading}
                 >
-                  {loading ? 'Eliminando…' : 'Sí, eliminar'}
+                  {loading ? 'Eliminando...' : 'Sí, eliminar'}
                 </button>
                 <button
                   type="button"
@@ -277,9 +313,12 @@ export default function PhotoCard({
               <button
                 type="button"
                 className="btn btn--small btn--ghost"
-                onClick={() => setLightbox(true)}
+                onClick={() => {
+                  if (isImage) setLightbox(true);
+                  else window.open(photo.public_url, '_blank', 'noopener,noreferrer');
+                }}
               >
-                Ver
+                {isImage ? 'Ver' : 'Abrir'}
               </button>
               <button
                 type="button"
@@ -312,7 +351,7 @@ export default function PhotoCard({
         </div>
       </article>
 
-      {lightbox && (
+      {lightbox && isImage && (
         <PhotoLightbox
           photo={photo}
           onClose={() => setLightbox(false)}

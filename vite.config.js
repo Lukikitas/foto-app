@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Necesario para GitHub Pages: https://lukikitas.github.io/foto-app/
+  // Dominio propio de GitHub Pages: https://delivery.star-app.com.ar/
   base: '/',
   plugins: [
     react(),
@@ -14,13 +14,13 @@ export default defineConfig({
       manifest: {
         name: 'Delivery La Plata',
         short_name: 'Delivery',
-        description: 'Registro de fotos de pedidos de delivery',
+        description: 'Registro de fotos y archivos de delivery',
         theme_color: '#E4002B',
         background_color: '#E4002B',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/foto-app/',
-        scope: '/foto-app/',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
             src: 'pwa-192.png',
@@ -48,7 +48,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallback: '/foto-app/index.html',
+        navigateFallback: '/index.html',
       },
     }),
   ],
