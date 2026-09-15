@@ -49,7 +49,7 @@ export default function PhotoUploader() {
   }
 
   function handleDigitsChange(e) {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+    const value = e.target.value.replace(/[^\d-]/g, '').slice(0, 20);
     setOrderDigits(value);
     setDetectedOrder(null);
     setError(null);
@@ -86,7 +86,7 @@ export default function PhotoUploader() {
       return URL.createObjectURL(selected);
     });
     setFile(selected);
-    setOrderDigits(order.orderDigits);
+    setOrderDigits(order.displayCode);
     setDetectedOrder(order);
     setShowManualOrder(false);
     setOrderCameraOpen(false);
@@ -132,7 +132,7 @@ export default function PhotoUploader() {
     }
 
     if (uploadMode === UPLOAD_MODES.order && !isValidOrderDigits(orderDigits)) {
-      setError('Ingresá los 4 últimos dígitos del pedido.');
+      setError('Ingresá el código completo o los últimos 4 dígitos del pedido.');
       return;
     }
 
@@ -278,7 +278,7 @@ export default function PhotoUploader() {
           <div className="uploader__detected-order" role="status">
             <span>
               Código detectado: <strong>{detectedOrder.displayCode}</strong>
-              {' · '}se guardará como #{orderDigits}
+              {' · '}se guardará con este código
             </span>
             <button
               type="button"
@@ -292,15 +292,15 @@ export default function PhotoUploader() {
 
         {isOrderMode && (!detectedOrder || showManualOrder) ? (
           <label className="uploader__name-label">
-            Últimos 4 dígitos del pedido
+            Código de pedido
             <input
               type="text"
               inputMode="numeric"
-              pattern="\d{4}"
+              pattern="(?:\d{4}|\d{1,4}-\d{4,})"
               value={orderDigits}
               onChange={handleDigitsChange}
-              placeholder="Ej: 4821"
-              maxLength={4}
+              placeholder="Ej: 4-2239954696"
+              maxLength={20}
               className="uploader__digits-input"
               autoComplete="off"
             />
@@ -373,7 +373,7 @@ export default function PhotoUploader() {
         <button
           type="submit"
           className="btn btn--primary btn--large"
-          disabled={saving || !file || (isOrderMode && orderDigits.length !== 4)}
+          disabled={saving || !file || (isOrderMode && !isValidOrderDigits(orderDigits))}
         >
           {saving ? 'Preparando...' : 'Guardar y seguir'}
         </button>

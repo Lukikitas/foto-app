@@ -2,7 +2,7 @@ import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { supabase } from './supabase';
 
 const BUCKET = 'photos';
-const ORDER_DIGITS = /^\d{4}$/;
+const ORDER_CODE = /^(?:\d{4}|\d{1,4}-\d{4,})$/;
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 
 export const PHOTO_GALLERY_KINDS = {
@@ -11,7 +11,7 @@ export const PHOTO_GALLERY_KINDS = {
 };
 
 export function isValidOrderDigits(value) {
-  return ORDER_DIGITS.test(value);
+  return ORDER_CODE.test(value);
 }
 
 export function isOrderPhoto(photo) {
@@ -273,7 +273,7 @@ async function insertStoredFile(file, name, meta = {}, folder = '') {
 
 export async function uploadPhoto(file, orderDigits, meta = {}) {
   if (!isValidOrderDigits(orderDigits)) {
-    throw new Error('El pedido debe tener exactamente 4 dígitos.');
+    throw new Error('Ingresá el código completo o los últimos 4 dígitos del pedido.');
   }
 
   return insertStoredFile(file, orderDigits, meta, 'orders');

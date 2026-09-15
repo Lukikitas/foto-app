@@ -8,10 +8,7 @@ function normalizeOcrText(value = '') {
     .trim();
 }
 
-/**
- * Extracts the code printed after "Código Ped.". The database still stores
- * the last four digits because that is the existing order-photo identifier.
- */
+/** Extracts the full code printed after "Código Ped.". */
 export function detectOrderCode(ocrText) {
   const text = normalizeOcrText(ocrText);
   const match = text.match(
@@ -20,16 +17,12 @@ export function detectOrderCode(ocrText) {
 
   if (!match) return null;
 
-  const digits = match[1].replace(/\D/g, '');
-  if (digits.length < 4) return null;
+  if (match[1].replace(/\D/g, '').length < 4) return null;
 
   const displayCode = match[1]
     .trim()
     .replace(/\s*-\s*/g, '-')
     .replace(/\s+/g, '');
 
-  return {
-    displayCode,
-    orderDigits: digits.slice(-4),
-  };
+  return { displayCode };
 }

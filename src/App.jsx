@@ -58,7 +58,7 @@ export default function App() {
             itemLabel="pedido"
             emptyMessage="Todavia no hay fotos de pedidos registradas. Subi la primera."
             searchLabel="Pedido"
-            searchPlaceholder="4821..."
+            searchPlaceholder="4-2239954696 o 4696"
           />
         )}
         {tab === TABS.files && (
