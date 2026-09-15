@@ -46,14 +46,19 @@ export default function OrderCamera({ onCapture, onCancel }) {
   const workerRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
+  const restartScanRef = useRef(null);
   const [status, setStatus] = useState('starting');
   const [detectedOrder, setDetectedOrder] = useState(null);
   const [error, setError] = useState(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
+  const [lastQueued, setLastQueued] = useState(null);
 
   useEffect(() => {
     let active = true;
     let startedAt = 0;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
 
     function scheduleScan(scan) {
       timerRef.current = window.setTimeout(scan, SCAN_INTERVAL_MS);
@@ -125,6 +130,7 @@ export default function OrderCamera({ onCapture, onCancel }) {
           if (active) scheduleScan(scan);
         };
 
+        restartScanRef.current = scan;
         scan();
       } catch (startError) {
         if (active) {
@@ -139,6 +145,8 @@ export default function OrderCamera({ onCapture, onCancel }) {
     return () => {
       active = false;
       window.clearTimeout(timerRef.current);
+      restartScanRef.current = null;
+      document.body.style.overflow = previousOverflow;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       workerRef.current?.terminate();
     };
@@ -151,6 +159,13 @@ export default function OrderCamera({ onCapture, onCancel }) {
     try {
       const file = await makePhoto(videoRef.current);
       onCapture(file, detectedOrder);
+      setQueuedCount((count) => count + 1);
+      setLastQueued(detectedOrder);
+      setDetectedOrder(null);
+      setStatus('scanning');
+      setError(null);
+      setTakingPhoto(false);
+      window.setTimeout(() => restartScanRef.current?.(), 180);
     } catch (captureError) {
       setError(captureError.message || 'No se pudo tomar la foto.');
       setTakingPhoto(false);
@@ -159,9 +174,9 @@ export default function OrderCamera({ onCapture, onCancel }) {
 
   const message = {
     starting: 'Preparando cámara y lector…',
-    scanning: 'Buscando “Código Ped.”…',
-    'not-found': 'No se detecta el código. Acercá el ticket, enfocá y mejorá la luz.',
-    found: `Pedido ${detectedOrder?.displayCode} detectado.`,
+    scanning: 'Buscando “CODIGO:” y el agregador…',
+    'not-found': 'No se detecta “CODIGO:” seguido de PEYA, RAPPI, RAPPITURBO o MP.',
+    found: `${detectedOrder?.aggregatorLabel}: ${detectedOrder?.displayCode} detectado.`,
     error: 'No se pudo iniciar la lectura automática.',
   }[status];
 
@@ -170,7 +185,7 @@ export default function OrderCamera({ onCapture, onCancel }) {
       <div className="order-camera__viewport">
         <video ref={videoRef} className="order-camera__video" autoPlay muted playsInline />
         <div className="order-camera__guide" aria-hidden="true">
-          <span>Ubicá el ticket dentro de esta zona</span>
+          <span>Mostrá el ticket con “CODIGO:” dentro de esta zona</span>
         </div>
       </div>
       <canvas ref={canvasRef} className="order-camera__canvas" aria-hidden="true" />
@@ -182,6 +197,12 @@ export default function OrderCamera({ onCapture, onCancel }) {
       >
         {message}
       </p>
+      {lastQueued && (
+        <p className="order-camera__summary" role="status" aria-live="polite">
+          {lastQueued.aggregatorLabel} · {lastQueued.displayCode} en cola · {queuedCount}{' '}
+          {queuedCount === 1 ? 'foto' : 'fotos'}
+        </p>
+      )}
       {error && <p className="message message--error">{error}</p>}
 
       <div className="order-camera__actions">
@@ -191,7 +212,7 @@ export default function OrderCamera({ onCapture, onCancel }) {
           disabled={!detectedOrder || takingPhoto}
           onClick={handleCapture}
         >
-          {takingPhoto ? 'Guardando foto…' : 'Sacar foto y usar este pedido'}
+          {takingPhoto ? 'Guardando foto…' : 'Sacar foto y seguir'}
         </button>
         <button type="button" className="btn btn--ghost" onClick={onCancel}>
           Cancelar

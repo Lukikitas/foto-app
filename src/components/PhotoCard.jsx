@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
+import { getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
 import {
@@ -17,12 +18,14 @@ import {
 
 function PhotoBadges({ photo }) {
   const isFile = !isOrderPhoto(photo);
+  const aggregator = getPhotoAggregator(photo);
 
-  if (!photo.has_complaint && !photo.is_refutado && !isFile) return null;
+  if (!photo.has_complaint && !photo.is_refutado && !isFile && !aggregator) return null;
 
   return (
     <div className="photo-card__badges">
       {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
+      {aggregator && <span className="badge badge--aggregator">{getAggregatorLabel(aggregator)}</span>}
       {photo.has_complaint && (
         <span className="badge badge--complaint">Reclamo</span>
       )}
@@ -71,7 +74,7 @@ export default function PhotoCard({
 
   function handleNameChange(e) {
     const value = isOrder
-      ? e.target.value.replace(/\D/g, '').slice(0, 4)
+      ? e.target.value.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 32)
       : e.target.value;
     updateForm('name', value);
   }
@@ -79,7 +82,7 @@ export default function PhotoCard({
   async function handleEdit(e) {
     e.preventDefault();
     if (isOrder && !isValidOrderDigits(form.name)) {
-      setError('El pedido debe tener exactamente 4 dígitos.');
+      setError('Ingresá un código de pedido válido.');
       return;
     }
     if (!form.name.trim()) {
@@ -185,14 +188,13 @@ export default function PhotoCard({
           {editing ? (
             <form className="photo-card__edit-form" onSubmit={handleEdit}>
               <label>
-                {isOrder ? 'Dígitos del pedido' : 'Nombre'}
+                {isOrder ? 'Código del pedido' : 'Nombre'}
                 <input
                   type="text"
-                  inputMode={isOrder ? 'numeric' : undefined}
                   value={form.name}
                   onChange={handleNameChange}
                   disabled={loading}
-                  maxLength={isOrder ? 4 : 120}
+                  maxLength={isOrder ? 32 : 120}
                   autoFocus
                 />
               </label>
@@ -246,7 +248,7 @@ export default function PhotoCard({
                 <button
                   type="submit"
                   className="btn btn--small btn--primary"
-                  disabled={loading || !form.name.trim() || (isOrder && form.name.length !== 4)}
+                  disabled={loading || !form.name.trim() || (isOrder && !isValidOrderDigits(form.name))}
                 >
                   Guardar
                 </button>

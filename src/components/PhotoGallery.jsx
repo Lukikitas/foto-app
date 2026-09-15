@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
+import { AGGREGATOR_OPTIONS } from '../lib/aggregators';
 import { fetchPhotos, getPhotoTitle, photoMatchesFilters } from '../lib/photos';
 import { supabase } from '../lib/supabase';
 import {
@@ -19,6 +20,7 @@ const EMPTY_FILTERS = {
   dateTo: '',
   timeFrom: '',
   timeTo: '',
+  aggregator: '',
   hasComplaint: false,
   isRefutado: false,
   takenBy: '',
@@ -429,7 +431,11 @@ export default function PhotoGallery({
 
       {filtersOpen && (
         <form className="gallery__filters gallery__filters--compact" onSubmit={handleSearchSubmit}>
-          <div className="gallery__filters-row gallery__filters-row--main">
+          <div
+            className={`gallery__filters-row gallery__filters-row--main${
+              kind === 'orders' ? ' gallery__filters-row--with-aggregator' : ''
+            }`}
+          >
             <label className="gallery__filter-field gallery__filter-field--compact">
               <span>{searchLabel}</span>
               <input
@@ -459,6 +465,23 @@ export default function PhotoGallery({
                 placeholder="Palabra clave"
               />
             </label>
+
+            {kind === 'orders' && (
+              <label className="gallery__filter-field gallery__filter-field--compact">
+                <span>Agregador</span>
+                <select
+                  value={filters.aggregator}
+                  onChange={(e) => updateFilter('aggregator', e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {AGGREGATOR_OPTIONS.map((aggregator) => (
+                    <option key={aggregator.id} value={aggregator.id}>
+                      {aggregator.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
 
           <div className="gallery__filters-row gallery__filters-row--secondary">

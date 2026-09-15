@@ -1,8 +1,9 @@
 import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
+import { AGGREGATORS, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
 
 const BUCKET = 'photos';
-const ORDER_CODE = /^(?:\d{4}|\d{1,4}-\d{4,})$/;
+const ORDER_CODE = /^(?:\d{4}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MP)[A-Z0-9-]{1,28})$/;
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 
 export const PHOTO_GALLERY_KINDS = {
@@ -86,6 +87,7 @@ export async function fetchPhotos({
   dateTo,
   timeFrom,
   timeTo,
+  aggregator,
   hasComplaint,
   isRefutado,
   takenBy,
@@ -123,6 +125,10 @@ export async function fetchPhotos({
     query = query.eq('is_refutado', true);
   }
 
+  if (aggregator && AGGREGATORS[aggregator]) {
+    query = query.like('file_path', `orders/${aggregator}/%`);
+  }
+
   const trimmedTakenBy = takenBy?.trim();
   if (trimmedTakenBy) {
     query = query.ilike('taken_by', `%${trimmedTakenBy}%`);
@@ -144,6 +150,7 @@ export async function fetchPhotos({
       dateTo,
       timeFrom,
       timeTo,
+      aggregator,
       hasComplaint,
       isRefutado,
       takenBy,
@@ -189,6 +196,7 @@ export function photoMatchesFilters(
     dateTo,
     timeFrom,
     timeTo,
+    aggregator,
     hasComplaint,
     isRefutado,
     takenBy,
@@ -198,6 +206,8 @@ export function photoMatchesFilters(
   if (!photoMatchesGalleryKind(photo, kind)) {
     return false;
   }
+
+  if (aggregator && getPhotoAggregator(photo) !== aggregator) return false;
 
   const trimmedSearch = search?.trim();
   if (trimmedSearch && !includesInsensitive(photo.name, trimmedSearch)) {
@@ -271,12 +281,13 @@ async function insertStoredFile(file, name, meta = {}, folder = '') {
   return data;
 }
 
-export async function uploadPhoto(file, orderDigits, meta = {}) {
+export async function uploadPhoto(file, orderDigits, meta = {}, aggregator = 'sin_agregador') {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('Ingresá el código completo o los últimos 4 dígitos del pedido.');
   }
 
-  return insertStoredFile(file, orderDigits, meta, 'orders');
+  const storageAggregator = AGGREGATORS[aggregator] ? aggregator : 'sin_agregador';
+  return insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`);
 }
 
 export async function uploadFile(file, title, meta = {}) {

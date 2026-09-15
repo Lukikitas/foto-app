@@ -1,28 +1,64 @@
-function normalizeOcrText(value = '') {
+import { detectAggregator, getAggregatorLabel } from './aggregators';
+
+function normalizeLine(value = '') {
   return value
     .toUpperCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[–—]/g, '-')
+    .replace(/[^A-Z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/** Extracts the full code printed after "Código Ped.". */
+function getCodeAfterLabel(line, nextLine = '') {
+  const label = /C[O0]D[I1L]G[O0]\s*:\s*/;
+  const afterLabel = line.replace(label, '').trim();
+  const compactAfterLabel = afterLabel.replace(/[^A-Z0-9-]/g, '');
+  const afterLabelAggregator = detectAggregator(compactAfterLabel);
+  const prefix = {
+    pedidosya: 'PEYA',
+    rappi: 'RAPPI',
+    rappi_turbo: 'RAPPITURBO',
+    mercadopago: 'MP',
+  }[afterLabelAggregator];
+  const candidate = prefix && compactAfterLabel === prefix
+    ? `${afterLabel} ${nextLine}`
+    : afterLabel || nextLine;
+  const compact = candidate.replace(/[^A-Z0-9-]/g, '');
+  const aggregator = detectAggregator(compact);
+
+  if (!aggregator) return null;
+
+  const prefixLength = {
+    pedidosya: 'PEYA'.length,
+    rappi: 'RAPPI'.length,
+    rappi_turbo: 'RAPPITURBO'.length,
+    mercadopago: 'MP'.length,
+  }[aggregator];
+
+  if (compact.length <= prefixLength) return null;
+
+  return {
+    displayCode: compact.slice(0, 32),
+    aggregator,
+    aggregatorLabel: getAggregatorLabel(aggregator),
+  };
+}
+
+/** Extracts the code printed after "CODIGO:" and its delivery aggregator. */
 export function detectOrderCode(ocrText) {
-  const text = normalizeOcrText(ocrText);
-  const match = text.match(
-    /C[O0]D[I1L]G[O0](?:\s+PED(?:IDO)?)?[^0-9]{0,12}(\d[\d\s-]{2,24})/,
-  );
+  const lines = String(ocrText)
+    .split(/\r?\n/)
+    .map(normalizeLine)
+    .filter(Boolean);
 
-  if (!match) return null;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/C[O0]D[I1L]G[O0]\s*:/.test(lines[index])) continue;
 
-  if (match[1].replace(/\D/g, '').length < 4) return null;
+    const code = getCodeAfterLabel(lines[index], lines[index + 1]);
+    if (code) return code;
+  }
 
-  const displayCode = match[1]
-    .trim()
-    .replace(/\s*-\s*/g, '-')
-    .replace(/\s+/g, '');
-
-  return { displayCode };
+  return null;
 }

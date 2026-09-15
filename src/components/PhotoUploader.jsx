@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import OrderCamera from './OrderCamera';
-import { compressImage } from '../lib/compressImage';
 import { isValidOrderDigits } from '../lib/photos';
 import { getLastTakenBy, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
@@ -49,7 +48,7 @@ export default function PhotoUploader() {
   }
 
   function handleDigitsChange(e) {
-    const value = e.target.value.replace(/[^\d-]/g, '').slice(0, 20);
+    const value = e.target.value.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 32);
     setOrderDigits(value);
     setDetectedOrder(null);
     setError(null);
@@ -81,17 +80,20 @@ export default function PhotoUploader() {
   }
 
   function handleOrderCapture(selected, order) {
-    setPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(selected);
-    });
-    setFile(selected);
-    setOrderDigits(order.displayCode);
-    setDetectedOrder(order);
-    setShowManualOrder(false);
-    setOrderCameraOpen(false);
     setError(null);
-    setQueuedMessage(null);
+    saveLastTakenBy(meta.taken_by);
+    enqueue({
+      file: selected,
+      kind: UPLOAD_MODES.order,
+      orderDigits: order.displayCode,
+      title: order.displayCode,
+      aggregator: order.aggregator,
+      meta: {
+        ...meta,
+        has_complaint: false,
+      },
+    });
+    setQueuedMessage(`${order.aggregatorLabel} · ${order.displayCode} en cola.`);
   }
 
   function clearInputs() {
@@ -138,16 +140,14 @@ export default function PhotoUploader() {
 
     setSaving(true);
     try {
-      const preparedFile = file.type.startsWith('image/')
-        ? await compressImage(file)
-        : file;
       saveLastTakenBy(meta.taken_by);
 
       enqueue({
-        file: preparedFile,
+        file,
         kind: uploadMode,
         orderDigits,
         title: title.trim() || getFileTitle(file) || file.name,
+        aggregator: 'sin_agregador',
         meta: {
           ...meta,
           has_complaint: false,
@@ -295,12 +295,11 @@ export default function PhotoUploader() {
             Código de pedido
             <input
               type="text"
-              inputMode="numeric"
-              pattern="(?:\d{4}|\d{1,4}-\d{4,})"
+              pattern="(?:\d{4}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MP)[A-Z0-9-]{1,28})"
               value={orderDigits}
               onChange={handleDigitsChange}
-              placeholder="Ej: 4-2239954696"
-              maxLength={20}
+              placeholder="Ej: PEYA12345"
+              maxLength={32}
               className="uploader__digits-input"
               autoComplete="off"
             />

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
+import { getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
 import {
@@ -15,12 +16,14 @@ import {
 
 function RowBadges({ photo }) {
   const isFile = !isOrderPhoto(photo);
+  const aggregator = getPhotoAggregator(photo);
 
-  if (!photo.has_complaint && !photo.is_refutado && !isFile) return null;
+  if (!photo.has_complaint && !photo.is_refutado && !isFile && !aggregator) return null;
 
   return (
     <span className="photo-row__badges">
       {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
+      {aggregator && <span className="badge badge--aggregator">{getAggregatorLabel(aggregator)}</span>}
       {photo.has_complaint && <span className="badge badge--complaint">R</span>}
       {photo.is_refutado && <span className="badge badge--refutado">Ref</span>}
     </span>

@@ -1,3 +1,4 @@
+import { compressImage } from './compressImage';
 import { uploadFile, uploadPhoto } from './photos';
 
 const queue = [];
@@ -30,13 +31,14 @@ export function subscribe(listener) {
   return () => listeners.delete(listener);
 }
 
-export function enqueue({ file, kind = 'order', orderDigits = '', title = '', meta }) {
+export function enqueue({ file, kind = 'order', orderDigits = '', title = '', aggregator = '', meta }) {
   const item = {
     id: crypto.randomUUID(),
     file,
     kind,
     orderDigits,
     title,
+    aggregator,
     label: kind === 'order' ? `Pedido #${orderDigits}` : title || file.name,
     meta,
     status: 'pending',
@@ -80,9 +82,12 @@ async function processQueue() {
   notify();
 
   try {
+    const preparedFile = next.file.type.startsWith('image/')
+      ? await compressImage(next.file)
+      : next.file;
     const photo = next.kind === 'file'
-      ? await uploadFile(next.file, next.title, next.meta)
-      : await uploadPhoto(next.file, next.orderDigits, next.meta);
+      ? await uploadFile(preparedFile, next.title, next.meta)
+      : await uploadPhoto(preparedFile, next.orderDigits, next.meta, next.aggregator);
     next.status = 'done';
     next.error = null;
     notify();
