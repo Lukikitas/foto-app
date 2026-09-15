@@ -295,7 +295,7 @@ export default function PhotoUploader() {
             Código de pedido
             <input
               type="text"
-              pattern="(?:\d{4}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MP)[A-Z0-9-]{1,28})"
+              pattern="(?:\d{4}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})"
               value={orderDigits}
               onChange={handleDigitsChange}
               placeholder="Ej: PEYA12345"

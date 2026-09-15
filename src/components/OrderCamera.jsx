@@ -4,16 +4,27 @@ import { loadTesseract } from '../lib/tesseract';
 
 const SCAN_INTERVAL_MS = 450;
 const NO_CODE_NOTICE_AFTER_MS = 3500;
+const ROTATION_RETRY_AFTER_MS = 2200;
+const ROTATION_RETRY_COOLDOWN_MS = 3500;
 
-function drawFrame(video, canvas, maxWidth = 1280) {
+function drawFrame(video, canvas, maxWidth = 1280, rotation = 0) {
   const sourceWidth = video.videoWidth;
   const sourceHeight = video.videoHeight;
-  const scale = Math.min(1, maxWidth / sourceWidth);
+  const scale = Math.min(1, maxWidth / Math.max(sourceWidth, sourceHeight));
+  const width = Math.round(sourceWidth * scale);
+  const height = Math.round(sourceHeight * scale);
 
-  canvas.width = Math.round(sourceWidth * scale);
-  canvas.height = Math.round(sourceHeight * scale);
+  canvas.width = rotation ? height : width;
+  canvas.height = rotation ? width : height;
   const context = canvas.getContext('2d', { alpha: false });
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  if (rotation === 90) {
+    context.translate(canvas.width, 0);
+    context.rotate(Math.PI / 2);
+  } else if (rotation === 270) {
+    context.translate(0, canvas.height);
+    context.rotate(-Math.PI / 2);
+  }
+  context.drawImage(video, 0, 0, width, height);
 }
 
 function makePhoto(video) {
@@ -57,6 +68,7 @@ export default function OrderCamera({ onCapture, onCancel }) {
   useEffect(() => {
     let active = true;
     let startedAt = 0;
+    let lastRotationRetryAt = 0;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
@@ -108,12 +120,27 @@ export default function OrderCamera({ onCapture, onCancel }) {
 
           try {
             drawFrame(videoRef.current, canvasRef.current);
-            const {
+            let {
               data: { text },
             } = await workerRef.current.recognize(canvasRef.current);
             if (!active) return;
 
-            const order = detectOrderCode(text);
+            let order = detectOrderCode(text);
+            const shouldTryRotation = !order
+              && Date.now() - startedAt >= ROTATION_RETRY_AFTER_MS
+              && Date.now() - lastRotationRetryAt >= ROTATION_RETRY_COOLDOWN_MS;
+
+            if (shouldTryRotation) {
+              lastRotationRetryAt = Date.now();
+              for (const rotation of [90, 270]) {
+                drawFrame(videoRef.current, canvasRef.current, 1280, rotation);
+                ({ data: { text } } = await workerRef.current.recognize(canvasRef.current));
+                if (!active) return;
+                order = detectOrderCode(text);
+                if (order) break;
+              }
+            }
+
             if (order) {
               setDetectedOrder(order);
               setStatus('found');
@@ -175,7 +202,7 @@ export default function OrderCamera({ onCapture, onCancel }) {
   const message = {
     starting: 'Preparando cámara y lector…',
     scanning: 'Buscando “CODIGO:” y el agregador…',
-    'not-found': 'No se detecta “CODIGO:” seguido de PEYA, RAPPI, RAPPITURBO o MP.',
+    'not-found': 'No se detecta “CODIGO:” seguido de PEYA, RAPPI, RAPPITURBO o MPD.',
     found: `${detectedOrder?.aggregatorLabel}: ${detectedOrder?.displayCode} detectado.`,
     error: 'No se pudo iniciar la lectura automática.',
   }[status];

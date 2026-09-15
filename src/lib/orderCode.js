@@ -16,13 +16,13 @@ function getCodeAfterLabel(line, nextLine = '') {
   const afterLabel = line.replace(label, '').trim();
   const compactAfterLabel = afterLabel.replace(/[^A-Z0-9-]/g, '');
   const afterLabelAggregator = detectAggregator(compactAfterLabel);
-  const prefix = {
-    pedidosya: 'PEYA',
-    rappi: 'RAPPI',
-    rappi_turbo: 'RAPPITURBO',
-    mercadopago: 'MP',
-  }[afterLabelAggregator];
-  const candidate = prefix && compactAfterLabel === prefix
+  const prefixes = {
+    pedidosya: ['PEYA'],
+    rappi: ['RAPPI'],
+    rappi_turbo: ['RAPPITURBO'],
+    mercadopago: ['MPD', 'MP'],
+  }[afterLabelAggregator] || [];
+  const candidate = prefixes.includes(compactAfterLabel)
     ? `${afterLabel} ${nextLine}`
     : afterLabel || nextLine;
   const compact = candidate.replace(/[^A-Z0-9-]/g, '');
@@ -30,14 +30,14 @@ function getCodeAfterLabel(line, nextLine = '') {
 
   if (!aggregator) return null;
 
-  const prefixLength = {
-    pedidosya: 'PEYA'.length,
-    rappi: 'RAPPI'.length,
-    rappi_turbo: 'RAPPITURBO'.length,
-    mercadopago: 'MP'.length,
-  }[aggregator];
+  const matchedPrefix = ({
+    pedidosya: ['PEYA'],
+    rappi: ['RAPPI'],
+    rappi_turbo: ['RAPPITURBO'],
+    mercadopago: ['MPD', 'MP'],
+  }[aggregator]).find((prefix) => compact.startsWith(prefix));
 
-  if (compact.length <= prefixLength) return null;
+  if (compact.length <= matchedPrefix.length) return null;
 
   return {
     displayCode: compact.slice(0, 32),

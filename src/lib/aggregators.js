@@ -2,7 +2,7 @@ export const AGGREGATORS = {
   pedidosya: { label: 'PedidosYa', prefixes: ['PEYA'] },
   rappi: { label: 'Rappi', prefixes: ['RAPPI'] },
   rappi_turbo: { label: 'Rappi Turbo', prefixes: ['RAPPITURBO', 'RAPPI TURBO'] },
-  mercadopago: { label: 'Mercado Pago', prefixes: ['MP'] },
+  mercadopago: { label: 'Mercado Pago', prefixes: ['MPD', 'MP'] },
 };
 
 export const AGGREGATOR_OPTIONS = Object.entries(AGGREGATORS).map(([id, item]) => ({
@@ -20,7 +20,7 @@ export function detectAggregator(value) {
   if (normalized.startsWith('RAPPITURBO')) return 'rappi_turbo';
   if (normalized.startsWith('PEYA')) return 'pedidosya';
   if (normalized.startsWith('RAPPI')) return 'rappi';
-  if (normalized.startsWith('MP')) return 'mercadopago';
+  if (normalized.startsWith('MPD') || normalized.startsWith('MP')) return 'mercadopago';
   return null;
 }
 
