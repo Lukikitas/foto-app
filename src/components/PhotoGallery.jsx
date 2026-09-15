@@ -17,6 +17,8 @@ const EMPTY_FILTERS = {
   search: '',
   dateFrom: '',
   dateTo: '',
+  timeFrom: '',
+  timeTo: '',
   hasComplaint: false,
   isRefutado: false,
   takenBy: '',
@@ -475,6 +477,24 @@ export default function PhotoGallery({
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => updateFilter('dateTo', e.target.value)}
+              />
+            </label>
+
+            <label className="gallery__filter-field gallery__filter-field--compact">
+              <span>Hora desde</span>
+              <input
+                type="time"
+                value={filters.timeFrom}
+                onChange={(e) => updateFilter('timeFrom', e.target.value)}
+              />
+            </label>
+
+            <label className="gallery__filter-field gallery__filter-field--compact">
+              <span>Hora hasta</span>
+              <input
+                type="time"
+                value={filters.timeTo}
+                onChange={(e) => updateFilter('timeTo', e.target.value)}
               />
             </label>
 

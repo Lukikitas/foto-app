@@ -136,8 +136,107 @@
 
 .uploader__file-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: 0.65rem;
+}
+
+.uploader__detected-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius);
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 0.9rem;
+}
+
+.uploader__detected-order strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.order-camera {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  background: var(--accent-bg);
+}
+
+.order-camera__viewport {
+  position: relative;
+  overflow: hidden;
+  min-height: 14rem;
+  border-radius: var(--radius);
+  background: #121212;
+}
+
+.order-camera__video {
+  display: block;
+  width: 100%;
+  min-height: 14rem;
+  max-height: 52svh;
+  object-fit: cover;
+}
+
+.order-camera__guide {
+  position: absolute;
+  inset: 12% 8%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.7rem;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+}
+
+.order-camera__guide span {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 0.82rem;
+}
+
+.order-camera__canvas {
+  display: none;
+}
+
+.order-camera__status {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-h);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.order-camera__status--found {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.order-camera__status--not-found,
+.order-camera__status--error {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.order-camera__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .uploader__file-label {
@@ -482,7 +581,7 @@
 
 .gallery__filters-row--secondary {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
   gap: 0.4rem;
   align-items: end;
 }

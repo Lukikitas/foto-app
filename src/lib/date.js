@@ -28,6 +28,16 @@ export function endOfDay(dateStr) {
   return date.toISOString();
 }
 
+export function startOfDateTime(dateStr, timeStr) {
+  if (!timeStr) return startOfDay(dateStr);
+  return new Date(`${dateStr}T${timeStr}:00`).toISOString();
+}
+
+export function endOfDateTime(dateStr, timeStr) {
+  if (!timeStr) return endOfDay(dateStr);
+  return new Date(`${dateStr}T${timeStr}:59.999`).toISOString();
+}
+
 export function todayDateInput() {
   return toDateInputValue(new Date());
 }

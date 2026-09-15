@@ -1,4 +1,4 @@
-import { endOfDay, startOfDay } from './date';
+import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { supabase } from './supabase';
 
 const BUCKET = 'photos';
@@ -84,6 +84,8 @@ export async function fetchPhotos({
   search,
   dateFrom,
   dateTo,
+  timeFrom,
+  timeTo,
   hasComplaint,
   isRefutado,
   takenBy,
@@ -100,11 +102,17 @@ export async function fetchPhotos({
   }
 
   if (dateFrom) {
-    query = query.gte('created_at', startOfDay(dateFrom));
+    query = query.gte(
+      'created_at',
+      timeFrom ? startOfDateTime(dateFrom, timeFrom) : startOfDay(dateFrom),
+    );
   }
 
   if (dateTo) {
-    query = query.lte('created_at', endOfDay(dateTo));
+    query = query.lte(
+      'created_at',
+      timeTo ? endOfDateTime(dateTo, timeTo) : endOfDay(dateTo),
+    );
   }
 
   if (hasComplaint) {
@@ -128,13 +136,48 @@ export async function fetchPhotos({
   const { data, error } = await query;
 
   if (error) throw error;
-  return (data ?? []).filter((photo) => photoMatchesGalleryKind(photo, kind));
+  return (data ?? []).filter((photo) =>
+    photoMatchesFilters(photo, {
+      kind,
+      search,
+      dateFrom,
+      dateTo,
+      timeFrom,
+      timeTo,
+      hasComplaint,
+      isRefutado,
+      takenBy,
+      notes,
+    }),
+  );
 }
 
 function includesInsensitive(value, query) {
   if (!query) return true;
   if (!value) return false;
   return value.toLowerCase().includes(query.toLowerCase());
+}
+
+function minutesFromTime(value) {
+  if (!/^\d{2}:\d{2}$/.test(value || '')) return null;
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function photoMatchesTimeOfDay(photo, timeFrom, timeTo) {
+  const from = minutesFromTime(timeFrom);
+  const to = minutesFromTime(timeTo);
+  if (from === null && to === null) return true;
+
+  const takenAt = new Date(photo.created_at);
+  const current = takenAt.getHours() * 60 + takenAt.getMinutes();
+
+  if (from !== null && to !== null && from > to) {
+    return current >= from || current <= to;
+  }
+  if (from !== null && current < from) return false;
+  if (to !== null && current > to) return false;
+  return true;
 }
 
 export function photoMatchesFilters(
@@ -144,6 +187,8 @@ export function photoMatchesFilters(
     search,
     dateFrom,
     dateTo,
+    timeFrom,
+    timeTo,
     hasComplaint,
     isRefutado,
     takenBy,
@@ -160,13 +205,19 @@ export function photoMatchesFilters(
   }
 
   if (dateFrom) {
-    const start = new Date(startOfDay(dateFrom));
+    const start = new Date(
+      timeFrom ? startOfDateTime(dateFrom, timeFrom) : startOfDay(dateFrom),
+    );
     if (new Date(photo.created_at) < start) return false;
   }
 
   if (dateTo) {
-    const end = new Date(endOfDay(dateTo));
+    const end = new Date(timeTo ? endOfDateTime(dateTo, timeTo) : endOfDay(dateTo));
     if (new Date(photo.created_at) > end) return false;
+  }
+
+  if (!dateFrom && !dateTo && !photoMatchesTimeOfDay(photo, timeFrom, timeTo)) {
+    return false;
   }
 
   if (hasComplaint && !photo.has_complaint) return false;

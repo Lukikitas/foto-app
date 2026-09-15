@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import OrderCamera from './OrderCamera';
 import { compressImage } from '../lib/compressImage';
 import { isValidOrderDigits } from '../lib/photos';
 import { getLastTakenBy, saveLastTakenBy } from '../lib/storage';
@@ -26,6 +27,9 @@ export default function PhotoUploader() {
   const [preview, setPreview] = useState(null);
   const [uploadMode, setUploadMode] = useState(UPLOAD_MODES.order);
   const [orderDigits, setOrderDigits] = useState('');
+  const [detectedOrder, setDetectedOrder] = useState(null);
+  const [showManualOrder, setShowManualOrder] = useState(false);
+  const [orderCameraOpen, setOrderCameraOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [meta, setMeta] = useState(EMPTY_META);
   const [error, setError] = useState(null);
@@ -47,6 +51,7 @@ export default function PhotoUploader() {
   function handleDigitsChange(e) {
     const value = e.target.value.replace(/\D/g, '').slice(0, 4);
     setOrderDigits(value);
+    setDetectedOrder(null);
     setError(null);
     setQueuedMessage(null);
   }
@@ -69,6 +74,24 @@ export default function PhotoUploader() {
     });
     setFile(selected);
     setTitle((current) => current || getFileTitle(selected));
+    if (uploadMode === UPLOAD_MODES.order) {
+      setDetectedOrder(null);
+      setShowManualOrder(true);
+    }
+  }
+
+  function handleOrderCapture(selected, order) {
+    setPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(selected);
+    });
+    setFile(selected);
+    setOrderDigits(order.orderDigits);
+    setDetectedOrder(order);
+    setShowManualOrder(false);
+    setOrderCameraOpen(false);
+    setError(null);
+    setQueuedMessage(null);
   }
 
   function clearInputs() {
@@ -83,6 +106,9 @@ export default function PhotoUploader() {
     });
     setFile(null);
     setOrderDigits('');
+    setDetectedOrder(null);
+    setShowManualOrder(false);
+    setOrderCameraOpen(false);
     setTitle('');
     setMeta({
       ...EMPTY_META,
@@ -146,6 +172,12 @@ export default function PhotoUploader() {
 
   return (
     <section className="uploader">
+      {orderCameraOpen && (
+        <OrderCamera
+          onCapture={handleOrderCapture}
+          onCancel={() => setOrderCameraOpen(false)}
+        />
+      )}
       <form className="uploader__form" onSubmit={handleSubmit}>
         <div className="uploader__mode" role="group" aria-label="Tipo de carga">
           <button
@@ -167,17 +199,46 @@ export default function PhotoUploader() {
         </div>
 
         <div className="uploader__file-actions">
-          <label className="uploader__file-label">
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="uploader__file-input"
-            />
-            <span className="uploader__file-btn">Sacar foto</span>
-          </label>
+          {isOrderMode ? (
+            <button
+              type="button"
+              className="uploader__file-btn"
+              onClick={() => {
+                setOrderCameraOpen(true);
+                setError(null);
+              }}
+            >
+              Detectar y sacar foto
+            </button>
+          ) : (
+            <label className="uploader__file-label">
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileChange}
+                className="uploader__file-input"
+              />
+              <span className="uploader__file-btn">Sacar foto</span>
+            </label>
+          )}
+
+          {isOrderMode && (
+            <label className="uploader__file-label">
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileChange}
+                className="uploader__file-input"
+              />
+              <span className="uploader__file-btn uploader__file-btn--secondary">
+                Foto sin lectura
+              </span>
+            </label>
+          )}
 
           <label className="uploader__file-label">
             <input
@@ -213,7 +274,23 @@ export default function PhotoUploader() {
           </div>
         )}
 
-        {isOrderMode ? (
+        {isOrderMode && detectedOrder && !showManualOrder && (
+          <div className="uploader__detected-order" role="status">
+            <span>
+              Código detectado: <strong>{detectedOrder.displayCode}</strong>
+              {' · '}se guardará como #{orderDigits}
+            </span>
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => setShowManualOrder(true)}
+            >
+              Corregir
+            </button>
+          </div>
+        )}
+
+        {isOrderMode && (!detectedOrder || showManualOrder) ? (
           <label className="uploader__name-label">
             Últimos 4 dígitos del pedido
             <input
