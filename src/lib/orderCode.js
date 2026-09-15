@@ -1,19 +1,20 @@
 import { detectAggregator, getAggregatorLabel } from './aggregators';
 
+const CODE_LABEL = /C[O0]D[I1L]G[O0]\s*[:.;-]?\s*/;
+
 function normalizeLine(value = '') {
   return value
     .toUpperCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[–—]/g, '-')
-    .replace(/[^A-Z0-9\s-]/g, ' ')
+    .replace(/[^A-Z0-9\s:-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function getCodeAfterLabel(line, nextLine = '') {
-  const label = /C[O0]D[I1L]G[O0]\s*:\s*/;
-  const afterLabel = line.replace(label, '').trim();
+  const afterLabel = line.replace(CODE_LABEL, '').trim();
   const compactAfterLabel = afterLabel.replace(/[^A-Z0-9-]/g, '');
   const afterLabelAggregator = detectAggregator(compactAfterLabel);
   const prefixes = {
@@ -54,7 +55,7 @@ export function detectOrderCode(ocrText) {
     .filter(Boolean);
 
   for (let index = 0; index < lines.length; index += 1) {
-    if (!/C[O0]D[I1L]G[O0]\s*:/.test(lines[index])) continue;
+    if (!CODE_LABEL.test(lines[index])) continue;
 
     const code = getCodeAfterLabel(lines[index], lines[index + 1]);
     if (code) return code;
