@@ -1,5 +1,6 @@
 import { compressImage } from './compressImage';
-import { uploadFile, uploadPhoto } from './photos';
+import { detectOrderFromPhoto } from './orderOcr';
+import { uploadFile, uploadPhoto, uploadUnidentifiedOrder } from './photos';
 
 const queue = [];
 const listeners = new Set();
@@ -39,7 +40,9 @@ export function enqueue({ file, kind = 'order', orderDigits = '', title = '', ag
     orderDigits,
     title,
     aggregator,
-    label: kind === 'order' ? `Pedido #${orderDigits}` : title || file.name,
+    label: kind === 'order'
+      ? orderDigits ? `Pedido #${orderDigits}` : 'Buscando código…'
+      : title || file.name,
     meta,
     status: 'pending',
     error: null,
@@ -78,16 +81,48 @@ async function processQueue() {
   if (!next) return;
 
   processing = true;
-  next.status = 'uploading';
-  notify();
-
   try {
     const preparedFile = next.file.type.startsWith('image/')
       ? await compressImage(next.file)
       : next.file;
-    const photo = next.kind === 'file'
-      ? await uploadFile(preparedFile, next.title, next.meta)
-      : await uploadPhoto(preparedFile, next.orderDigits, next.meta, next.aggregator);
+
+    let photo;
+    if (next.kind === 'file') {
+      next.status = 'uploading';
+      notify();
+      photo = await uploadFile(preparedFile, next.title, next.meta);
+    } else if (next.orderDigits) {
+      next.status = 'uploading';
+      notify();
+      photo = await uploadPhoto(preparedFile, next.orderDigits, next.meta, next.aggregator);
+    } else {
+      next.status = 'analyzing';
+      next.label = 'Buscando código…';
+      notify();
+
+      let detectedOrder = null;
+      try {
+        detectedOrder = await detectOrderFromPhoto(preparedFile);
+      } catch {
+        detectedOrder = null;
+      }
+
+      next.status = 'uploading';
+      if (detectedOrder) {
+        next.label = `Pedido #${detectedOrder.displayCode}`;
+        notify();
+        photo = await uploadPhoto(
+          preparedFile,
+          detectedOrder.displayCode,
+          next.meta,
+          detectedOrder.aggregator,
+        );
+      } else {
+        next.label = 'Código no encontrado';
+        notify();
+        photo = await uploadUnidentifiedOrder(preparedFile, next.meta);
+      }
+    }
     next.status = 'done';
     next.error = null;
     notify();
@@ -111,5 +146,7 @@ async function processQueue() {
 }
 
 export function getPendingCount() {
-  return queue.filter((entry) => entry.status === 'pending' || entry.status === 'uploading').length;
+  return queue.filter((entry) =>
+    entry.status === 'pending' || entry.status === 'analyzing' || entry.status === 'uploading'
+  ).length;
 }

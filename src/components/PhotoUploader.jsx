@@ -79,21 +79,18 @@ export default function PhotoUploader() {
     }
   }
 
-  function handleOrderCapture(selected, order) {
+  function handleOrderCapture(selected) {
     setError(null);
     saveLastTakenBy(meta.taken_by);
     enqueue({
       file: selected,
       kind: UPLOAD_MODES.order,
-      orderDigits: order.displayCode,
-      title: order.displayCode,
-      aggregator: order.aggregator,
       meta: {
         ...meta,
         has_complaint: false,
       },
     });
-    setQueuedMessage(`${order.aggregatorLabel} · ${order.displayCode} en cola.`);
+    setQueuedMessage('Foto en cola. El código se buscará mientras seguís sacando fotos.');
   }
 
   function clearInputs() {
@@ -208,7 +205,7 @@ export default function PhotoUploader() {
                 setError(null);
               }}
             >
-              Detectar y sacar foto
+              Abrir cámara rápida
             </button>
           ) : (
             <label className="uploader__file-label">

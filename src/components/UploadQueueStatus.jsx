@@ -3,6 +3,7 @@ import { useUploadQueue } from '../hooks/useUploadQueue';
 
 const STATUS_LABEL = {
   pending: 'En cola',
+  analyzing: 'Buscando código…',
   uploading: 'Subiendo…',
   done: 'Guardado',
   error: 'Error',
@@ -14,7 +15,7 @@ export default function UploadQueueStatus() {
   if (items.length === 0) return null;
 
   const activeCount = items.filter(
-    (item) => item.status === 'pending' || item.status === 'uploading'
+    (item) => item.status === 'pending' || item.status === 'analyzing' || item.status === 'uploading'
   ).length;
 
   return (

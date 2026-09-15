@@ -21,6 +21,7 @@ const EMPTY_FILTERS = {
   timeFrom: '',
   timeTo: '',
   aggregator: '',
+  codeNotFound: false,
   hasComplaint: false,
   isRefutado: false,
   takenBy: '',
@@ -538,6 +539,16 @@ export default function PhotoGallery({
                 />
                 <span>Refutados</span>
               </label>
+              {kind === 'orders' && (
+                <label className="checkbox-label checkbox-label--compact">
+                  <input
+                    type="checkbox"
+                    checked={filters.codeNotFound}
+                    onChange={(e) => updateFilter('codeNotFound', e.target.checked)}
+                  />
+                  <span>Sin código</span>
+                </label>
+              )}
             </div>
           </div>
 

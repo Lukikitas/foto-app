@@ -12,6 +12,7 @@ import {
   getPhotoTitle,
   isImagePhoto,
   isOrderPhoto,
+  isUnidentifiedOrder,
   isValidOrderDigits,
   updatePhoto,
 } from '../lib/photos';
@@ -19,13 +20,15 @@ import {
 function PhotoBadges({ photo }) {
   const isFile = !isOrderPhoto(photo);
   const aggregator = getPhotoAggregator(photo);
+  const codeNotFound = isUnidentifiedOrder(photo);
 
-  if (!photo.has_complaint && !photo.is_refutado && !isFile && !aggregator) return null;
+  if (!photo.has_complaint && !photo.is_refutado && !isFile && !aggregator && !codeNotFound) return null;
 
   return (
     <div className="photo-card__badges">
       {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
       {aggregator && <span className="badge badge--aggregator">{getAggregatorLabel(aggregator)}</span>}
+      {codeNotFound && <span className="badge badge--missing-code">Código no encontrado</span>}
       {photo.has_complaint && (
         <span className="badge badge--complaint">Reclamo</span>
       )}
@@ -60,6 +63,7 @@ export default function PhotoCard({
   const timestamp = getPhotoTimestamp(photo);
   const title = getPhotoTitle(photo);
   const isOrder = isOrderPhoto(photo);
+  const isUnidentified = isUnidentifiedOrder(photo);
   const isImage = isImagePhoto(photo);
   const extension = getFileExtension(photo).toUpperCase() || 'FILE';
   const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
@@ -335,7 +339,7 @@ export default function PhotoCard({
                 onClick={startEditing}
                 disabled={loading}
               >
-                Editar
+                {isUnidentified ? 'Completar código' : 'Editar'}
               </button>
               <button
                 type="button"

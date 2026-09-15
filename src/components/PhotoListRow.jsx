@@ -12,18 +12,21 @@ import {
   getPhotoTitle,
   isImagePhoto,
   isOrderPhoto,
+  isUnidentifiedOrder,
 } from '../lib/photos';
 
 function RowBadges({ photo }) {
   const isFile = !isOrderPhoto(photo);
   const aggregator = getPhotoAggregator(photo);
+  const codeNotFound = isUnidentifiedOrder(photo);
 
-  if (!photo.has_complaint && !photo.is_refutado && !isFile && !aggregator) return null;
+  if (!photo.has_complaint && !photo.is_refutado && !isFile && !aggregator && !codeNotFound) return null;
 
   return (
     <span className="photo-row__badges">
       {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
       {aggregator && <span className="badge badge--aggregator">{getAggregatorLabel(aggregator)}</span>}
+      {codeNotFound && <span className="badge badge--missing-code">Sin código</span>}
       {photo.has_complaint && <span className="badge badge--complaint">R</span>}
       {photo.is_refutado && <span className="badge badge--refutado">Ref</span>}
     </span>

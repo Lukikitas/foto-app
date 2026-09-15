@@ -670,6 +670,12 @@
   color: var(--accent);
 }
 
+.badge--missing-code {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .gallery__filter-checks--inline {
   display: flex;
   flex-wrap: wrap;

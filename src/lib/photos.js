@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 const BUCKET = 'photos';
 const ORDER_CODE = /^(?:\d{4}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})$/;
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
+export const UNIDENTIFIED_ORDER_NAME = 'Código no encontrado';
 
 export const PHOTO_GALLERY_KINDS = {
   orders: 'orders',
@@ -19,6 +20,10 @@ export function isOrderPhoto(photo) {
   if (photo?.file_path?.startsWith('files/')) return false;
   if (photo?.file_path?.startsWith('orders/')) return true;
   return isValidOrderDigits(photo?.name || '');
+}
+
+export function isUnidentifiedOrder(photo) {
+  return isOrderPhoto(photo) && photo?.name === UNIDENTIFIED_ORDER_NAME;
 }
 
 export function photoMatchesGalleryKind(photo, kind) {
@@ -36,6 +41,7 @@ export function isImagePhoto(photo) {
 }
 
 export function getPhotoTitle(photo) {
+  if (isUnidentifiedOrder(photo)) return UNIDENTIFIED_ORDER_NAME;
   if (isOrderPhoto(photo)) return `Pedido #${photo.name}`;
   return photo?.name || 'Archivo';
 }
@@ -88,6 +94,7 @@ export async function fetchPhotos({
   timeFrom,
   timeTo,
   aggregator,
+  codeNotFound,
   hasComplaint,
   isRefutado,
   takenBy,
@@ -151,6 +158,7 @@ export async function fetchPhotos({
       timeFrom,
       timeTo,
       aggregator,
+      codeNotFound,
       hasComplaint,
       isRefutado,
       takenBy,
@@ -197,6 +205,7 @@ export function photoMatchesFilters(
     timeFrom,
     timeTo,
     aggregator,
+    codeNotFound,
     hasComplaint,
     isRefutado,
     takenBy,
@@ -208,6 +217,7 @@ export function photoMatchesFilters(
   }
 
   if (aggregator && getPhotoAggregator(photo) !== aggregator) return false;
+  if (codeNotFound && !isUnidentifiedOrder(photo)) return false;
 
   const trimmedSearch = search?.trim();
   if (trimmedSearch && !includesInsensitive(photo.name, trimmedSearch)) {
@@ -288,6 +298,10 @@ export async function uploadPhoto(file, orderDigits, meta = {}, aggregator = 'si
 
   const storageAggregator = AGGREGATORS[aggregator] ? aggregator : 'sin_agregador';
   return insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`);
+}
+
+export async function uploadUnidentifiedOrder(file, meta = {}) {
+  return insertStoredFile(file, UNIDENTIFIED_ORDER_NAME, meta, 'orders/no_code');
 }
 
 export async function uploadFile(file, title, meta = {}) {
