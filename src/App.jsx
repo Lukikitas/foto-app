@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ComplaintsInbox from './components/ComplaintsInbox';
 import InstallPrompt from './components/InstallPrompt';
 import PhotoGallery from './components/PhotoGallery';
 import PhotoUploader from './components/PhotoUploader';
@@ -12,6 +13,7 @@ import './App.css';
 const TABS = {
   capture: 'capture',
   orders: 'orders',
+  complaints: 'complaints',
   files: 'files',
 };
 
@@ -62,6 +64,7 @@ export default function App() {
             searchPlaceholder="PEYA12345 o 4696"
           />
         )}
+        {tab === TABS.complaints && <ComplaintsInbox />}
         {tab === TABS.files && (
           <PhotoGallery
             key="files-gallery"
@@ -94,6 +97,14 @@ export default function App() {
             aria-current={tab === TABS.orders ? 'page' : undefined}
           >
             Pedidos
+          </button>
+          <button
+            type="button"
+            className={`app-nav__btn${tab === TABS.complaints ? ' app-nav__btn--active' : ''}`}
+            onClick={() => setTab(TABS.complaints)}
+            aria-current={tab === TABS.complaints ? 'page' : undefined}
+          >
+            Reclamos
           </button>
           <button
             type="button"
