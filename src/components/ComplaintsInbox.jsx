@@ -537,7 +537,7 @@ function ComplaintCard({
         )}
 
         <div className="complaint-card__heading">
-          <h3>{row.complaint.orderCode}</h3>
+          <h3>{photo?.name || row.complaint.orderCode}</h3>
           <p>{formatComplaintWhen(row.complaint)}</p>
           <div className="complaint-card__badges">
             {aggregator && (
