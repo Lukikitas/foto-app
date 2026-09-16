@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { subscribe } from '../lib/uploadQueue';
 
-const GUIDE_INSET = { top: 0.16, right: 0.07, bottom: 0.3, left: 0.07 };
+const STEPS = {
+  ticket: 'ticket',
+  evidence: 'evidence',
+};
 
 function drawFrame(video, canvas, maxWidth = 2560) {
   const sourceWidth = video.videoWidth;
@@ -66,80 +70,26 @@ function canvasToFile(canvas, name, type, quality) {
   });
 }
 
-function makePhoto(video) {
+function makePhoto(video, name) {
   if (!video?.videoWidth || !video?.videoHeight) {
     return Promise.reject(new Error('La cámara todavía no está lista.'));
   }
 
   const canvas = document.createElement('canvas');
   drawFrame(video, canvas);
-  return canvasToFile(canvas, `pedido-${Date.now()}.jpg`, 'image/jpeg', 0.95);
+  return canvasToFile(canvas, name, 'image/jpeg', 0.95);
 }
 
-function visibleVideoRect(video, viewport) {
-  const videoWidth = video.videoWidth;
-  const videoHeight = video.videoHeight;
-  const viewWidth = viewport.clientWidth;
-  const viewHeight = viewport.clientHeight;
-  const scale = Math.max(viewWidth / videoWidth, viewHeight / videoHeight);
-  const overflowX = (videoWidth * scale - viewWidth) / 2;
-  const overflowY = (videoHeight * scale - viewHeight) / 2;
-
-  return {
-    x: overflowX / scale,
-    y: overflowY / scale,
-    width: viewWidth / scale,
-    height: viewHeight / scale,
-  };
-}
-
-function guideRect(video, viewport) {
-  const visible = visibleVideoRect(video, viewport);
-  return {
-    x: visible.x + visible.width * GUIDE_INSET.left,
-    y: visible.y + visible.height * GUIDE_INSET.top,
-    width: visible.width * (1 - GUIDE_INSET.left - GUIDE_INSET.right),
-    height: visible.height * (1 - GUIDE_INSET.top - GUIDE_INSET.bottom),
-  };
-}
-
-async function makeOcrCrop(video, viewport) {
-  if (!video?.videoWidth || !viewport?.clientWidth) return null;
-
-  const region = guideRect(video, viewport);
-  if (region.width < 40 || region.height < 40) return null;
-
-  const scale = Math.min(3.5, Math.max(1.6, 2400 / Math.max(region.width, region.height)));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(region.width * scale));
-  canvas.height = Math.max(1, Math.round(region.height * scale));
-  const context = canvas.getContext('2d', { alpha: false });
-  if (!context) return null;
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(
-    video,
-    region.x,
-    region.y,
-    region.width,
-    region.height,
-    0,
-    0,
-    canvas.width,
-    canvas.height,
-  );
-
-  return canvasToFile(canvas, `pedido-ocr-${Date.now()}.png`, 'image/png');
-}
-
-export default function OrderCamera({ onCapture, onCancel }) {
+export default function OrderCamera({ onCapturePair, onCancel }) {
   const videoRef = useRef(null);
-  const viewportRef = useRef(null);
   const streamRef = useRef(null);
+  const ticketFileRef = useRef(null);
   const [status, setStatus] = useState('starting');
+  const [step, setStep] = useState(STEPS.ticket);
   const [error, setError] = useState(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
-  const [queuedCount, setQueuedCount] = useState(0);
+  const [queuedPairs, setQueuedPairs] = useState(0);
+  const [pendingTasks, setPendingTasks] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -181,12 +131,33 @@ export default function OrderCamera({ onCapture, onCancel }) {
 
     startCamera();
 
+    const unsubscribe = subscribe((items) => {
+      setPendingTasks(
+        items.filter((item) =>
+          item.status === 'pending' || item.status === 'analyzing' || item.status === 'uploading'
+        ).length,
+      );
+    });
+
     return () => {
       active = false;
+      unsubscribe();
       document.body.style.overflow = previousOverflow;
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      ticketFileRef.current = null;
     };
   }, []);
+
+  function resetToTicket() {
+    ticketFileRef.current = null;
+    setStep(STEPS.ticket);
+    setTakingPhoto(false);
+  }
+
+  function handleCancel() {
+    ticketFileRef.current = null;
+    onCancel();
+  }
 
   async function handleCapture() {
     if (status !== 'ready' || takingPhoto) return;
@@ -196,30 +167,57 @@ export default function OrderCamera({ onCapture, onCancel }) {
       if (!videoRef.current?.videoWidth) {
         throw new Error('La cámara todavía no está lista.');
       }
-      const file = await makePhoto(videoRef.current);
-      const ocrFile = await makeOcrCrop(videoRef.current, viewportRef.current);
-      onCapture(file, ocrFile);
-      setQueuedCount((count) => count + 1);
+
+      if (step === STEPS.ticket) {
+        ticketFileRef.current = await makePhoto(videoRef.current, `ticket-${Date.now()}.jpg`);
+        setStep(STEPS.evidence);
+        setError(null);
+        setTakingPhoto(false);
+        return;
+      }
+
+      const evidenceFile = await makePhoto(videoRef.current, `evidencia-${Date.now()}.jpg`);
+      const ticketFile = ticketFileRef.current;
+      ticketFileRef.current = null;
+      if (!ticketFile) {
+        throw new Error('Falta la foto del ticket. Volvé a empezar el par.');
+      }
+
+      onCapturePair({ ticketFile, evidenceFile });
+      setQueuedPairs((count) => count + 1);
       setError(null);
+      setStep(STEPS.ticket);
       setTakingPhoto(false);
     } catch (captureError) {
       setError(captureError.message || 'No se pudo tomar la foto.');
+      if (step === STEPS.evidence && !ticketFileRef.current) {
+        setStep(STEPS.ticket);
+      }
       setTakingPhoto(false);
     }
   }
 
-  const message = {
-    starting: 'Preparando cámara…',
-    ready: 'Sacá todas las fotos que necesites. El código se busca después, sin frenar la cámara.',
-    error: 'No se pudo abrir la cámara.',
-  }[status];
+  const isTicketStep = step === STEPS.ticket;
+  const stepLabel = isTicketStep ? '1 de 2 · Foto del ticket' : '2 de 2 · Foto de evidencia';
+  const guideText = isTicketStep
+    ? 'Acercá la parte de arriba del ticket, donde dice CODIGO:'
+    : 'Bolsa, contenido y ticket a la vista';
+  const captureLabel = takingPhoto
+    ? 'Tomando foto…'
+    : isTicketStep
+      ? 'Foto del ticket'
+      : 'Foto de evidencia';
 
   return (
     <section className="order-camera" aria-label="Cámara rápida de pedidos">
-      <div ref={viewportRef} className="order-camera__viewport">
+      <div className="order-camera__viewport">
         <video ref={videoRef} className="order-camera__video" autoPlay muted playsInline />
-        <div className="order-camera__guide" aria-hidden="true">
-          <span>Mostrá el ticket y el contenido de la bolsa</span>
+        <div
+          className={`order-camera__guide order-camera__guide--${step}`}
+          aria-hidden="true"
+        >
+          {isTicketStep && <span className="order-camera__guide-focus" />}
+          <span>{guideText}</span>
         </div>
       </div>
 
@@ -228,13 +226,23 @@ export default function OrderCamera({ onCapture, onCancel }) {
         role="status"
         aria-live="polite"
       >
-        {message}
+        {status === 'starting' && 'Preparando cámara…'}
+        {status === 'error' && 'No se pudo abrir la cámara.'}
+        {status === 'ready' && stepLabel}
       </p>
-      {queuedCount > 0 && (
+      {(queuedPairs > 0 || pendingTasks > 0) && (
         <p className="order-camera__summary" role="status" aria-live="polite">
-          {queuedCount}{' '}
-          {queuedCount === 1 ? 'foto' : 'fotos'}
-          {' '}en cola para analizar y guardar
+          {queuedPairs > 0 && (
+            <>
+              {queuedPairs} {queuedPairs === 1 ? 'par tomado' : 'pares tomados'}
+            </>
+          )}
+          {pendingTasks > 0 && (
+            <>
+              {queuedPairs > 0 ? ' · ' : ''}
+              {pendingTasks} {pendingTasks === 1 ? 'par pendiente' : 'pares pendientes'}
+            </>
+          )}
         </p>
       )}
       {error && <p className="message message--error">{error}</p>}
@@ -242,15 +250,22 @@ export default function OrderCamera({ onCapture, onCancel }) {
       <div className="order-camera__actions">
         <button
           type="button"
-          className="btn btn--primary btn--large"
+          className="btn btn--primary btn--large order-camera__shutter"
           disabled={status !== 'ready' || takingPhoto}
           onClick={handleCapture}
         >
-          {takingPhoto ? 'Tomando foto…' : 'Sacar foto'}
+          {captureLabel}
         </button>
-        <button type="button" className="btn btn--ghost" onClick={onCancel}>
-          Cancelar
-        </button>
+        <div className="order-camera__secondary">
+          {step === STEPS.evidence && (
+            <button type="button" className="btn btn--ghost" onClick={resetToTicket}>
+              Repetir ticket
+            </button>
+          )}
+          <button type="button" className="btn btn--ghost" onClick={handleCancel}>
+            Cancelar
+          </button>
+        </div>
       </div>
     </section>
   );

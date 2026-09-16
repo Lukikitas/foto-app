@@ -205,8 +205,6 @@
 
 .order-camera__guide {
   position: absolute;
-  /* Keep in sync with GUIDE_INSET in OrderCamera.jsx */
-  inset: 16% 7% 30%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -218,7 +216,25 @@
   pointer-events: none;
 }
 
-.order-camera__guide span {
+.order-camera__guide--ticket {
+  inset: 8% 10% 50%;
+}
+
+.order-camera__guide--evidence {
+  inset: 12% 6% 28%;
+}
+
+.order-camera__guide-focus {
+  position: absolute;
+  top: 10%;
+  left: 8%;
+  right: 8%;
+  height: 32%;
+  border: 2px dashed rgba(255, 214, 10, 0.95);
+  border-radius: 8px;
+}
+
+.order-camera__guide span:not(.order-camera__guide-focus) {
   padding: 0.25rem 0.5rem;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.62);
@@ -234,6 +250,7 @@
   top: max(0.85rem, env(safe-area-inset-top));
   left: 0.75rem;
   right: 0.75rem;
+  z-index: 2;
   margin: 0 auto;
   max-width: 38rem;
   padding: 0.6rem 0.75rem;
@@ -241,8 +258,9 @@
   border-radius: var(--radius);
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 800;
+  text-align: center;
 }
 
 .order-camera__status--found {
@@ -264,7 +282,21 @@
   left: 0.75rem;
   right: 0.75rem;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.order-camera__shutter {
+  width: 100%;
+  min-height: 3.4rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.order-camera__secondary {
+  display: flex;
   justify-content: center;
   gap: 0.5rem;
 }
@@ -272,7 +304,7 @@
 .order-camera__summary {
   position: absolute;
   right: 0.75rem;
-  bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 4rem);
+  bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 7.2rem);
   left: 0.75rem;
   margin: 0 auto;
   width: fit-content;
@@ -289,6 +321,15 @@
   border-color: rgba(255, 255, 255, 0.58);
   background: rgba(0, 0, 0, 0.45);
   color: #fff;
+  touch-action: manipulation;
+}
+
+.order-camera .message--error {
+  position: absolute;
+  top: calc(max(0.85rem, env(safe-area-inset-top)) + 3.7rem);
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
 }
 
 .uploader__file-label {
@@ -951,8 +992,61 @@
 }
 
 .photo-row__error {
+  flex-basis: 100%;
   font-size: 0.68rem;
   color: var(--danger);
+}
+
+.photo-row--completing {
+  flex-wrap: wrap;
+}
+
+.photo-row__complete {
+  flex-basis: 100%;
+  padding: 0.35rem 0.15rem 0.2rem;
+}
+
+.complete-code {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.complete-code__label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.complete-code__input {
+  width: 8.5rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.complete-code__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.complete-code__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .bulk-bar {
@@ -1359,6 +1453,7 @@
   font-size: 0.85rem;
 }
 
+.upload-queue__item--analyzing,
 .upload-queue__item--uploading {
   border-color: var(--accent-border);
   background: var(--accent-bg);

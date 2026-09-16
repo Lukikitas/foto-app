@@ -3,6 +3,7 @@ import { formatDateTime } from '../lib/date';
 import { getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
+import CompleteOrderCode from './CompleteOrderCode';
 import {
   deletePhoto,
   downloadPhoto,
@@ -13,6 +14,7 @@ import {
   isImagePhoto,
   isOrderPhoto,
   isUnidentifiedOrder,
+  updatePhoto,
 } from '../lib/photos';
 
 function RowBadges({ photo }) {
@@ -26,7 +28,7 @@ function RowBadges({ photo }) {
     <span className="photo-row__badges">
       {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
       {aggregator && <span className="badge badge--aggregator">{getAggregatorLabel(aggregator)}</span>}
-      {codeNotFound && <span className="badge badge--missing-code">Sin código</span>}
+      {codeNotFound && <span className="badge badge--missing-code">Código no encontrado</span>}
       {photo.has_complaint && <span className="badge badge--complaint">R</span>}
       {photo.is_refutado && <span className="badge badge--refutado">Ref</span>}
     </span>
@@ -38,14 +40,17 @@ export default function PhotoListRow({
   selected,
   onToggleSelect,
   onLongPressSelect,
+  onUpdated,
   onDeleted,
 }) {
   const [lightbox, setLightbox] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const timestamp = getPhotoTimestamp(photo);
   const title = getPhotoTitle(photo);
   const isImage = isImagePhoto(photo);
+  const isUnidentified = isUnidentifiedOrder(photo);
   const extension = getFileExtension(photo).toUpperCase() || 'FILE';
 
   const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
@@ -82,12 +87,36 @@ export default function PhotoListRow({
     }
   }
 
+  async function handleComplete(digits) {
+    if (!/^\d{4}$/.test(digits)) {
+      setError('Ingresá los últimos 4 dígitos.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await updatePhoto(photo.id, digits, {
+        notes: photo.notes || '',
+        has_complaint: Boolean(photo.has_complaint),
+        taken_by: photo.taken_by || '',
+        is_refutado: Boolean(photo.is_refutado),
+      });
+      onUpdated?.(updated);
+      setCompleting(false);
+    } catch (err) {
+      setError(err.message || 'Error al guardar el código.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const pressHandlers = longPress.bind(openItem);
 
   return (
     <>
       <div
-        className={`photo-row${selected ? ' photo-row--selected' : ''}${photo.has_complaint ? ' photo-row--complaint' : ''}`}
+        className={`photo-row${selected ? ' photo-row--selected' : ''}${photo.has_complaint ? ' photo-row--complaint' : ''}${completing ? ' photo-row--completing' : ''}`}
       >
         <input
           type="checkbox"
@@ -127,6 +156,19 @@ export default function PhotoListRow({
         </button>
 
         <div className="photo-row__actions">
+          {isUnidentified && !completing && (
+            <button
+              type="button"
+              className="btn btn--small btn--primary"
+              onClick={() => {
+                setCompleting(true);
+                setError(null);
+              }}
+              disabled={loading}
+            >
+              Completar código
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--icon"
@@ -147,7 +189,21 @@ export default function PhotoListRow({
           </button>
         </div>
 
-        {error && <span className="photo-row__error">{error}</span>}
+        {completing && (
+          <div className="photo-row__complete">
+            <CompleteOrderCode
+              loading={loading}
+              error={error}
+              onSubmit={handleComplete}
+              onCancel={() => {
+                setCompleting(false);
+                setError(null);
+              }}
+            />
+          </div>
+        )}
+
+        {error && !completing && <span className="photo-row__error">{error}</span>}
       </div>
 
       {lightbox && isImage && (

@@ -79,19 +79,19 @@ export default function PhotoUploader() {
     }
   }
 
-  function handleOrderCapture(selected, ocrFile) {
+  function handleOrderCapture({ ticketFile, evidenceFile }) {
     setError(null);
     saveLastTakenBy(meta.taken_by);
     enqueue({
-      file: selected,
-      ocrFile,
+      file: evidenceFile,
+      ticketFile,
       kind: UPLOAD_MODES.order,
       meta: {
         ...meta,
         has_complaint: false,
       },
     });
-    setQueuedMessage('Foto en cola. El código se buscará mientras seguís sacando fotos.');
+    setQueuedMessage('Par en cola. El ticket se lee en segundo plano y solo se guarda la evidencia.');
   }
 
   function clearInputs() {
@@ -172,7 +172,7 @@ export default function PhotoUploader() {
     <section className="uploader">
       {orderCameraOpen && (
         <OrderCamera
-          onCapture={handleOrderCapture}
+          onCapturePair={handleOrderCapture}
           onCancel={() => setOrderCameraOpen(false)}
         />
       )}

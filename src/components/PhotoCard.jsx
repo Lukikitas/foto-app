@@ -3,6 +3,7 @@ import { formatDateTime } from '../lib/date';
 import { getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
+import CompleteOrderCode from './CompleteOrderCode';
 import {
   deletePhoto,
   downloadPhoto,
@@ -48,6 +49,7 @@ export default function PhotoCard({
   onDeleted,
 }) {
   const [editing, setEditing] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [form, setForm] = useState({
     name: photo.name,
     notes: photo.notes || '',
@@ -134,6 +136,30 @@ export default function PhotoCard({
     }
   }
 
+  async function handleComplete(digits) {
+    if (!/^\d{4}$/.test(digits)) {
+      setError('Ingresá los últimos 4 dígitos.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await updatePhoto(photo.id, digits, {
+        notes: photo.notes || '',
+        has_complaint: Boolean(photo.has_complaint),
+        taken_by: photo.taken_by || '',
+        is_refutado: Boolean(photo.is_refutado),
+      });
+      onUpdated?.(updated);
+      setCompleting(false);
+    } catch (err) {
+      setError(err.message || 'Error al guardar el código.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function startEditing() {
     setForm({
       name: photo.name,
@@ -189,7 +215,17 @@ export default function PhotoCard({
         </div>
 
         <div className="photo-card__body">
-          {editing ? (
+          {completing ? (
+            <CompleteOrderCode
+              loading={loading}
+              error={error}
+              onSubmit={handleComplete}
+              onCancel={() => {
+                setCompleting(false);
+                setError(null);
+              }}
+            />
+          ) : editing ? (
             <form className="photo-card__edit-form" onSubmit={handleEdit}>
               <label>
                 {isOrder ? 'Código del pedido' : 'Nombre'}
@@ -286,7 +322,7 @@ export default function PhotoCard({
             </>
           )}
 
-          {error && (
+          {error && !completing && (
             <p className="message message--error message--compact" role="alert">
               {error}
             </p>
@@ -314,7 +350,7 @@ export default function PhotoCard({
                 </button>
               </div>
             </div>
-          ) : !editing && (
+          ) : !editing && !completing && (
             <div className="photo-card__actions">
               <button
                 type="button"
@@ -333,13 +369,26 @@ export default function PhotoCard({
               >
                 Descargar
               </button>
+              {isUnidentified && (
+                <button
+                  type="button"
+                  className="btn btn--small btn--primary"
+                  onClick={() => {
+                    setCompleting(true);
+                    setError(null);
+                  }}
+                  disabled={loading}
+                >
+                  Completar código
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn--small btn--ghost"
                 onClick={startEditing}
                 disabled={loading}
               >
-                {isUnidentified ? 'Completar código' : 'Editar'}
+                Editar
               </button>
               <button
                 type="button"
