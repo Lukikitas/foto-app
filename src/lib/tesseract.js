@@ -1,30 +1,16 @@
-const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js';
-const SCRIPT_ID = 'tesseract-js';
+import { createWorker, PSM } from 'tesseract.js';
 
-let loadingPromise;
+export { createWorker, PSM };
+
+export const OCR_ENGINE_ERROR = 'No se pudo leer el ticket.';
+
+export function tessAssetUrl(relative) {
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
+  const assetPath = `${base}tesseract/${relative}`;
+  if (typeof window === 'undefined') return assetPath;
+  return new URL(assetPath, window.location.origin).href;
+}
 
 export function loadTesseract() {
-  if (window.Tesseract) return Promise.resolve(window.Tesseract);
-  if (loadingPromise) return loadingPromise;
-
-  loadingPromise = new Promise((resolve, reject) => {
-    const existing = document.getElementById(SCRIPT_ID);
-    if (existing) {
-      existing.addEventListener('load', () => resolve(window.Tesseract), { once: true });
-      existing.addEventListener('error', () => reject(new Error('No se pudo cargar el lector.')), {
-        once: true,
-      });
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = SCRIPT_ID;
-    script.src = TESSERACT_URL;
-    script.async = true;
-    script.onload = () => resolve(window.Tesseract);
-    script.onerror = () => reject(new Error('No se pudo cargar el lector.'));
-    document.head.appendChild(script);
-  });
-
-  return loadingPromise;
+  return Promise.resolve({ createWorker, PSM, tessAssetUrl });
 }

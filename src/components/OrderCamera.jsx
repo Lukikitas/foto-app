@@ -13,7 +13,39 @@ function drawFrame(video, canvas, maxWidth = 1920) {
   context.drawImage(video, 0, 0, width, height);
 }
 
+function waitForVideo(video) {
+  if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('La cámara no devolvió imagen.'));
+    }, 8000);
+
+    const onReady = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        cleanup();
+        resolve();
+      }
+    };
+
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('loadedmetadata', onReady);
+    };
+
+    video.addEventListener('loadeddata', onReady);
+    video.addEventListener('loadedmetadata', onReady);
+    onReady();
+  });
+}
+
 function makePhoto(video) {
+  if (!video?.videoWidth || !video?.videoHeight) {
+    return Promise.reject(new Error('La cámara todavía no está lista.'));
+  }
+
   const canvas = document.createElement('canvas');
   drawFrame(video, canvas);
 
@@ -72,6 +104,7 @@ export default function OrderCamera({ onCapture, onCancel }) {
         streamRef.current = stream;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+        await waitForVideo(videoRef.current);
         if (!active) return;
         setStatus('ready');
       } catch (startError) {
@@ -96,6 +129,9 @@ export default function OrderCamera({ onCapture, onCancel }) {
 
     setTakingPhoto(true);
     try {
+      if (!videoRef.current?.videoWidth) {
+        throw new Error('La cámara todavía no está lista.');
+      }
       const file = await makePhoto(videoRef.current);
       onCapture(file);
       setQueuedCount((count) => count + 1);

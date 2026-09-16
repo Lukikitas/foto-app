@@ -1,5 +1,6 @@
 import { compressImage } from './compressImage';
 import { detectOrderFromPhoto } from './orderOcr';
+import { OCR_ENGINE_ERROR } from './tesseract';
 import { uploadFile, uploadPhoto, uploadUnidentifiedOrder } from './photos';
 
 const queue = [];
@@ -82,6 +83,16 @@ async function processQueue() {
 
   processing = true;
   try {
+    let detectedOrder = null;
+    const needsOcr = next.kind !== 'file' && !next.orderDigits;
+
+    if (needsOcr) {
+      next.status = 'analyzing';
+      next.label = 'Buscando código…';
+      notify();
+      detectedOrder = await detectOrderFromPhoto(next.file);
+    }
+
     const preparedFile = next.file.type.startsWith('image/')
       ? await compressImage(next.file)
       : next.file;
@@ -95,33 +106,21 @@ async function processQueue() {
       next.status = 'uploading';
       notify();
       photo = await uploadPhoto(preparedFile, next.orderDigits, next.meta, next.aggregator);
-    } else {
-      next.status = 'analyzing';
-      next.label = 'Buscando código…';
-      notify();
-
-      let detectedOrder = null;
-      try {
-        detectedOrder = await detectOrderFromPhoto(preparedFile);
-      } catch {
-        detectedOrder = null;
-      }
-
+    } else if (detectedOrder) {
       next.status = 'uploading';
-      if (detectedOrder) {
-        next.label = `Pedido #${detectedOrder.displayCode}`;
-        notify();
-        photo = await uploadPhoto(
-          preparedFile,
-          detectedOrder.displayCode,
-          next.meta,
-          detectedOrder.aggregator,
-        );
-      } else {
-        next.label = 'Código no encontrado';
-        notify();
-        photo = await uploadUnidentifiedOrder(preparedFile, next.meta);
-      }
+      next.label = `Pedido #${detectedOrder.displayCode}`;
+      notify();
+      photo = await uploadPhoto(
+        preparedFile,
+        detectedOrder.displayCode,
+        next.meta,
+        detectedOrder.aggregator || 'sin_agregador',
+      );
+    } else {
+      next.status = 'uploading';
+      next.label = 'Código no encontrado';
+      notify();
+      photo = await uploadUnidentifiedOrder(preparedFile, next.meta);
     }
     next.status = 'done';
     next.error = null;
@@ -136,8 +135,9 @@ async function processQueue() {
       }
     }, 4000);
   } catch (err) {
+    const analyzing = next.status === 'analyzing';
     next.status = 'error';
-    next.error = err.message || 'Error al subir la foto.';
+    next.error = err.message || (analyzing ? OCR_ENGINE_ERROR : 'Error al subir la foto.');
     notify();
   } finally {
     processing = false;
