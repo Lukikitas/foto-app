@@ -6,6 +6,7 @@ import UploadQueueStatus from './components/UploadQueueStatus';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, toggleTheme } from './lib/theme';
+import { APP_VERSION } from './lib/version';
 import './App.css';
 
 const TABS = {
@@ -76,30 +77,33 @@ export default function App() {
       </main>
 
       <nav className="app-nav" aria-label="Navegacion principal">
-        <button
-          type="button"
-          className={`app-nav__btn${tab === TABS.capture ? ' app-nav__btn--active' : ''}`}
-          onClick={() => setTab(TABS.capture)}
-          aria-current={tab === TABS.capture ? 'page' : undefined}
-        >
-          Sacar foto
-        </button>
-        <button
-          type="button"
-          className={`app-nav__btn${tab === TABS.orders ? ' app-nav__btn--active' : ''}`}
-          onClick={() => setTab(TABS.orders)}
-          aria-current={tab === TABS.orders ? 'page' : undefined}
-        >
-          Pedidos
-        </button>
-        <button
-          type="button"
-          className={`app-nav__btn${tab === TABS.files ? ' app-nav__btn--active' : ''}`}
-          onClick={() => setTab(TABS.files)}
-          aria-current={tab === TABS.files ? 'page' : undefined}
-        >
-          Archivos
-        </button>
+        <span className="app__version">v{APP_VERSION}</span>
+        <div className="app-nav__buttons">
+          <button
+            type="button"
+            className={`app-nav__btn${tab === TABS.capture ? ' app-nav__btn--active' : ''}`}
+            onClick={() => setTab(TABS.capture)}
+            aria-current={tab === TABS.capture ? 'page' : undefined}
+          >
+            Sacar foto
+          </button>
+          <button
+            type="button"
+            className={`app-nav__btn${tab === TABS.orders ? ' app-nav__btn--active' : ''}`}
+            onClick={() => setTab(TABS.orders)}
+            aria-current={tab === TABS.orders ? 'page' : undefined}
+          >
+            Pedidos
+          </button>
+          <button
+            type="button"
+            className={`app-nav__btn${tab === TABS.files ? ' app-nav__btn--active' : ''}`}
+            onClick={() => setTab(TABS.files)}
+            aria-current={tab === TABS.files ? 'page' : undefined}
+          >
+            Archivos
+          </button>
+        </div>
       </nav>
     </div>
   );

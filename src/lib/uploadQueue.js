@@ -33,10 +33,19 @@ export function subscribe(listener) {
   return () => listeners.delete(listener);
 }
 
-export function enqueue({ file, kind = 'order', orderDigits = '', title = '', aggregator = '', meta }) {
+export function enqueue({
+  file,
+  ocrFile,
+  kind = 'order',
+  orderDigits = '',
+  title = '',
+  aggregator = '',
+  meta,
+}) {
   const item = {
     id: crypto.randomUUID(),
     file,
+    ocrFile,
     kind,
     orderDigits,
     title,
@@ -90,7 +99,10 @@ async function processQueue() {
       next.status = 'analyzing';
       next.label = 'Buscando código…';
       notify();
-      detectedOrder = await detectOrderFromPhoto(next.file);
+      detectedOrder = await detectOrderFromPhoto(
+        next.ocrFile || next.file,
+        next.ocrFile ? [next.file] : [],
+      );
     }
 
     const preparedFile = next.file.type.startsWith('image/')

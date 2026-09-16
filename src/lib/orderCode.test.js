@@ -75,9 +75,9 @@ test('finds PEYA without a CODIGO label when the code is long enough', () => {
   });
 });
 
-test('reads the legacy numeric Código Ped. format as the last four digits', () => {
+test('reads a long numeric Código Ped. as the full order id', () => {
   assert.deepEqual(code('Código Ped. 12345678'), {
-    displayCode: '5678',
+    displayCode: '12345678',
     aggregator: null,
   });
 });
@@ -108,5 +108,33 @@ test('accepts spaced letters inside CODIGO', () => {
   assert.deepEqual(code('C O D I G O: PEYA22233'), {
     displayCode: 'PEYA22233',
     aggregator: 'pedidosya',
+  });
+});
+
+test('reads PEYA codes that continue with letters', () => {
+  assert.deepEqual(code('CODIGO: PEYAX7K29'), {
+    displayCode: 'PEYAX7K29',
+    aggregator: 'pedidosya',
+  });
+});
+
+test('finds a code inside a compact OCR blob', () => {
+  assert.deepEqual(code('PEDIDOSYACODIGOPEYA12345TOTAL1500'), {
+    displayCode: 'PEYA12345',
+    aggregator: 'pedidosya',
+  });
+});
+
+test('repairs spaced PEYA without a CODIGO label', () => {
+  assert.deepEqual(code('ticket P E Y A 778899 bolsa'), {
+    displayCode: 'PEYA778899',
+    aggregator: 'pedidosya',
+  });
+});
+
+test('reads numeric order ids after ORDEN', () => {
+  assert.deepEqual(code('ORDEN: 44556677'), {
+    displayCode: '44556677',
+    aggregator: null,
   });
 });

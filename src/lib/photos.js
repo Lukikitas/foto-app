@@ -3,7 +3,7 @@ import { AGGREGATORS, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
 
 const BUCKET = 'photos';
-const ORDER_CODE = /^(?:\d{4}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})$/;
+const ORDER_CODE = /^(?:\d{4,12}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})$/;
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 export const UNIDENTIFIED_ORDER_NAME = 'Código no encontrado';
 
