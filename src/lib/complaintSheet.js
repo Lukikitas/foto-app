@@ -456,45 +456,149 @@ export function parseComplaintSheet(text) {
   return { complaints, skipped, usedHeaders: hasHeaders };
 }
 
+export function parseGoogleSheetRef(input) {
+  const text = String(input || '').trim();
+  if (!text) return { id: '', publishedId: '', gid: '0' };
+
+  const published = text.match(/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
+  const idMatch = text.match(/spreadsheets\/d\/(?!e\/)([a-zA-Z0-9-_]+)/);
+  const gidMatch = text.match(/[?#&]gid=(\d+)/) || text.match(/gid=(\d+)/);
+
+  return {
+    id: idMatch ? idMatch[1] : '',
+    publishedId: published ? published[1] : '',
+    gid: gidMatch ? gidMatch[1] : '0',
+  };
+}
+
 export function toGoogleCsvUrl(input) {
   const text = String(input || '').trim();
   if (!text) return '';
 
-  const published = text.match(/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
-  if (published) {
-    const gidMatch = text.match(/gid=(\d+)/);
-    const gid = gidMatch ? `&gid=${gidMatch[1]}` : '';
-    return `https://docs.google.com/spreadsheets/d/e/${published[1]}/pub?output=csv${gid}`;
+  const { id, publishedId, gid } = parseGoogleSheetRef(text);
+  if (publishedId) {
+    return `https://docs.google.com/spreadsheets/d/e/${publishedId}/pub?output=csv&gid=${gid}`;
   }
-
-  const idMatch = text.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (idMatch) {
-    const gidMatch = text.match(/[?#&]gid=(\d+)/);
-    const gid = gidMatch ? gidMatch[1] : '0';
-    return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=csv&gid=${gid}`;
+  if (id) {
+    return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
   }
+  if (/^https?:\/\//i.test(text)) return text;
+  return '';
+}
 
-  return text;
+export function toGoogleGvizUrl(input, callbackName) {
+  const { id, gid } = parseGoogleSheetRef(input);
+  if (!id) return '';
+  const tqx = callbackName
+    ? `out:json;responseHandler:${callbackName}`
+    : 'out:json';
+  return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?gid=${encodeURIComponent(gid)}&tqx=${encodeURIComponent(tqx)}`;
+}
+
+function cellText(cell) {
+  if (!cell) return '';
+  if (cell.f != null && String(cell.f).trim() !== '') return String(cell.f);
+  const value = cell.v;
+  if (value == null) return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const date = `${String(value.getDate()).padStart(2, '0')}/${String(value.getMonth() + 1).padStart(2, '0')}/${value.getFullYear()}`;
+    const time = `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+    return value.getHours() || value.getMinutes() ? `${date} ${time}` : date;
+  }
+  return String(value);
+}
+
+export function gvizTableToTsv(table) {
+  const cols = table?.cols || [];
+  const headers = cols.map((col) => col.label || col.id || '');
+  const rows = (table?.rows || []).map((row) => {
+    const cells = row?.c || [];
+    return cols.map((_, index) => cellText(cells[index])).join('\t');
+  });
+  return [headers.join('\t'), ...rows].join('\n');
+}
+
+async function fetchGoogleSheetViaJsonp(input) {
+  if (typeof document === 'undefined') return '';
+  const { id } = parseGoogleSheetRef(input);
+  if (!id) return '';
+
+  const callbackName = `fotoAppSheet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const src = toGoogleGvizUrl(input, callbackName);
+  const table = await new Promise((resolve, reject) => {
+    let settled = false;
+    let script;
+    let timer;
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script?.remove();
+    }
+
+    window[callbackName] = (payload) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (payload?.status && payload.status !== 'ok') {
+        reject(
+          new Error(
+            'El Sheet no se pudo leer. Compartilo con “Cualquier persona con el enlace”.',
+          ),
+        );
+        return;
+      }
+      if (!payload?.table) {
+        reject(new Error('El Sheet no devolvió una tabla.'));
+        return;
+      }
+      resolve(payload.table);
+    };
+
+    timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('Se agotó el tiempo leyendo el Google Sheet.'));
+    }, 15000);
+
+    script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onerror = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('No se pudo cargar el Google Sheet.'));
+    };
+    document.head.appendChild(script);
+  });
+
+  return gvizTableToTsv(table);
 }
 
 export async function fetchComplaintSheetText(url) {
   const csvUrl = toGoogleCsvUrl(url);
-  if (!csvUrl) {
+  if (!csvUrl && !parseGoogleSheetRef(url).id) {
     throw new Error('Pegá el link del Google Sheet o cargá el CSV.');
   }
 
-  let response;
-  try {
-    response = await fetch(csvUrl);
-  } catch {
-    throw new Error(
-      'El navegador no puede leer el Google Sheet directo. Descargalo como CSV o copiá las celdas.',
-    );
+  if (csvUrl) {
+    try {
+      const response = await fetch(csvUrl);
+      if (response.ok) {
+        const text = await response.text();
+        if (text.trim()) return text;
+      }
+    } catch {
+      // CORS: el navegador bloquea el CSV; pasamos a la API pública de Google.
+    }
   }
 
-  if (!response.ok) {
-    throw new Error('No se pudo leer el Sheet. Descargalo como CSV o copiá las celdas.');
-  }
+  const tsv = await fetchGoogleSheetViaJsonp(url);
+  if (tsv.trim()) return tsv;
 
-  return response.text();
+  throw new Error(
+    'No se pudo leer el Sheet desde la web. Compartilo con “Cualquier persona con el enlace” o copiá las celdas.',
+  );
 }

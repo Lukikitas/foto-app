@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateTime } from '../lib/date';
-import { detectAggregator, getAggregatorLabel } from '../lib/aggregators';
+import { detectAggregator, getAggregatorLabel, getComplaintAggregator, getPartnerPortal, openPartnerPortal, PARTNER_PORTALS } from '../lib/aggregators';
 import {
   fetchComplaintSheetText,
   parseComplaintSheet,
@@ -20,6 +20,7 @@ import {
   saveComplaintBatch,
 } from '../lib/complaints';
 import { downloadPhoto, isImagePhoto } from '../lib/photos';
+import { getSavedSheetUrl, saveSheetUrl } from '../lib/storage';
 import PhotoLightbox from './PhotoLightbox';
 
 const FILTERS = [
@@ -30,6 +31,8 @@ const FILTERS = [
   { id: 'pendiente', label: 'Pendientes' },
   { id: 'refutado', label: 'Refutados' },
 ];
+
+const PORTAL_LINKS = [PARTNER_PORTALS.pedidosya, PARTNER_PORTALS.rappi];
 
 function formatComplaintWhen(complaint) {
   if (complaint.orderAtIso) return formatDateTime(complaint.orderAtIso);
@@ -60,7 +63,7 @@ function readStoredBatch() {
 export default function ComplaintsInbox() {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
-  const [sheetUrl, setSheetUrl] = useState('');
+  const [sheetUrl, setSheetUrl] = useState(getSavedSheetUrl);
   const [complaints, setComplaints] = useState(storedBatch.complaints);
   const [photos, setPhotos] = useState([]);
   const [rows, setRows] = useState([]);
@@ -143,6 +146,7 @@ export default function ComplaintsInbox() {
     setSkipped(parsed.skipped);
     setFilter('all');
     await loadAndMatch(parsed.complaints, {});
+    if (sheetUrl.trim()) saveSheetUrl(sheetUrl);
     setImportOpen(false);
     setNotice(`${parsed.complaints.length} reclamos cruzados con las fotos.`);
   }
@@ -228,6 +232,35 @@ export default function ComplaintsInbox() {
     }
   }
 
+  async function copyCode(row) {
+    const code = row.photo?.name || row.complaint.orderCode;
+    try {
+      await copyText(code);
+      setNotice(`Código ${code} copiado.`);
+    } catch {
+      setError('No se pudo copiar el código.');
+    }
+  }
+
+  function portalFor(row) {
+    return getPartnerPortal(getComplaintAggregator(row.complaint, row.photo));
+  }
+
+  async function openPortal(row) {
+    const code = row.photo?.name || row.complaint.orderCode;
+    const portal = openPartnerPortal(getComplaintAggregator(row.complaint, row.photo));
+    if (!portal) {
+      setError('Este agregador no tiene portal web para abrir desde la app.');
+      return;
+    }
+    try {
+      await copyText(code);
+      setNotice(`Se abrió ${portal.label}. Código ${code} copiado para buscarlo ahí.`);
+    } catch {
+      setNotice(`Se abrió ${portal.label}.`);
+    }
+  }
+
   async function copyLink(row) {
     if (!row.photo) return;
     try {
@@ -245,9 +278,15 @@ export default function ComplaintsInbox() {
     try {
       const updated = await applyComplaintToPhoto(row.photo, row.complaint, { refutado: false });
       applyUpdatedPhotos([updated]);
+      const code = updated.name || row.complaint.orderCode;
       await downloadPhoto(updated, new Set(), getEvidenceFilename(row.complaint, updated));
-      await copyText(updated.public_url);
-      setNotice('Evidencia lista: foto descargada y link copiado. Subila en el portal del agregador.');
+      await copyText(code);
+      const portal = openPartnerPortal(getComplaintAggregator(row.complaint, updated));
+      setNotice(
+        portal
+          ? `Se abrió ${portal.label}. Buscá ${code} y adjuntá la foto descargada.`
+          : `Código ${code} copiado y foto descargada.`,
+      );
     } catch (err) {
       setError(err.message || 'No se pudo preparar la evidencia.');
     } finally {
@@ -318,9 +357,24 @@ export default function ComplaintsInbox() {
     <section className="complaints">
       <h2 className="gallery__title">Reclamos</h2>
       <p className="complaints__lead">
-        Sin API de PedidosYa ni Rappi no podemos cargar la foto en el portal. Pegá el Sheet,
-        la app busca si ya tienen la foto y te deja bajar la evidencia para el refutado.
+        No podemos entrar a tu usuario de PedidosYa o Rappi: el navegador no deja manejar
+        otro sitio. Sí podemos abrir el portal, copiar el código y dejarte la foto lista
+        para adjuntar. El Google Sheet se lee de la web si está compartido con enlace.
       </p>
+
+      <div className="complaints__portals">
+        {PORTAL_LINKS.map((portal) => (
+          <a
+            key={portal.url}
+            className="btn btn--ghost btn--small"
+            href={portal.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abrir {portal.label}
+          </a>
+        ))}
+      </div>
 
       {rows.length > 0 && (
         <button
@@ -361,7 +415,7 @@ export default function ComplaintsInbox() {
           </div>
 
           <label className="complaints__field">
-            <span>O link del Sheet (si está publicado)</span>
+            <span>O link del Google Sheet (compartido con enlace)</span>
             <div className="complaints__url-row">
               <input
                 type="url"
@@ -483,6 +537,9 @@ export default function ComplaintsInbox() {
                 onPrepare={prepareEvidence}
                 onDownload={downloadEvidence}
                 onCopy={copyLink}
+                onCopyCode={copyCode}
+                onOpenPortal={openPortal}
+                portal={portalFor(row)}
                 onMarkReclamo={(item) => markRow(item)}
                 onMarkRefutado={(item) => markRow(item, { refutado: true })}
                 onOpenPhoto={(photo) => setLightboxPhoto(photo)}
@@ -510,6 +567,9 @@ function ComplaintCard({
   onPrepare,
   onDownload,
   onCopy,
+  onCopyCode,
+  onOpenPortal,
+  portal,
   onMarkReclamo,
   onMarkRefutado,
   onOpenPhoto,
@@ -584,51 +644,75 @@ function ComplaintCard({
         </div>
       )}
 
-      {photo && (
+      {(photo || portal) && (
         <div className="complaint-card__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--small"
-            onClick={() => onPrepare(row)}
-            disabled={disabled}
-          >
-            Preparar evidencia
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={() => onDownload(row)}
-            disabled={disabled}
-          >
-            Descargar
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={() => onCopy(row)}
-            disabled={disabled}
-          >
-            Copiar link
-          </button>
-          {!photo.has_complaint && (
+          {photo && (
             <button
               type="button"
-              className="btn btn--ghost btn--small"
-              onClick={() => onMarkReclamo(row)}
+              className="btn btn--primary btn--small"
+              onClick={() => onPrepare(row)}
               disabled={disabled}
             >
-              Marcar reclamo
+              {portal ? `Preparar y abrir ${portal.label}` : 'Preparar evidencia'}
             </button>
           )}
-          {!photo.is_refutado && (
+          {portal && (
             <button
               type="button"
               className="btn btn--ghost btn--small"
-              onClick={() => onMarkRefutado(row)}
+              onClick={() => onOpenPortal(row)}
               disabled={disabled}
             >
-              Marcar refutado
+              Abrir portal
             </button>
+          )}
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => onCopyCode(row)}
+            disabled={disabled}
+          >
+            Copiar código
+          </button>
+          {photo && (
+            <>
+              <button
+                type="button"
+                className="btn btn--ghost btn--small"
+                onClick={() => onDownload(row)}
+                disabled={disabled}
+              >
+                Descargar
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--small"
+                onClick={() => onCopy(row)}
+                disabled={disabled}
+              >
+                Copiar link
+              </button>
+              {!photo.has_complaint && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  onClick={() => onMarkReclamo(row)}
+                  disabled={disabled}
+                >
+                  Marcar reclamo
+                </button>
+              )}
+              {!photo.is_refutado && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  onClick={() => onMarkRefutado(row)}
+                  disabled={disabled}
+                >
+                  Marcar refutado
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
