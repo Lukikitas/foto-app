@@ -1,6 +1,45 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = path.dirname(fileURLToPath(import.meta.url))
+
+function copyTesseractAssets() {
+  const destRoot = path.join(root, 'public', 'tesseract')
+  const coreDest = path.join(destRoot, 'core')
+  const langDest = path.join(destRoot, 'lang')
+  fs.mkdirSync(coreDest, { recursive: true })
+  fs.mkdirSync(langDest, { recursive: true })
+
+  fs.copyFileSync(
+    path.join(root, 'node_modules/tesseract.js/dist/worker.min.js'),
+    path.join(destRoot, 'worker.min.js'),
+  )
+
+  const coreDir = path.join(root, 'node_modules/tesseract.js-core')
+  for (const file of fs.readdirSync(coreDir)) {
+    if (file.includes('lstm') && file.endsWith('.wasm.js')) {
+      fs.copyFileSync(path.join(coreDir, file), path.join(coreDest, file))
+    }
+  }
+
+  fs.copyFileSync(
+    path.join(root, 'node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'),
+    path.join(langDest, 'eng.traineddata.gz'),
+  )
+}
+
+function tesseractAssets() {
+  return {
+    name: 'tesseract-assets',
+    buildStart() {
+      copyTesseractAssets()
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -8,6 +47,7 @@ export default defineConfig({
   base: '/',
   plugins: [
     react(),
+    tesseractAssets(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
@@ -47,8 +87,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm,gz}'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/tesseract\//],
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
     }),
   ],
