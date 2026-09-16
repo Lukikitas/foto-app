@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  gvizTableToTsv,
   parseComplaintOrderCode,
   parseComplaintSheet,
   parseDelimitedText,
+  parseGoogleSheetRef,
   parseSheetDateTime,
   toGoogleCsvUrl,
+  toGoogleGvizUrl,
 } from './complaintSheet.js';
+import { getPartnerPortal } from './aggregators.js';
 
 test('reads Spanish TSV with headers from a Google Sheet paste', () => {
   const text = [
@@ -83,4 +87,41 @@ test('converts a Google Sheet edit URL into a CSV export URL', () => {
     toGoogleCsvUrl('https://docs.google.com/spreadsheets/d/abc123XYZ/edit#gid=7'),
     'https://docs.google.com/spreadsheets/d/abc123XYZ/export?format=csv&gid=7',
   );
+});
+
+test('parses a Google Sheet id and gid from an edit link', () => {
+  assert.deepEqual(
+    parseGoogleSheetRef('https://docs.google.com/spreadsheets/d/abc123XYZ/edit?gid=7#gid=7'),
+    { id: 'abc123XYZ', publishedId: '', gid: '7' },
+  );
+});
+
+test('builds a Google Visualization URL the browser can load', () => {
+  assert.equal(
+    toGoogleGvizUrl('https://docs.google.com/spreadsheets/d/abc123XYZ/edit#gid=7', 'fotoAppSheet_cb'),
+    'https://docs.google.com/spreadsheets/d/abc123XYZ/gviz/tq?gid=7&tqx=out%3Ajson%3BresponseHandler%3AfotoAppSheet_cb',
+  );
+});
+
+test('turns a Google Visualization table into TSV for the sheet parser', () => {
+  const tsv = gvizTableToTsv({
+    cols: [
+      { id: 'A', label: 'Código' },
+      { id: 'B', label: 'Hora' },
+      { id: 'C', label: 'Motivo' },
+    ],
+    rows: [
+      { c: [{ v: 'PEYA12345' }, { f: '16/09/2026 21:30', v: 'Date(2026,8,16,21,30,0)' }, { v: 'Faltan productos' }] },
+    ],
+  });
+  const { complaints } = parseComplaintSheet(tsv);
+  assert.equal(complaints[0].orderCode, 'PEYA12345');
+  assert.equal(complaints[0].reason, 'Faltan productos');
+  assert.equal(complaints[0].timeOfDay, '21:30');
+});
+
+test('opens PedidosYa and Rappi partner portals', () => {
+  assert.equal(getPartnerPortal('pedidosya').url, 'https://portal-app.pedidosya.com/login');
+  assert.equal(getPartnerPortal('rappi').url, 'https://partners.rappi.com');
+  assert.equal(getPartnerPortal('mercadopago'), null);
 });

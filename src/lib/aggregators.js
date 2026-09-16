@@ -33,3 +33,33 @@ export function getPhotoAggregator(photo) {
   const aggregator = parts[0] === 'orders' && parts.length > 2 ? parts[1] : null;
   return AGGREGATORS[aggregator] ? aggregator : null;
 }
+
+export const PARTNER_PORTALS = {
+  pedidosya: {
+    label: 'PedidosYa Portal',
+    url: 'https://portal-app.pedidosya.com/login',
+  },
+  rappi: {
+    label: 'Rappi Partners',
+    url: 'https://partners.rappi.com',
+  },
+  rappi_turbo: {
+    label: 'Rappi Partners',
+    url: 'https://partners.rappi.com',
+  },
+};
+
+export function getPartnerPortal(aggregator) {
+  return PARTNER_PORTALS[aggregator] || null;
+}
+
+export function getComplaintAggregator(complaint, photo) {
+  return detectAggregator(complaint?.orderCode) || getPhotoAggregator(photo);
+}
+
+export function openPartnerPortal(aggregator) {
+  const portal = getPartnerPortal(aggregator);
+  if (!portal) return null;
+  window.open(portal.url, '_blank', 'noopener,noreferrer');
+  return portal;
+}

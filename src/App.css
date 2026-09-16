@@ -1680,6 +1680,12 @@
   line-height: 1.45;
 }
 
+.complaints__portals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .complaints__import {
   display: flex;
   flex-direction: column;

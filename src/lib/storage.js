@@ -51,3 +51,23 @@ export function saveFiltersOpen(open) {
     // localStorage no disponible
   }
 }
+
+const SHEET_URL_KEY = 'foto-app-complaints-sheet-url';
+
+export function getSavedSheetUrl() {
+  try {
+    return localStorage.getItem(SHEET_URL_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveSheetUrl(url) {
+  try {
+    const trimmed = url?.trim() || '';
+    if (trimmed) localStorage.setItem(SHEET_URL_KEY, trimmed);
+    else localStorage.removeItem(SHEET_URL_KEY);
+  } catch {
+    // localStorage no disponible
+  }
+}
