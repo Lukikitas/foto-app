@@ -1,7 +1,7 @@
 {
   "name": "foto-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
     "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/spa": "^1.0.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tesseract.js": "^7.0.0"

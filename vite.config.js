@@ -30,6 +30,10 @@ function copyTesseractAssets() {
     path.join(root, 'node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'),
     path.join(langDest, 'eng.traineddata.gz'),
   )
+  fs.copyFileSync(
+    path.join(root, 'node_modules/@tesseract.js-data/spa/4.0.0_best_int/spa.traineddata.gz'),
+    path.join(langDest, 'spa.traineddata.gz'),
+  )
 }
 
 function tesseractAssets() {

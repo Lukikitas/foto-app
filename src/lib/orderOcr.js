@@ -1,9 +1,14 @@
 import { detectOrderCode } from './orderCode.js';
 import { loadTesseract, OCR_ENGINE_ERROR, tessAssetUrl } from './tesseract';
 
-const OCR_MAX_SIDE = 2400;
-const TICKET_TARGET_SIDE = 2200;
-const CHAR_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:- ';
+const OCR_MAX_SIDE = 2560;
+const TICKET_TARGET_SIDE = 2400;
+const NEIGHBORS = [
+  [0, 1],
+  [1, 0],
+  [0, -1],
+  [-1, 0],
+];
 
 let workerPromise = null;
 
@@ -16,18 +21,24 @@ async function getWorker() {
   if (!workerPromise) {
     workerPromise = (async () => {
       const { createWorker, PSM } = await loadTesseract();
-      const worker = await createWorker('eng', 1, {
+      const options = {
         workerPath: tessAssetUrl('worker.min.js'),
         corePath: tessAssetUrl('core'),
         langPath: tessAssetUrl('lang'),
         gzip: true,
         errorHandler: (error) => console.error(error),
-      });
+      };
+      let worker;
+      try {
+        worker = await createWorker('spa+eng', 1, options);
+      } catch (error) {
+        console.error(error);
+        worker = await createWorker('eng', 1, options);
+      }
       await worker.setParameters({
-        tessedit_char_whitelist: CHAR_WHITELIST,
         preserve_interword_spaces: '1',
         user_defined_dpi: '300',
-        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        tessedit_pageseg_mode: PSM.AUTO,
       });
       return { worker, PSM };
     })().catch((error) => {
@@ -58,6 +69,8 @@ function canvasFromSource(source, maxSide) {
   canvas.height = Math.max(1, Math.round(sourceHeight * scale));
   const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) fail();
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
   context.drawImage(source, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
@@ -115,68 +128,8 @@ function blockStats(data, width, height, startX, startY, cell) {
   return { mean, variance: sumSq / count - mean * mean };
 }
 
-function findTextRegion(canvas) {
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) return null;
-
-  const { width, height } = canvas;
-  const { data } = context.getImageData(0, 0, width, height);
-  const cell = Math.max(16, Math.round(Math.min(width, height) / 40));
-  const cols = Math.ceil(width / cell);
-  const rows = Math.ceil(height / cell);
-  const blocks = [];
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      blocks.push({
-        row,
-        col,
-        ...blockStats(data, width, height, col * cell, row * cell, cell),
-      });
-    }
-  }
-
-  const paper = blocks.filter((block) => block.mean > 140 && block.variance > 80);
-  const candidates = paper.length >= 6
-    ? paper
-    : blocks.filter((block) => block.variance > 150);
-
-  if (candidates.length < 4) return null;
-
-  const variances = candidates.map((block) => block.variance).sort((a, b) => a - b);
-  const cutoff = variances[Math.floor(variances.length * 0.35)] || 0;
-  const hot = candidates.filter((block) => block.variance >= cutoff);
-  if (hot.length < 4) return null;
-
-  let minRow = Infinity;
-  let minCol = Infinity;
-  let maxRow = 0;
-  let maxCol = 0;
-  for (const block of hot) {
-    minRow = Math.min(minRow, block.row);
-    minCol = Math.min(minCol, block.col);
-    maxRow = Math.max(maxRow, block.row);
-    maxCol = Math.max(maxCol, block.col);
-  }
-
-  minRow = Math.max(0, minRow - 1);
-  minCol = Math.max(0, minCol - 1);
-  maxRow = Math.min(rows - 1, maxRow + 1);
-  maxCol = Math.min(cols - 1, maxCol + 1);
-
-  const x = minCol * cell;
-  const y = minRow * cell;
-  const regionWidth = Math.min(width - x, (maxCol - minCol + 1) * cell);
-  const regionHeight = Math.min(height - y, (maxRow - minRow + 1) * cell);
-
-  if (regionWidth < 60 || regionHeight < 60) return null;
-  if (regionWidth * regionHeight > width * height * 0.88) return null;
-
-  return { x, y, width: regionWidth, height: regionHeight };
-}
-
 function cropRegion(source, region, targetSide) {
-  const scale = Math.min(3, Math.max(1.2, targetSide / Math.max(region.width, region.height)));
+  const scale = Math.min(4, Math.max(1.35, targetSide / Math.max(region.width, region.height, 1)));
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(region.width * scale));
   canvas.height = Math.max(1, Math.round(region.height * scale));
@@ -197,6 +150,109 @@ function cropRegion(source, region, targetSide) {
   );
   enhanceInPlace(canvas);
   return canvas;
+}
+
+function cropBand(source, { left = 0, top = 0, width = 1, height = 1 }) {
+  const region = {
+    x: Math.round(source.width * left),
+    y: Math.round(source.height * top),
+    width: Math.round(source.width * width),
+    height: Math.round(source.height * height),
+  };
+  region.width = Math.min(region.width, source.width - region.x);
+  region.height = Math.min(region.height, source.height - region.y);
+  if (region.width < 80 || region.height < 80) return null;
+  return cropRegion(source, region, TICKET_TARGET_SIDE);
+}
+
+function findTicketRegions(canvas) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return [];
+
+  const { width, height } = canvas;
+  const { data } = context.getImageData(0, 0, width, height);
+  const cell = Math.max(14, Math.round(Math.min(width, height) / 48));
+  const cols = Math.ceil(width / cell);
+  const rows = Math.ceil(height / cell);
+  const stats = [];
+  const hot = new Set();
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const block = blockStats(data, width, height, col * cell, row * cell, cell);
+      stats.push({ row, col, ...block });
+      if (block.mean > 145 && block.variance > 45) {
+        hot.add(row * cols + col);
+      }
+    }
+  }
+
+  const visited = new Set();
+  const regions = [];
+
+  for (const block of stats) {
+    const start = block.row * cols + block.col;
+    if (!hot.has(start) || visited.has(start)) continue;
+
+    const cells = [];
+    const stack = [block];
+    visited.add(start);
+
+    while (stack.length) {
+      const current = stack.pop();
+      cells.push(current);
+      for (const [deltaRow, deltaCol] of NEIGHBORS) {
+        const nextRow = current.row + deltaRow;
+        const nextCol = current.col + deltaCol;
+        if (nextRow < 0 || nextCol < 0 || nextRow >= rows || nextCol >= cols) continue;
+        const key = nextRow * cols + nextCol;
+        if (!hot.has(key) || visited.has(key)) continue;
+        visited.add(key);
+        stack.push(stats[key]);
+      }
+    }
+
+    if (cells.length < 5) continue;
+
+    let minRow = Infinity;
+    let minCol = Infinity;
+    let maxRow = 0;
+    let maxCol = 0;
+    let varianceSum = 0;
+    for (const cellBlock of cells) {
+      minRow = Math.min(minRow, cellBlock.row);
+      minCol = Math.min(minCol, cellBlock.col);
+      maxRow = Math.max(maxRow, cellBlock.row);
+      maxCol = Math.max(maxCol, cellBlock.col);
+      varianceSum += cellBlock.variance;
+    }
+
+    minRow = Math.max(0, minRow - 1);
+    minCol = Math.max(0, minCol - 1);
+    maxRow = Math.min(rows - 1, maxRow + 1);
+    maxCol = Math.min(cols - 1, maxCol + 1);
+
+    const x = minCol * cell;
+    const y = minRow * cell;
+    const regionWidth = Math.min(width - x, (maxCol - minCol + 1) * cell);
+    const regionHeight = Math.min(height - y, (maxRow - minRow + 1) * cell);
+    const areaRatio = (regionWidth * regionHeight) / (width * height);
+    const aspect = regionWidth / Math.max(regionHeight, 1);
+
+    if (regionWidth < 70 || regionHeight < 70) continue;
+    if (areaRatio < 0.02 || areaRatio > 0.72) continue;
+    if (aspect > 3.2 || aspect < 0.18) continue;
+
+    regions.push({
+      x,
+      y,
+      width: regionWidth,
+      height: regionHeight,
+      score: cells.length * (varianceSum / cells.length),
+    });
+  }
+
+  return regions.sort((left, right) => right.score - left.score).slice(0, 3);
 }
 
 function rotatedCanvas(source, rotation) {
@@ -224,42 +280,86 @@ function rotatedCanvas(source, rotation) {
   return canvas;
 }
 
-/** Reads a captured order image outside the camera flow. */
-export async function detectOrderFromPhoto(file) {
-  if (!file) fail();
+function prepareCanvases(bitmap) {
+  const original = canvasFromSource(bitmap, OCR_MAX_SIDE);
+  const canvases = [original];
 
-  const { worker, PSM } = await getWorker();
-
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(file);
-  } catch (error) {
-    fail(error);
+  for (const region of findTicketRegions(original)) {
+    canvases.push(cropRegion(original, region, TICKET_TARGET_SIDE));
   }
 
-  try {
-    const full = canvasFromSource(bitmap, OCR_MAX_SIDE);
-    enhanceInPlace(full);
-    const region = findTextRegion(full);
-    const ticket = region ? cropRegion(full, region, TICKET_TARGET_SIDE) : null;
-    const sources = ticket ? [ticket, full] : [full];
+  const topHalf = cropBand(original, { height: 0.52 });
+  if (topHalf) canvases.push(topHalf);
 
-    for (const psm of [PSM.SPARSE_TEXT, PSM.AUTO]) {
-      for (const rotation of [0, 180, 90, 270]) {
-        for (const source of sources) {
-          let order;
-          try {
-            order = await recognizeOrder(worker, rotatedCanvas(source, rotation), psm);
-          } catch (error) {
-            fail(error);
-          }
-          if (order) return order;
+  return canvases;
+}
+
+async function recognizeSources(worker, PSM, canvases, rotations, psms) {
+  for (const psm of psms) {
+    for (const rotation of rotations) {
+      for (const source of canvases) {
+        let order;
+        try {
+          order = await recognizeOrder(worker, rotatedCanvas(source, rotation), psm);
+        } catch (error) {
+          fail(error);
         }
+        if (order) return order;
       }
+    }
+  }
+  return null;
+}
+
+/** Reads a captured order image outside the camera flow. */
+export async function detectOrderFromPhoto(file, extraFiles = []) {
+  if (!file && extraFiles.length === 0) fail();
+
+  const { worker, PSM } = await getWorker();
+  const inputs = [file, ...extraFiles].filter(Boolean);
+  const bitmaps = [];
+
+  try {
+    for (const input of inputs) {
+      try {
+        bitmaps.push(await createImageBitmap(input));
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    if (bitmaps.length === 0) fail();
+
+    const prepared = bitmaps.map((bitmap) => prepareCanvases(bitmap));
+
+    for (const canvases of prepared) {
+      const found = await recognizeSources(
+        worker,
+        PSM,
+        canvases.slice(0, 4),
+        [0],
+        [PSM.SINGLE_BLOCK, PSM.AUTO],
+      );
+      if (found) return found;
+    }
+
+    for (const canvases of prepared) {
+      const found = await recognizeSources(worker, PSM, [canvases[0]], [0], [PSM.SPARSE_TEXT]);
+      if (found) return found;
+    }
+
+    for (const canvases of prepared) {
+      const found = await recognizeSources(
+        worker,
+        PSM,
+        canvases.slice(0, 2),
+        [180, 90, 270],
+        [PSM.AUTO],
+      );
+      if (found) return found;
     }
 
     return null;
   } finally {
-    bitmap.close();
+    bitmaps.forEach((bitmap) => bitmap.close());
   }
 }
