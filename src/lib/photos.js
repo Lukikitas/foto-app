@@ -74,16 +74,7 @@ export function getDownloadFilename(photo, usedNames = new Set()) {
     .join('')
     .replace(/\s+/g, ' ')
     .trim();
-  let filename = `${baseName}.${ext}`;
-  let counter = 2;
-
-  while (usedNames.has(filename)) {
-    filename = `${baseName}-${counter}.${ext}`;
-    counter += 1;
-  }
-
-  usedNames.add(filename);
-  return filename;
+  return uniqueDownloadFilename(`${baseName}.${ext}`, usedNames);
 }
 
 export async function fetchPhotos({
@@ -385,7 +376,31 @@ export async function bulkDeletePhotos(photos) {
   if (dbError) throw dbError;
 }
 
-export async function downloadPhoto(photo, usedNames = new Set()) {
+export function uniqueDownloadFilename(filename, usedNames = new Set()) {
+  const safe = String(filename || 'archivo')
+    .replace(/[<>:"/\\|?*]/g, '-')
+    .split('')
+    .filter((char) => char.charCodeAt(0) >= 32)
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim() || 'archivo';
+
+  const dot = safe.lastIndexOf('.');
+  const base = dot === -1 ? safe : safe.slice(0, dot);
+  const ext = dot === -1 ? '' : safe.slice(dot);
+  let next = safe;
+  let counter = 2;
+
+  while (usedNames.has(next)) {
+    next = `${base}-${counter}${ext}`;
+    counter += 1;
+  }
+
+  usedNames.add(next);
+  return next;
+}
+
+export async function downloadPhoto(photo, usedNames = new Set(), filenameOverride) {
   const response = await fetch(photo.public_url);
   if (!response.ok) throw new Error('No se pudo descargar la foto');
 
@@ -393,7 +408,9 @@ export async function downloadPhoto(photo, usedNames = new Set()) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = getDownloadFilename(photo, usedNames);
+  link.download = filenameOverride
+    ? uniqueDownloadFilename(filenameOverride, usedNames)
+    : getDownloadFilename(photo, usedNames);
   document.body.appendChild(link);
   link.click();
   link.remove();
