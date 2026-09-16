@@ -274,17 +274,26 @@ export default function PhotoGallery({
   }
 
   function handleUpdated(updated) {
+    const matches = (photo) =>
+      photoMatchesFilters(photo, { ...appliedFiltersRef.current, kind });
+
     if (Array.isArray(updated)) {
       setPhotos((prev) => {
         const map = new Map(updated.map((photo) => [photo.id, photo]));
-        return prev.map((photo) => map.get(photo.id) || photo);
+        return prev
+          .map((photo) => map.get(photo.id) || photo)
+          .filter(matches);
       });
       return;
     }
 
-    setPhotos((prev) =>
-      prev.map((photo) => (photo.id === updated.id ? updated : photo)),
-    );
+    setPhotos((prev) => {
+      const next = prev.map((photo) => (photo.id === updated.id ? updated : photo));
+      if (!matches(updated)) {
+        return next.filter((photo) => photo.id !== updated.id);
+      }
+      return next;
+    });
   }
 
   function handleDeleted(ids) {

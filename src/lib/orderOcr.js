@@ -311,55 +311,42 @@ async function recognizeSources(worker, PSM, canvases, rotations, psms) {
   return null;
 }
 
-/** Reads a captured order image outside the camera flow. */
-export async function detectOrderFromPhoto(file, extraFiles = []) {
-  if (!file && extraFiles.length === 0) fail();
+/** Reads a ticket close-up. Never used on the live camera feed. */
+export async function detectOrderFromPhoto(file) {
+  if (!file) fail();
 
   const { worker, PSM } = await getWorker();
-  const inputs = [file, ...extraFiles].filter(Boolean);
-  const bitmaps = [];
+  let bitmap;
 
   try {
-    for (const input of inputs) {
-      try {
-        bitmaps.push(await createImageBitmap(input));
-      } catch (error) {
-        console.error(error);
-      }
-    }
-    if (bitmaps.length === 0) fail();
+    bitmap = await createImageBitmap(file);
+  } catch (error) {
+    fail(error);
+  }
 
-    const prepared = bitmaps.map((bitmap) => prepareCanvases(bitmap));
+  try {
+    const canvases = prepareCanvases(bitmap);
 
-    for (const canvases of prepared) {
-      const found = await recognizeSources(
-        worker,
-        PSM,
-        canvases.slice(0, 4),
-        [0],
-        [PSM.SINGLE_BLOCK, PSM.AUTO],
-      );
-      if (found) return found;
-    }
+    const found = await recognizeSources(
+      worker,
+      PSM,
+      canvases.slice(0, 4),
+      [0],
+      [PSM.SINGLE_BLOCK, PSM.AUTO],
+    );
+    if (found) return found;
 
-    for (const canvases of prepared) {
-      const found = await recognizeSources(worker, PSM, [canvases[0]], [0], [PSM.SPARSE_TEXT]);
-      if (found) return found;
-    }
+    const sparse = await recognizeSources(worker, PSM, [canvases[0]], [0], [PSM.SPARSE_TEXT]);
+    if (sparse) return sparse;
 
-    for (const canvases of prepared) {
-      const found = await recognizeSources(
-        worker,
-        PSM,
-        canvases.slice(0, 2),
-        [180, 90, 270],
-        [PSM.AUTO],
-      );
-      if (found) return found;
-    }
-
-    return null;
+    return recognizeSources(
+      worker,
+      PSM,
+      canvases.slice(0, 2),
+      [180, 90, 270],
+      [PSM.AUTO],
+    );
   } finally {
-    bitmaps.forEach((bitmap) => bitmap.close());
+    bitmap.close();
   }
 }

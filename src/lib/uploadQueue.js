@@ -35,7 +35,7 @@ export function subscribe(listener) {
 
 export function enqueue({
   file,
-  ocrFile,
+  ticketFile,
   kind = 'order',
   orderDigits = '',
   title = '',
@@ -45,7 +45,7 @@ export function enqueue({
   const item = {
     id: crypto.randomUUID(),
     file,
-    ocrFile,
+    ticketFile,
     kind,
     orderDigits,
     title,
@@ -84,6 +84,10 @@ export function dismissUpload(id) {
   processQueue();
 }
 
+function releaseTicket(item) {
+  item.ticketFile = null;
+}
+
 async function processQueue() {
   if (processing) return;
 
@@ -93,21 +97,20 @@ async function processQueue() {
   processing = true;
   try {
     let detectedOrder = null;
-    const needsOcr = next.kind !== 'file' && !next.orderDigits;
+    const needsOcr = next.kind === 'order' && !next.orderDigits && next.ticketFile;
 
     if (needsOcr) {
       next.status = 'analyzing';
       next.label = 'Buscando código…';
       notify();
-      detectedOrder = await detectOrderFromPhoto(
-        next.ocrFile || next.file,
-        next.ocrFile ? [next.file] : [],
-      );
+      detectedOrder = await detectOrderFromPhoto(next.ticketFile);
     }
 
     const preparedFile = next.file.type.startsWith('image/')
       ? await compressImage(next.file)
       : next.file;
+
+    // OCR uses ticketFile only. Evidence (`next.file`) is the only image uploaded.
 
     let photo;
     if (next.kind === 'file') {
@@ -118,7 +121,7 @@ async function processQueue() {
       next.status = 'uploading';
       notify();
       photo = await uploadPhoto(preparedFile, next.orderDigits, next.meta, next.aggregator);
-    } else if (detectedOrder) {
+    } else if (detectedOrder?.aggregator) {
       next.status = 'uploading';
       next.label = `Pedido #${detectedOrder.displayCode}`;
       notify();
@@ -126,7 +129,7 @@ async function processQueue() {
         preparedFile,
         detectedOrder.displayCode,
         next.meta,
-        detectedOrder.aggregator || 'sin_agregador',
+        detectedOrder.aggregator,
       );
     } else {
       next.status = 'uploading';
@@ -134,6 +137,8 @@ async function processQueue() {
       notify();
       photo = await uploadUnidentifiedOrder(preparedFile, next.meta);
     }
+
+    releaseTicket(next);
     next.status = 'done';
     next.error = null;
     notify();

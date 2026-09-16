@@ -17,6 +17,25 @@ test('reads a clean aggregator code after CODIGO', () => {
   });
 });
 
+test('reads hyphenated aggregator codes', () => {
+  assert.deepEqual(code('CODIGO: PEYA-9K2X18'), {
+    displayCode: 'PEYA-9K2X18',
+    aggregator: 'pedidosya',
+  });
+  assert.deepEqual(code('CODIGO: RAPPI-998877'), {
+    displayCode: 'RAPPI-998877',
+    aggregator: 'rappi',
+  });
+  assert.deepEqual(code('CODIGO: RAPPITURBO-1122'), {
+    displayCode: 'RAPPITURBO-1122',
+    aggregator: 'rappi_turbo',
+  });
+  assert.deepEqual(code('CODIGO: MPD-445566'), {
+    displayCode: 'MPD-445566',
+    aggregator: 'mercadopago',
+  });
+});
+
 test('reads the code when CODIGO sits in the middle of a single OCR block', () => {
   assert.deepEqual(
     code('PEDIDOS YA CODIGO: PEYA12345 TOTAL 1500'),
@@ -51,10 +70,6 @@ test('reads Rappi, Rappi Turbo and Mercado Pago prefixes', () => {
     displayCode: 'MPD445566',
     aggregator: 'mercadopago',
   });
-  assert.deepEqual(code('CODIGO: MP99887766'), {
-    displayCode: 'MP99887766',
-    aggregator: 'mercadopago',
-  });
 });
 
 test('repairs PEYA misreads only after the label', () => {
@@ -75,26 +90,16 @@ test('finds PEYA without a CODIGO label when the code is long enough', () => {
   });
 });
 
-test('reads a long numeric Código Ped. as the full order id', () => {
-  assert.deepEqual(code('Código Ped. 12345678'), {
-    displayCode: '12345678',
-    aggregator: null,
-  });
-});
-
-test('keeps dashed numeric codes after the label', () => {
-  assert.deepEqual(code('CODIGO PED 12-345678'), {
-    displayCode: '12-345678',
-    aggregator: null,
-  });
+test('does not treat a numeric Código Ped. as an aggregator code', () => {
+  assert.equal(code('Código Ped. 12345678'), null);
 });
 
 test('does not treat CAMPAMENTO as a Mercado Pago code', () => {
   assert.equal(code('CAMPAMENTO TOTAL 1500'), null);
 });
 
-test('does not match a short MP token without the label', () => {
-  assert.equal(code('MP 12 items'), null);
+test('does not match a short MP token', () => {
+  assert.equal(code('CODIGO: MP99887766'), null);
 });
 
 test('stops the code before TOTAL and prices', () => {
@@ -132,9 +137,6 @@ test('repairs spaced PEYA without a CODIGO label', () => {
   });
 });
 
-test('reads numeric order ids after ORDEN', () => {
-  assert.deepEqual(code('ORDEN: 44556677'), {
-    displayCode: '44556677',
-    aggregator: null,
-  });
+test('does not invent a code from ORDEN numbers', () => {
+  assert.equal(code('ORDEN: 44556677'), null);
 });

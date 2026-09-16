@@ -3,11 +3,9 @@ import { detectAggregator, getAggregatorLabel } from './aggregators.js';
 const CODIGO_LABEL =
   /C\s*[O0]\s*D(?:\s*[I1L]\s*G\s*[O0](?:\s+PED(?:IDO)?)?|\s+PED(?:IDO)?)\s*[:.;#-]?\s*/;
 
-const OTHER_LABEL = /\b(?:PEDIDO|ORDEN|ORDER)\s*[:.;#-]?\s*/;
+const AGGREGATOR_PREFIX = /\b(RAPPITURBO|PEYA|RAPPI|MPD)(?=[\s-]?[A-Z0-9])/;
 
-const AGGREGATOR_PREFIX = /\b(RAPPITURBO|PEYA|RAPPI|MPD)(?=[A-Z0-9\s-])|\b(MP)(?=[0-9\s-])/;
-
-const BARE_PREFIXES = new Set(['PEYA', 'RAPPI', 'RAPPITURBO', 'MPD', 'MP']);
+const BARE_PREFIXES = new Set(['PEYA', 'RAPPI', 'RAPPITURBO', 'MPD']);
 
 const STOP_WORDS = new Set([
   'TOTAL',
@@ -30,12 +28,11 @@ const STOP_WORDS = new Set([
 
 const COMPACT_JUNK = /(?:TOTAL|SUBTOTAL|IMPORTE|PESOS|ARS|EFECTIVO|CANTIDAD|FECHA|HORA|CLIENTE|ARTICULOS).*$/;
 
-const MIN_EXTRA_STRICT = {
+const MIN_EXTRA = {
   RAPPITURBO: 3,
   PEYA: 4,
   RAPPI: 4,
   MPD: 4,
-  MP: 6,
 };
 
 const PREFIXES = [
@@ -43,7 +40,6 @@ const PREFIXES = [
   ['PEYA', 'pedidosya'],
   ['RAPPI', 'rappi'],
   ['MPD', 'mercadopago'],
-  ['MP', 'mercadopago'],
 ];
 
 function normalizeLine(value = '') {
@@ -71,8 +67,8 @@ function repairKnownPrefixes(value = '') {
     .replace(/R[A4][\s-]*P[\s-]*P[\s-]*[I1L](?=[A-Z0-9\s-]|$)/g, 'RAPPI');
 }
 
-function textAfterLabel(line, label) {
-  const match = line.match(label);
+function textAfterLabel(line) {
+  const match = line.match(CODIGO_LABEL);
   if (!match) return '';
   return line.slice(match.index + match[0].length).trim();
 }
@@ -89,20 +85,14 @@ function makeAggregatorResult(displayCode, aggregator) {
   };
 }
 
-function makeNumericResult(displayCode) {
-  return {
-    displayCode,
-    aggregator: null,
-    aggregatorLabel: getAggregatorLabel(null),
-  };
-}
-
 function stripTrailingJunk(value = '') {
   return value.replace(COMPACT_JUNK, '').replace(/[A-Z]{4,}$/g, '');
 }
 
 function collectCodeRest(source, startIndex) {
-  const after = source.slice(startIndex).trim();
+  const rawAfter = source.slice(startIndex);
+  const leadingHyphen = /^\s*-/.test(rawAfter);
+  const after = rawAfter.trim().replace(/^-+/, '').trim();
   if (!after) return '';
 
   const tokens = after.split(/\s+/).filter(Boolean);
@@ -121,21 +111,26 @@ function collectCodeRest(source, startIndex) {
     parts.push(compact);
   }
 
-  return parts.join('');
+  const rest = parts.join('');
+  if (!rest) return '';
+  return leadingHyphen ? `-${rest}` : rest;
 }
 
-function parseAggregatorPrefixMatch(source, minExtra, requireDigits) {
+function isReliableCode(prefix, rest) {
+  const restBody = compactAlnum(rest);
+  const needed = MIN_EXTRA[prefix] || 4;
+  const digits = rest.replace(/\D/g, '');
+  return restBody.length >= needed && digits.length >= 3;
+}
+
+function parseAggregatorPrefixMatch(source) {
   const matcher = new RegExp(AGGREGATOR_PREFIX.source, 'g');
   let match;
 
   while ((match = matcher.exec(source))) {
-    const prefix = match[1] || match[2];
+    const prefix = match[1];
     const rest = collectCodeRest(source, match.index + match[0].length);
-    const restBody = compactAlnum(rest);
-    const needed = minExtra === 1 ? 1 : MIN_EXTRA_STRICT[prefix] || minExtra;
-
-    if (restBody.length < needed) continue;
-    if (requireDigits && rest.replace(/\D/g, '').length < 3) continue;
+    if (!isReliableCode(prefix, rest)) continue;
 
     const aggregator = detectAggregator(prefix);
     if (!aggregator) continue;
@@ -146,10 +141,10 @@ function parseAggregatorPrefixMatch(source, minExtra, requireDigits) {
   return null;
 }
 
-function parseAggregatorCode(text, { strict = false, repair = false } = {}) {
-  const source = repair ? repairKnownPrefixes(normalizeLine(text)) : normalizeLine(text);
+function parseAggregatorCode(text) {
+  const source = repairKnownPrefixes(normalizeLine(text));
   if (!source) return null;
-  return parseAggregatorPrefixMatch(source, strict ? 4 : 1, strict);
+  return parseAggregatorPrefixMatch(source);
 }
 
 function parseCompactAggregator(text) {
@@ -162,18 +157,9 @@ function parseCompactAggregator(text) {
       const idx = compact.indexOf(prefix, from);
       if (idx === -1) break;
       from = idx + 1;
-      if ((prefix === 'MP' || prefix === 'MPD') && idx > 0 && /[A-Z0-9]/.test(compact[idx - 1])) {
-        continue;
-      }
 
       let rest = stripTrailingJunk(compact.slice(idx + prefix.length)).slice(0, 28);
-      const needed = MIN_EXTRA_STRICT[prefix] || 4;
-      const digits = rest.replace(/\D/g, '');
-
-      if (rest.length < needed) continue;
-      if (prefix === 'MP' && digits.length < 6) continue;
-      if (digits.length < 3 && rest.length < needed) continue;
-      if (digits.length < 3) continue;
+      if (!isReliableCode(prefix, rest)) continue;
 
       return makeAggregatorResult(`${prefix}${rest}`, aggregator);
     }
@@ -182,41 +168,25 @@ function parseCompactAggregator(text) {
   return null;
 }
 
-function parseNumericCode(text) {
-  const source = normalizeLine(text);
-  if (!source) return null;
-
-  const dashed = source.match(/\b(\d{1,4}-\d{4,})\b/);
-  if (dashed) return makeNumericResult(dashed[1]);
-
-  const digits = source.match(/\b(\d{4,12})\b/);
-  if (!digits) return null;
-
-  return makeNumericResult(digits[1].length <= 4 ? digits[1].slice(-4) : digits[1]);
-}
-
-function getCodeAfterLabel(line, nextLine, label) {
-  const afterLabel = repairKnownPrefixes(textAfterLabel(line, label));
+function getCodeAfterLabel(line, nextLine = '') {
+  const afterLabel = repairKnownPrefixes(textAfterLabel(line));
   const candidate = !afterLabel || isBarePrefix(afterLabel)
     ? `${afterLabel} ${nextLine}`.trim()
     : afterLabel;
 
-  return (
-    parseAggregatorCode(candidate, { repair: true }) ||
-    parseNumericCode(candidate)
-  );
+  return parseAggregatorCode(candidate);
 }
 
-function scanLabeledLines(lines, label) {
+function scanLabeledLines(lines) {
   for (let index = 0; index < lines.length; index += 1) {
-    if (!label.test(lines[index])) continue;
-    const code = getCodeAfterLabel(lines[index], lines[index + 1] || '', label);
+    if (!CODIGO_LABEL.test(lines[index])) continue;
+    const code = getCodeAfterLabel(lines[index], lines[index + 1] || '');
     if (code) return code;
   }
   return null;
 }
 
-/** Extracts an order code from noisy OCR text. */
+/** Extracts a reliable aggregator order code from OCR text. */
 export function detectOrderCode(ocrText) {
   const raw = String(ocrText || '');
   const lines = raw
@@ -224,25 +194,14 @@ export function detectOrderCode(ocrText) {
     .map((line) => repairKnownPrefixes(normalizeLine(line)))
     .filter(Boolean);
 
-  const fromCodigo = scanLabeledLines(lines, CODIGO_LABEL);
+  const fromCodigo = scanLabeledLines(lines);
   if (fromCodigo) return fromCodigo;
 
   const full = repairKnownPrefixes(normalizeLine(raw.replace(/\r?\n/g, ' ')));
   if (CODIGO_LABEL.test(full)) {
-    const labeled = getCodeAfterLabel(full, '', CODIGO_LABEL);
+    const labeled = getCodeAfterLabel(full, '');
     if (labeled) return labeled;
   }
 
-  const compact = parseCompactAggregator(raw);
-  if (compact) return compact;
-
-  const fromOther = scanLabeledLines(lines, OTHER_LABEL);
-  if (fromOther) return fromOther;
-
-  if (OTHER_LABEL.test(full)) {
-    const labeled = getCodeAfterLabel(full, '', OTHER_LABEL);
-    if (labeled) return labeled;
-  }
-
-  return parseAggregatorCode(full, { strict: true, repair: true });
+  return parseCompactAggregator(raw);
 }
