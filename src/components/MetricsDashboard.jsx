@@ -184,7 +184,7 @@ export default function MetricsDashboard({ store, hasData, saving, onSave, onGoT
             <strong>{compared.outOfTarget ? 'Fuera de objetivo' : 'Dentro del objetivo'}</strong>
             <p>
               {formatPct(current.overall.complaintPct)} de quejas sobre {formatNumber(current.overall.orders)}{' '}
-              pedidos. El tope es {formatPct(store.targetComplaintPct)}.
+              pedido{current.overall.orders === 1 ? '' : 's'}. El tope es {formatPct(store.targetComplaintPct)}.
             </p>
           </div>
 
@@ -232,7 +232,7 @@ export default function MetricsDashboard({ store, hasData, saving, onSave, onGoT
                     </strong>
                   </header>
                   <p className="metrics-agg__meta">
-                    {formatNumber(item.orders)} pedidos · {formatNumber(item.complaints)} quejas
+                    {formatNumber(item.orders)} pedido{item.orders === 1 ? '' : 's'} · {formatNumber(item.complaints)} queja{item.complaints === 1 ? '' : 's'}
                     {prev ? ` · ${formatDelta(item.complaintPct - (prev.complaintPct || 0), { pct: true })}` : ''}
                   </p>
                   <StackedBar accepted={item.accepted} refuted={item.refuted} pending={item.pending} />
