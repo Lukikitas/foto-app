@@ -70,6 +70,8 @@ test('does not treat a date cell as an order code', () => {
   assert.equal(parseComplaintOrderCode('16/09/2026 21:30'), '');
   assert.equal(parseComplaintOrderCode('21:30'), '');
   assert.equal(parseComplaintOrderCode('PEYA12345'), 'PEYA12345');
+  assert.equal(parseComplaintOrderCode('Pedido PEYA-2284672300'), 'PEYA2284672300');
+  assert.equal(parseComplaintOrderCode('2284672300.0'), '2284672300');
 });
 
 test('parses DMY datetimes used in Argentina', () => {

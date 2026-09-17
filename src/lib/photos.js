@@ -158,6 +158,32 @@ export async function fetchPhotos({
   );
 }
 
+export async function fetchOrderPhotosMatchingNames(tokens) {
+  const clean = [...new Set(
+    tokens
+      .map((token) => String(token || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+      .filter((token) => token.length >= 4 && token.length <= 32),
+  )];
+
+  if (clean.length === 0) return [];
+
+  const photos = [];
+  for (let index = 0; index < clean.length; index += 20) {
+    const chunk = clean.slice(index, index + 20);
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .or(chunk.map((token) => `name.ilike.%${token}%`).join(','));
+
+    if (error) throw error;
+    photos.push(...(data ?? []).filter(isOrderPhoto));
+  }
+
+  const byId = new Map();
+  photos.forEach((photo) => byId.set(photo.id, photo));
+  return [...byId.values()];
+}
+
 function includesInsensitive(value, query) {
   if (!query) return true;
   if (!value) return false;
