@@ -92,6 +92,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm,gz}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/tesseract\//],

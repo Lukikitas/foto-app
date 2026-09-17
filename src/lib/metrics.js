@@ -202,7 +202,7 @@ export function isOutOfTarget(rate, target = DEFAULT_COMPLAINT_TARGET_PCT) {
   return rate > Number(target);
 }
 
-export function formatPct(value, digits = 1) {
+export function formatPct(value, digits = 2) {
   if (value == null || Number.isNaN(Number(value))) return '—';
   return `${Number(value).toLocaleString('es-AR', {
     minimumFractionDigits: digits,

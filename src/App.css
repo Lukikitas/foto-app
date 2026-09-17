@@ -8,7 +8,7 @@
   position: fixed;
   top: 0.65rem;
   right: 0.65rem;
-  z-index: 90;
+  z-index: 80;
   width: 2.15rem;
   height: 2.15rem;
   border: 1px solid var(--border-strong);
@@ -1990,8 +1990,9 @@
 }
 
 .install-banner {
-  position: relative;
-  z-index: 110;
+  position: sticky;
+  top: 0;
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2521,10 +2522,92 @@
   border-color: var(--danger-border);
 }
 
+.metrics-entry-wrap,
 .metrics-entry {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+.metrics-paste {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.metrics-paste__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.metrics-paste h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-h);
+}
+
+.metrics-paste p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.metrics-paste__aggregator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.metrics-paste__aggregator select,
+.metrics-paste__input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+}
+
+.metrics-paste__input {
+  min-height: 8.5rem;
+  resize: vertical;
+  font-variant-numeric: tabular-nums;
+}
+
+.metrics-paste__input:focus,
+.metrics-paste__aggregator select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.metrics-paste__summary {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.metrics-paste__errors {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.metrics-paste__preview {
+  max-height: 14rem;
+  overflow: auto;
 }
 
 .metrics-entry__actions {

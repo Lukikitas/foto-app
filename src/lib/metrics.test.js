@@ -37,7 +37,9 @@ test('complaint rate and target use 2.4% by default', () => {
   assert.equal(isOutOfTarget(2.41, 2.4), true);
   assert.equal(isOutOfTarget(11, 11), false);
   assert.equal(isOutOfTarget(12, 11), true);
-  assert.equal(formatPct(2.4), '2,4%');
+  assert.equal(formatPct(2.4), '2,40%');
+  assert.equal(formatPct(2.14), '2,14%');
+  assert.equal(formatPct(complaintRate(174, 5)), '2,87%');
 });
 
 test('weeks start on Monday and periods cover today to custom ranges', () => {

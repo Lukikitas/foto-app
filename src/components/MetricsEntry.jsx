@@ -14,6 +14,7 @@ import {
   upsertDayStats,
 } from '../lib/metrics';
 import { fetchPhotoFlags } from '../lib/metricsStore';
+import MetricsListPaste from './MetricsListPaste';
 
 function toField(value) {
   return value == null || value === 0 ? '' : String(value);
@@ -109,7 +110,9 @@ export default function MetricsEntry({ store, saving, onSave }) {
   }
 
   return (
-    <form className="metrics-entry" onSubmit={handleSubmit}>
+    <div className="metrics-entry-wrap">
+      <MetricsListPaste store={store} saving={saving} onSave={onSave} />
+      <form className="metrics-entry" onSubmit={handleSubmit}>
       <div className="metrics-entry__top">
         <label className="metrics-entry__date">
           Día
@@ -279,5 +282,6 @@ export default function MetricsEntry({ store, saving, onSave }) {
         aceptadas son las quejas que no se refutaron, salvo que las cargues a mano.
       </p>
     </form>
+    </div>
   );
 }

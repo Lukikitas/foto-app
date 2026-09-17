@@ -15,6 +15,9 @@ export default function UpdatePrompt() {
     updateServiceWorker,
   } = useRegisterSW({
     immediate: true,
+    onNeedReload() {
+      window.location.reload();
+    },
     onRegisteredSW(_url, registration) {
       registrationRef.current = registration || null;
       checkForUpdate(registration);
@@ -38,6 +41,19 @@ export default function UpdatePrompt() {
     };
   }, []);
 
+  async function handleUpdate() {
+    const registration = registrationRef.current;
+    try {
+      registration?.waiting?.postMessage({ type: 'SKIP_WAITING' });
+      await updateServiceWorker(true);
+    } catch {
+      // si el SW no responde, igual recargamos
+    }
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 250);
+  }
+
   if (!needRefresh) return null;
 
   return (
@@ -47,11 +63,7 @@ export default function UpdatePrompt() {
         <p>Hay una versión nueva de la app. Actualizá para usar los últimos cambios.</p>
       </div>
       <div className="install-banner__actions">
-        <button
-          type="button"
-          className="btn btn--primary btn--small"
-          onClick={() => updateServiceWorker(true)}
-        >
+        <button type="button" className="btn btn--primary btn--small" onClick={handleUpdate}>
           Actualizar
         </button>
       </div>

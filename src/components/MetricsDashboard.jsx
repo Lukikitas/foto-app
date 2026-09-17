@@ -101,7 +101,7 @@ function DailyChart({ days, valueKey, target, title, legend }) {
           const bad = has && isOutOfTarget(value, target);
           return (
             <div key={day.day} className="metrics-chart__col">
-              <span className="metrics-chart__value">{has ? formatPct(value, 0) : ''}</span>
+              <span className="metrics-chart__value">{has ? formatPct(value) : ''}</span>
               <span
                 className={`metrics-chart__bar${bad ? ' metrics-chart__bar--bad' : ''}${has ? '' : ' metrics-chart__bar--empty'}`}
                 style={{ height: has ? `${height}%` : '3px' }}
