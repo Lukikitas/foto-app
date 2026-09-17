@@ -60,7 +60,7 @@ export default function MetricsListPaste({ store, saving, onSave }) {
             className="metrics-paste__input"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            rows={8}
+            rows={6}
             spellCheck={false}
             placeholder={
               showAwt
@@ -75,6 +75,22 @@ export default function MetricsListPaste({ store, saving, onSave }) {
               {parsed.errors.length > 0 ? ` · ${parsed.errors.length} renglón(es) sin leer` : ''}
             </p>
           )}
+          {parsed.errors.length > 0 && (
+            <p className="metrics-paste__errors" role="status">
+              {parsed.errors[0].message}
+              {parsed.errors.length > 1 ? ` (+${parsed.errors.length - 1})` : ''}
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn btn--primary metrics-paste__apply"
+            onClick={handleApply}
+            disabled={saving || parsed.rows.length === 0}
+          >
+            {saving ? 'Guardando…' : parsed.rows.length
+              ? `Cargar ${parsed.rows.length} día${parsed.rows.length === 1 ? '' : 's'}`
+              : 'Cargar lista'}
+          </button>
           {parsed.rows.length > 0 && (
             <div className="metrics-table-wrap metrics-paste__preview">
               <table className="metrics-table">
@@ -99,22 +115,6 @@ export default function MetricsListPaste({ store, saving, onSave }) {
               </table>
             </div>
           )}
-          {parsed.errors.length > 0 && (
-            <p className="metrics-paste__errors" role="status">
-              {parsed.errors[0].message}
-              {parsed.errors.length > 1 ? ` (+${parsed.errors.length - 1})` : ''}
-            </p>
-          )}
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={handleApply}
-            disabled={saving || parsed.rows.length === 0}
-          >
-            {saving ? 'Guardando…' : parsed.rows.length
-              ? `Cargar ${parsed.rows.length} día${parsed.rows.length === 1 ? '' : 's'}`
-              : 'Cargar lista'}
-          </button>
         </>
       )}
     </section>

@@ -2605,9 +2605,8 @@
   font-size: 0.82rem;
 }
 
-.metrics-paste__preview {
-  max-height: 14rem;
-  overflow: auto;
+.metrics-paste__apply {
+  align-self: start;
 }
 
 .metrics-entry__actions {
