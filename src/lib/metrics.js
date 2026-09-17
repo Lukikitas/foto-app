@@ -1,9 +1,28 @@
-import { AGGREGATORS, getPhotoAggregator } from './aggregators.js';
+import { AGGREGATORS, getAggregatorLabel, getPhotoAggregator } from './aggregators.js';
 
 export const DEFAULT_COMPLAINT_TARGET_PCT = 2.4;
+export const DEFAULT_AWT_TARGET_PCT = 11;
+export const AWT_AGGREGATOR = 'pedidosya';
 export const ARGENTINA_TZ = 'America/Argentina/Buenos_Aires';
 
 export const METRIC_AGGREGATORS = Object.keys(AGGREGATORS);
+
+export const AGGREGATOR_SHORT_LABELS = {
+  pedidosya: 'PEYA',
+  rappi: 'Rappi',
+  rappi_turbo: 'Turbo',
+  mercadopago: 'MP',
+};
+
+export function getAggregatorShortLabel(aggregator) {
+  return AGGREGATOR_SHORT_LABELS[aggregator] || getAggregatorLabel(aggregator);
+}
+
+export const METRIC_PAGE_TABS = [
+  { id: 'overview', label: 'Resumen' },
+  ...METRIC_AGGREGATORS.map((id) => ({ id, label: AGGREGATOR_SHORT_LABELS[id] })),
+  { id: 'entry', label: 'Cargar' },
+];
 
 export const PERIOD_PRESETS = [
   { id: 'today', label: 'Hoy' },
@@ -15,13 +34,14 @@ export const PERIOD_PRESETS = [
 ];
 
 export function emptyDayStats() {
-  return { orders: 0, complaints: 0, accepted: null, refuted: null };
+  return { orders: 0, complaints: 0, accepted: null, refuted: null, awt: 0 };
 }
 
 export function emptyStore() {
   return {
     version: 1,
     targetComplaintPct: DEFAULT_COMPLAINT_TARGET_PCT,
+    targetAwtPct: DEFAULT_AWT_TARGET_PCT,
     updatedAt: null,
     days: {},
   };
@@ -34,6 +54,11 @@ export function parseStore(raw) {
   const target = Number(raw.targetComplaintPct);
   if (Number.isFinite(target) && target >= 0 && target <= 100) {
     store.targetComplaintPct = target;
+  }
+
+  const awtTarget = Number(raw.targetAwtPct);
+  if (Number.isFinite(awtTarget) && awtTarget >= 0 && awtTarget <= 100) {
+    store.targetAwtPct = awtTarget;
   }
 
   store.updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : null;
@@ -61,6 +86,7 @@ export function normalizeDayStats(row = {}) {
     complaints: toCount(row.complaints),
     accepted: toOptionalCount(row.accepted),
     refuted: toOptionalCount(row.refuted),
+    awt: toCount(row.awt),
   };
 }
 
@@ -220,6 +246,7 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator) {
       ? Math.max(0, complaints - refuted)
       : toCount(entered.accepted);
   const pending = Math.max(0, complaints - refuted - accepted);
+  const awt = toCount(entered.awt);
   const rate = complaintRate(orders, complaints);
 
   return {
@@ -227,6 +254,7 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator) {
     day,
     orders,
     complaints,
+    awt,
     refuted,
     accepted,
     pending,
@@ -235,6 +263,7 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator) {
     usedPhotoRefuted: entered.refuted == null,
     usedAutoAccepted: entered.accepted == null,
     complaintPct: rate,
+    awtPct: complaintRate(orders, awt),
     refutedPctOfComplaints: ratioPct(refuted, complaints),
     acceptedPctOfComplaints: ratioPct(accepted, complaints),
   };
@@ -259,14 +288,24 @@ export function summarizeRange(store, photoFlags, from, to) {
   return { from, to, days, overall, aggregators, daily };
 }
 
-export function compareSummaries(current, previous, target) {
+export function aggregatorDailySeries(summary, aggregator) {
+  return (summary?.daily || []).map((day) => {
+    const row = day.aggregators.find((item) => item.aggregator === aggregator) || emptyDayStats();
+    return { day: day.day, ...row };
+  });
+}
+
+export function compareSummaries(current, previous, target, awtTarget = DEFAULT_AWT_TARGET_PCT) {
   return {
     orders: delta(current.orders, previous.orders),
     complaints: delta(current.complaints, previous.complaints),
     complaintPct: delta(current.complaintPct, previous.complaintPct),
+    awt: delta(current.awt, previous.awt),
+    awtPct: delta(current.awtPct, previous.awtPct),
     refuted: delta(current.refuted, previous.refuted),
     accepted: delta(current.accepted, previous.accepted),
     outOfTarget: isOutOfTarget(current.complaintPct, target),
+    outOfAwtTarget: isOutOfTarget(current.awtPct, awtTarget),
     previousOutOfTarget: isOutOfTarget(previous.complaintPct, target),
   };
 }
@@ -279,6 +318,7 @@ export function upsertDayStats(store, day, aggregator, stats) {
   const empty =
     normalized.orders === 0 &&
     normalized.complaints === 0 &&
+    normalized.awt === 0 &&
     normalized.accepted == null &&
     normalized.refuted == null;
 
@@ -297,6 +337,14 @@ export function setTargetComplaintPct(store, target) {
   return next;
 }
 
+export function setTargetAwtPct(store, target) {
+  const next = parseStore(store);
+  const value = Number(target);
+  next.targetAwtPct =
+    Number.isFinite(value) && value >= 0 && value <= 100 ? value : DEFAULT_AWT_TARGET_PCT;
+  return next;
+}
+
 export function copyDayStats(store, fromDay, toDay) {
   const next = parseStore(store);
   const source = next.days[fromDay];
@@ -310,6 +358,7 @@ export function copyDayStats(store, fromDay, toDay) {
 function rollupRows(id, rows) {
   const orders = rows.reduce((sum, row) => sum + toCount(row.orders), 0);
   const complaints = rows.reduce((sum, row) => sum + toCount(row.complaints), 0);
+  const awt = rows.reduce((sum, row) => sum + toCount(row.awt), 0);
   const refuted = rows.reduce((sum, row) => sum + toCount(row.refuted), 0);
   const accepted = rows.reduce((sum, row) => sum + toCount(row.accepted), 0);
   const pending = rows.reduce((sum, row) => sum + toCount(row.pending), 0);
@@ -318,10 +367,12 @@ function rollupRows(id, rows) {
     rows,
     orders,
     complaints,
+    awt,
     refuted,
     accepted,
     pending,
     complaintPct: complaintRate(orders, complaints),
+    awtPct: complaintRate(orders, awt),
     refutedPctOfComplaints: ratioPct(refuted, complaints),
     acceptedPctOfComplaints: ratioPct(accepted, complaints),
   };

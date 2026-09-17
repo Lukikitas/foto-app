@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import {
+  AWT_AGGREGATOR,
   METRIC_AGGREGATORS,
   addDays,
   argentinaToday,
@@ -22,6 +23,7 @@ function fieldsFromStats(stats = emptyDayStats()) {
   return {
     orders: toField(stats.orders),
     complaints: toField(stats.complaints),
+    awt: toField(stats.awt),
     accepted: stats.accepted == null ? '' : String(stats.accepted),
     refuted: stats.refuted == null ? '' : String(stats.refuted),
   };
@@ -82,6 +84,7 @@ export default function MetricsEntry({ store, saving, onSave }) {
       next = upsertDayStats(next, day, aggregator, {
         orders: row.orders,
         complaints: row.complaints,
+        awt: aggregator === AWT_AGGREGATOR ? row.awt : 0,
         accepted: row.accepted === '' ? null : row.accepted,
         refuted: row.refuted === '' ? null : row.refuted,
       });
@@ -125,25 +128,34 @@ export default function MetricsEntry({ store, saving, onSave }) {
       <div className="metrics-days" role="group" aria-label="Días recientes">
         {recentDays.map((item) => {
           const loaded = Boolean(store.days?.[item]);
-          const orders = METRIC_AGGREGATORS.reduce(
-            (sum, aggregator) => sum + Number(store.days?.[item]?.[aggregator]?.orders || 0),
-            0,
-          );
-          const complaints = METRIC_AGGREGATORS.reduce(
-            (sum, aggregator) => sum + Number(store.days?.[item]?.[aggregator]?.complaints || 0),
-            0,
-          );
-          const rate = complaintRate(orders, complaints);
-          const bad = isOutOfTarget(rate, store.targetComplaintPct);
+          const dots = METRIC_AGGREGATORS.map((aggregator) => {
+            const stats = store.days?.[item]?.[aggregator];
+            if (!stats) return { aggregator, tone: '' };
+            const complaintBad = isOutOfTarget(
+              complaintRate(stats.orders, stats.complaints),
+              store.targetComplaintPct,
+            );
+            const awtBad =
+              aggregator === AWT_AGGREGATOR &&
+              isOutOfTarget(complaintRate(stats.orders, stats.awt), store.targetAwtPct);
+            return { aggregator, tone: complaintBad || awtBad ? 'is-bad' : 'is-good' };
+          });
+          const bad = dots.some((dot) => dot.tone === 'is-bad');
           return (
             <button
               key={item}
               type="button"
-              className={`metrics-days__btn${item === day ? ' is-active' : ''}${bad ? ' is-bad' : ''}${loaded ? ' has-data' : ''}`}
+              className={`metrics-days__btn${item === day ? ' is-active' : ''}${bad ? ' is-bad' : ''}${
+                loaded ? ' has-data' : ''
+              }`}
               onClick={() => setDay(item)}
             >
               <span>{formatDayLabel(item)}</span>
-              <strong>{loaded ? formatPct(rate, 0) : '—'}</strong>
+              <span className="metrics-days__dots" aria-hidden="true">
+                {dots.map((dot) => (
+                  <i key={dot.aggregator} className={dot.tone} />
+                ))}
+              </span>
             </button>
           );
         })}
@@ -154,14 +166,27 @@ export default function MetricsEntry({ store, saving, onSave }) {
           const row = fields[aggregator];
           const rate = complaintRate(row.orders, row.complaints);
           const bad = isOutOfTarget(rate, store.targetComplaintPct);
+          const showAwt = aggregator === AWT_AGGREGATOR;
+          const awtRate = showAwt ? complaintRate(row.orders, row.awt) : null;
+          const awtBad = showAwt && isOutOfTarget(awtRate, store.targetAwtPct);
           const autoRefuted = photoFlags?.[day]?.[aggregator]?.refutedPhotos || 0;
           return (
-            <article key={aggregator} className={`metrics-form-card${bad ? ' is-bad' : ''}`}>
+            <article
+              key={aggregator}
+              className={`metrics-form-card${bad || awtBad ? ' is-bad' : ''}`}
+            >
               <header>
                 <h3>{getAggregatorLabel(aggregator)}</h3>
-                <strong className={rate == null ? '' : bad ? 'is-bad' : 'is-good'}>
-                  {formatPct(rate)}
-                </strong>
+                <div className="metrics-form-card__rates">
+                  <strong className={rate == null ? '' : bad ? 'is-bad' : 'is-good'}>
+                    {formatPct(rate)}
+                  </strong>
+                  {showAwt && (
+                    <span className={awtRate == null ? '' : awtBad ? 'is-bad' : 'is-good'}>
+                      AWT {formatPct(awtRate)}
+                    </span>
+                  )}
+                </div>
               </header>
               <label>
                 Pedidos
@@ -185,6 +210,19 @@ export default function MetricsEntry({ store, saving, onSave }) {
                   onChange={(e) => updateField(aggregator, 'complaints', e.target.value)}
                 />
               </label>
+              {showAwt && (
+                <label>
+                  AWT (demorados)
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={row.awt}
+                    onChange={(e) => updateField(aggregator, 'awt', e.target.value)}
+                  />
+                </label>
+              )}
               {showExtra && (
                 <>
                   <label>
@@ -214,6 +252,11 @@ export default function MetricsEntry({ store, saving, onSave }) {
               {!showExtra && autoRefuted > 0 && (
                 <p className="metrics-form-card__hint">Fotos refutadas ese día: {autoRefuted}</p>
               )}
+              {showAwt && (
+                <p className="metrics-form-card__hint">
+                  AWT es el % de pedidos demorados de PedidosYa. Objetivo {formatPct(store.targetAwtPct)}.
+                </p>
+              )}
             </article>
           );
         })}
@@ -232,8 +275,8 @@ export default function MetricsEntry({ store, saving, onSave }) {
         </button>
       </div>
       <p className="metrics-entry__note">
-        Con pedidos y quejas alcanza. Las refutadas se toman de las fotos marcadas, y las aceptadas
-        son las quejas que no se refutaron, salvo que las cargues a mano.
+        Cargá cada agregador por separado. Las refutadas se toman de las fotos marcadas, y las
+        aceptadas son las quejas que no se refutaron, salvo que las cargues a mano.
       </p>
     </form>
   );

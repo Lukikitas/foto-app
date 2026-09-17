@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { emptyStore } from '../lib/metrics';
+import { emptyStore, METRIC_PAGE_TABS } from '../lib/metrics';
 import {
   getMetricsView,
   loadMetricsStore,
@@ -65,29 +65,23 @@ export default function MetricsPage() {
         <div>
           <h2 className="gallery__title">Métricas</h2>
           <p className="metrics__lead">
-            Cargá pedidos y quejas por día. El tablero te muestra el % contra el objetivo y
-            cuántas se refutaron.
+            Cada agregador se mide solo, sobre sus propios pedidos. PedidosYa también muestra AWT
+            (demorados).
           </p>
         </div>
-        <div className="metrics__views" role="tablist" aria-label="Secciones de métricas">
-          <button
-            type="button"
-            className={`gallery__view-btn${view === 'dashboard' ? ' gallery__view-btn--active' : ''}`}
-            onClick={() => changeView('dashboard')}
-            role="tab"
-            aria-selected={view === 'dashboard'}
-          >
-            Dashboard
-          </button>
-          <button
-            type="button"
-            className={`gallery__view-btn${view === 'entry' ? ' gallery__view-btn--active' : ''}`}
-            onClick={() => changeView('entry')}
-            role="tab"
-            aria-selected={view === 'entry'}
-          >
-            Cargar
-          </button>
+        <div className="metrics__views metrics__views--tabs" role="tablist" aria-label="Agregadores">
+          {METRIC_PAGE_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`gallery__view-btn${view === tab.id ? ' gallery__view-btn--active' : ''}`}
+              onClick={() => changeView(tab.id)}
+              role="tab"
+              aria-selected={view === tab.id}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -107,16 +101,17 @@ export default function MetricsPage() {
           <div className="spinner" aria-hidden="true" />
           <p>Cargando métricas…</p>
         </div>
-      ) : view === 'dashboard' ? (
+      ) : view === 'entry' ? (
+        <MetricsEntry store={store} saving={saving} onSave={persist} />
+      ) : (
         <MetricsDashboard
           store={store}
           hasData={hasData}
           saving={saving}
+          view={view}
           onSave={persist}
-          onGoToEntry={() => changeView('entry')}
+          onChangeView={changeView}
         />
-      ) : (
-        <MetricsEntry store={store} saving={saving} onSave={persist} />
       )}
     </section>
   );

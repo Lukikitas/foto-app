@@ -21,7 +21,7 @@ const TABS = {
 };
 
 export default function App() {
-  const [tab, setTab] = useState(TABS.capture);
+  const [tab, setTab] = useState(TABS.metrics);
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
 
@@ -89,6 +89,14 @@ export default function App() {
         <div className="app-nav__buttons">
           <button
             type="button"
+            className={`app-nav__btn${tab === TABS.metrics ? ' app-nav__btn--active' : ''}`}
+            onClick={() => setTab(TABS.metrics)}
+            aria-current={tab === TABS.metrics ? 'page' : undefined}
+          >
+            Métricas
+          </button>
+          <button
+            type="button"
             className={`app-nav__btn${tab === TABS.capture ? ' app-nav__btn--active' : ''}`}
             onClick={() => setTab(TABS.capture)}
             aria-current={tab === TABS.capture ? 'page' : undefined}
@@ -110,14 +118,6 @@ export default function App() {
             aria-current={tab === TABS.complaints ? 'page' : undefined}
           >
             Reclamos
-          </button>
-          <button
-            type="button"
-            className={`app-nav__btn${tab === TABS.metrics ? ' app-nav__btn--active' : ''}`}
-            onClick={() => setTab(TABS.metrics)}
-            aria-current={tab === TABS.metrics ? 'page' : undefined}
-          >
-            Métricas
           </button>
           <button
             type="button"

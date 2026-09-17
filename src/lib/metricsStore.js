@@ -1,7 +1,6 @@
 import { supabase } from './supabase.js';
-import { emptyStore, parseStore } from './metrics.js';
+import { emptyStore, parseStore, METRIC_AGGREGATORS, groupPhotoFlags } from './metrics.js';
 import { fetchPhotos, PHOTO_GALLERY_KINDS } from './photos.js';
-import { groupPhotoFlags } from './metrics.js';
 
 const BUCKET = 'photos';
 const FILE_PATH = 'metrics/dashboard.json';
@@ -85,9 +84,12 @@ export async function fetchPhotoFlags(dateFrom, dateTo) {
 
 export function getMetricsView() {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'entry' ? 'entry' : 'dashboard';
+    const value = localStorage.getItem(VIEW_KEY);
+    if (value === 'dashboard') return 'overview';
+    if (value === 'entry' || value === 'overview' || METRIC_AGGREGATORS.includes(value)) return value;
+    return 'overview';
   } catch {
-    return 'dashboard';
+    return 'overview';
   }
 }
 

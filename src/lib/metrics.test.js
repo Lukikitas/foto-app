@@ -6,6 +6,7 @@ import {
   compareSummaries,
   copyDayStats,
   DEFAULT_COMPLAINT_TARGET_PCT,
+  DEFAULT_AWT_TARGET_PCT,
   emptyStore,
   endOfMonth,
   endOfWeek,
@@ -19,6 +20,8 @@ import {
   resolvePeriod,
   startOfMonth,
   startOfWeek,
+  aggregatorDailySeries,
+  setTargetAwtPct,
   summarizeRange,
   toArgentinaDate,
   upsertDayStats,
@@ -26,11 +29,14 @@ import {
 
 test('complaint rate and target use 2.4% by default', () => {
   assert.equal(DEFAULT_COMPLAINT_TARGET_PCT, 2.4);
+  assert.equal(DEFAULT_AWT_TARGET_PCT, 11);
   assert.equal(complaintRate(100, 2), 2);
   assert.equal(complaintRate(100, 3), 3);
   assert.equal(complaintRate(0, 1), null);
   assert.equal(isOutOfTarget(2.4, 2.4), false);
   assert.equal(isOutOfTarget(2.41, 2.4), true);
+  assert.equal(isOutOfTarget(11, 11), false);
+  assert.equal(isOutOfTarget(12, 11), true);
   assert.equal(formatPct(2.4), '2,4%');
 });
 
@@ -67,6 +73,7 @@ test('stores keep valid day rows and drop empty aggregator slots', () => {
   });
   store = upsertDayStats(store, '2026-09-17', 'rappi', { orders: 0, complaints: 0 });
   assert.equal(store.days['2026-09-17'].pedidosya.orders, 120);
+  assert.equal(store.days['2026-09-17'].pedidosya.awt, 0);
   assert.equal(store.days['2026-09-17'].rappi, undefined);
 
   const copied = copyDayStats(store, '2026-09-17', '2026-09-18');
@@ -126,6 +133,49 @@ test('dashboard rolls up a range and flags the target', () => {
   const compared = compareSummaries(summary.overall, previous.overall, 2.4);
   assert.equal(compared.orders, 250);
   assert.equal(compared.outOfTarget, false);
+});
+
+test('PedidosYa AWT is a percent of total orders against an 11% target', () => {
+  let store = upsertDayStats(emptyStore(), '2026-09-17', 'pedidosya', {
+    orders: 100,
+    complaints: 2,
+    awt: 9,
+  });
+  assert.equal(store.targetAwtPct, 11);
+  const row = resolveDayAggregator(store, {}, '2026-09-17', 'pedidosya');
+  assert.equal(row.awt, 9);
+  assert.equal(row.awtPct, 9);
+  assert.equal(isOutOfTarget(row.awtPct, store.targetAwtPct), false);
+
+  store = upsertDayStats(store, '2026-09-17', 'pedidosya', {
+    orders: 100,
+    complaints: 2,
+    awt: 12,
+  });
+  const late = resolveDayAggregator(store, {}, '2026-09-17', 'pedidosya');
+  assert.equal(late.awtPct, 12);
+  assert.equal(isOutOfTarget(late.awtPct, 11), true);
+
+  const parsed = parseStore({ targetAwtPct: '10', days: {} });
+  assert.equal(parsed.targetAwtPct, 10);
+  assert.equal(setTargetAwtPct(parsed, 8).targetAwtPct, 8);
+  assert.equal(setTargetAwtPct(parsed, 'nope').targetAwtPct, DEFAULT_AWT_TARGET_PCT);
+});
+
+test('aggregator daily series stays on one partner and ignores the overall mix', () => {
+  let store = emptyStore();
+  store = upsertDayStats(store, '2026-09-16', 'pedidosya', { orders: 100, complaints: 5, awt: 20 });
+  store = upsertDayStats(store, '2026-09-16', 'rappi', { orders: 100, complaints: 0 });
+  store = upsertDayStats(store, '2026-09-17', 'pedidosya', { orders: 50, complaints: 0, awt: 2 });
+  const summary = summarizeRange(store, {}, '2026-09-16', '2026-09-17');
+  assert.equal(summary.overall.complaintPct, 2);
+  const peya = aggregatorDailySeries(summary, 'pedidosya');
+  assert.equal(peya[0].complaintPct, 5);
+  assert.equal(peya[0].awtPct, 20);
+  assert.equal(peya[1].orders, 50);
+  const rappi = aggregatorDailySeries(summary, 'rappi');
+  assert.equal(rappi[0].complaintPct, 0);
+  assert.equal(rappi[1].orders, 0);
 });
 
 test('converts photo timestamps to Argentina calendar days', () => {
