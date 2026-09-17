@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import ComplaintsInbox from './components/ComplaintsInbox';
-import InstallPrompt from './components/InstallPrompt';
-import UpdatePrompt from './components/UpdatePrompt';
-import PhotoGallery from './components/PhotoGallery';
-import PhotoUploader from './components/PhotoUploader';
-import UploadQueueStatus from './components/UploadQueueStatus';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, toggleTheme } from './lib/theme';
 import { APP_VERSION } from './lib/version';
+import ComplaintsInbox from './components/ComplaintsInbox';
+import InstallPrompt from './components/InstallPrompt';
+import MetricsPage from './components/MetricsPage';
+import UpdatePrompt from './components/UpdatePrompt';
+import PhotoGallery from './components/PhotoGallery';
+import PhotoUploader from './components/PhotoUploader';
+import UploadQueueStatus from './components/UploadQueueStatus';
 import './App.css';
 
 const TABS = {
@@ -16,6 +17,7 @@ const TABS = {
   orders: 'orders',
   complaints: 'complaints',
   files: 'files',
+  metrics: 'metrics',
 };
 
 export default function App() {
@@ -67,6 +69,7 @@ export default function App() {
           />
         )}
         {tab === TABS.complaints && <ComplaintsInbox />}
+        {tab === TABS.metrics && <MetricsPage />}
         {tab === TABS.files && (
           <PhotoGallery
             key="files-gallery"
@@ -107,6 +110,14 @@ export default function App() {
             aria-current={tab === TABS.complaints ? 'page' : undefined}
           >
             Reclamos
+          </button>
+          <button
+            type="button"
+            className={`app-nav__btn${tab === TABS.metrics ? ' app-nav__btn--active' : ''}`}
+            onClick={() => setTab(TABS.metrics)}
+            aria-current={tab === TABS.metrics ? 'page' : undefined}
+          >
+            Métricas
           </button>
           <button
             type="button"
