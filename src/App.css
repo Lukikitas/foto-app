@@ -40,6 +40,10 @@
   box-sizing: border-box;
 }
 
+.app__main > [hidden] {
+  display: none !important;
+}
+
 .app-nav {
   position: fixed;
   bottom: 0;
@@ -2122,10 +2126,8 @@
 }
 
 .metrics__views--tabs {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 0.15rem;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .metrics__views--tabs .gallery__view-btn {
@@ -2135,6 +2137,7 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
+  white-space: nowrap;
 }
 
 .metrics__views--tabs .gallery__view-btn--active {
@@ -2404,6 +2407,11 @@
   background: var(--success);
 }
 
+.metrics-chart__bar--empty {
+  background: var(--border);
+  opacity: 0.7;
+}
+
 .metrics-chart__bar--bad {
   background: var(--danger);
 }
@@ -2535,12 +2543,6 @@
 }
 
 @media (min-width: 800px) {
-  .metrics__header {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: end;
-  }
-
   .metrics-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2658,6 +2660,11 @@ button.metrics-agg:focus-visible {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--text-h);
+}
+
+.metrics-agg--hero.metrics-agg--empty .metrics-agg__pct {
+  color: var(--text-muted);
+  font-size: 1.6rem;
 }
 
 .metrics-agg__pct-label {

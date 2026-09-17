@@ -96,14 +96,15 @@ function DailyChart({ days, valueKey, target, title, legend }) {
       <div className="metrics-chart__bars">
         {days.map((day) => {
           const value = day[valueKey];
-          const height = Math.max(6, ((value || 0) / maxValue) * 100);
-          const bad = isOutOfTarget(value, target);
+          const has = day.orders > 0;
+          const height = has ? Math.max(8, ((value || 0) / maxValue) * 100) : 0;
+          const bad = has && isOutOfTarget(value, target);
           return (
             <div key={day.day} className="metrics-chart__col">
-              <span className="metrics-chart__value">{day.orders ? formatPct(value, 0) : ''}</span>
+              <span className="metrics-chart__value">{has ? formatPct(value, 0) : ''}</span>
               <span
-                className={`metrics-chart__bar${bad ? ' metrics-chart__bar--bad' : ''}`}
-                style={{ height: `${height}%` }}
+                className={`metrics-chart__bar${bad ? ' metrics-chart__bar--bad' : ''}${has ? '' : ' metrics-chart__bar--empty'}`}
+                style={{ height: has ? `${height}%` : '3px' }}
               />
               <span className="metrics-chart__label">{addDays(day.day, 0).slice(8)}</span>
             </div>
@@ -538,14 +539,13 @@ function AggregatorDetail({ aggregator, current, previousSummary, store, hasData
               </thead>
               <tbody>
                 {series.map((day) => (
-                  <tr
-                    key={day.day}
-                    className={isOutOfTarget(day.complaintPct, store.targetComplaintPct) ? 'is-bad' : ''}
-                  >
+                  <tr key={day.day}>
                     <td>{formatDayLabel(day.day)}</td>
                     <td>{formatNumber(day.orders)}</td>
                     <td>{formatNumber(day.complaints)}</td>
-                    <td>{formatPct(day.complaintPct)}</td>
+                    <td className={isOutOfTarget(day.complaintPct, store.targetComplaintPct) ? 'is-bad' : ''}>
+                      {formatPct(day.complaintPct)}
+                    </td>
                     {showAwt && (
                       <>
                         <td>{formatNumber(day.awt)}</td>

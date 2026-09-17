@@ -69,7 +69,9 @@ export default function App() {
           />
         )}
         {tab === TABS.complaints && <ComplaintsInbox />}
-        {tab === TABS.metrics && <MetricsPage />}
+        <div hidden={tab !== TABS.metrics}>
+          <MetricsPage />
+        </div>
         {tab === TABS.files && (
           <PhotoGallery
             key="files-gallery"
