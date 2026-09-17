@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import ComplaintsInbox from './components/ComplaintsInbox';
 import InstallPrompt from './components/InstallPrompt';
+import UpdatePrompt from './components/UpdatePrompt';
 import PhotoGallery from './components/PhotoGallery';
 import PhotoUploader from './components/PhotoUploader';
 import UploadQueueStatus from './components/UploadQueueStatus';
@@ -34,6 +35,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <UpdatePrompt />
       <InstallPrompt />
 
       <button

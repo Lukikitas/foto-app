@@ -53,7 +53,8 @@ export default defineConfig({
     react(),
     tesseractAssets(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Delivery La Plata',
