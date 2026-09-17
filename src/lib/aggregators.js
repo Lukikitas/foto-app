@@ -37,7 +37,7 @@ export function getPhotoAggregator(photo) {
 export const PARTNER_PORTALS = {
   pedidosya: {
     label: 'PedidosYa Portal',
-    url: 'https://portal-app.pedidosya.com/login',
+    url: 'https://portal-app.pedidosya.com/orders',
   },
   rappi: {
     label: 'Rappi Partners',

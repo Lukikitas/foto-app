@@ -5,7 +5,7 @@ import {
   fetchComplaintSheetText,
   parseComplaintSheet,
 } from '../lib/complaintSheet';
-import { complaintRowStatus, matchComplaintsToPhotos } from '../lib/complaintMatch';
+import { clipboardOrderCode, complaintRowStatus, matchComplaintsToPhotos } from '../lib/complaintMatch';
 import {
   applyComplaintToPhoto,
   applyComplaintsToPhotos,
@@ -232,8 +232,12 @@ export default function ComplaintsInbox() {
     }
   }
 
+  function rowClipboardCode(row) {
+    return clipboardOrderCode(row.photo?.name || row.complaint.orderCode);
+  }
+
   async function copyCode(row) {
-    const code = row.photo?.name || row.complaint.orderCode;
+    const code = rowClipboardCode(row);
     try {
       await copyText(code);
       setNotice(`Código ${code} copiado.`);
@@ -247,7 +251,7 @@ export default function ComplaintsInbox() {
   }
 
   async function openPortal(row) {
-    const code = row.photo?.name || row.complaint.orderCode;
+    const code = rowClipboardCode(row);
     const portal = openPartnerPortal(getComplaintAggregator(row.complaint, row.photo));
     if (!portal) {
       setError('Este agregador no tiene portal web para abrir desde la app.');
@@ -278,7 +282,7 @@ export default function ComplaintsInbox() {
     try {
       const updated = await applyComplaintToPhoto(row.photo, row.complaint, { refutado: false });
       applyUpdatedPhotos([updated]);
-      const code = updated.name || row.complaint.orderCode;
+      const code = clipboardOrderCode(updated.name || row.complaint.orderCode);
       await downloadPhoto(updated, new Set(), getEvidenceFilename(row.complaint, updated));
       await copyText(code);
       const portal = openPartnerPortal(getComplaintAggregator(row.complaint, updated));

@@ -123,7 +123,7 @@ test('turns a Google Visualization table into TSV for the sheet parser', () => {
 });
 
 test('opens PedidosYa and Rappi partner portals', () => {
-  assert.equal(getPartnerPortal('pedidosya').url, 'https://portal-app.pedidosya.com/login');
+  assert.equal(getPartnerPortal('pedidosya').url, 'https://portal-app.pedidosya.com/orders');
   assert.equal(getPartnerPortal('rappi').url, 'https://partners.rappi.com');
   assert.equal(getPartnerPortal('mercadopago'), null);
 });

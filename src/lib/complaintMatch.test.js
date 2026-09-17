@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  clipboardOrderCode,
   codeMatchScore,
   matchComplaintToPhotos,
   matchComplaintsToPhotos,
@@ -33,6 +34,15 @@ function complaint(overrides) {
     ...overrides,
   };
 }
+
+test('clipboard copies the portal search id without the aggregator prefix', () => {
+  assert.equal(clipboardOrderCode('PEYA-2277060160'), '2277060160');
+  assert.equal(clipboardOrderCode('PEYA2277060160'), '2277060160');
+  assert.equal(clipboardOrderCode('2277060160'), '2277060160');
+  assert.equal(clipboardOrderCode('RAPPI-998877'), '998877');
+  assert.equal(clipboardOrderCode('RAPPITURBO-112233'), '112233');
+  assert.equal(clipboardOrderCode(''), '');
+});
 
 test('scores exact aggregator codes highest', () => {
   assert.equal(codeMatchScore('PEYA12345', 'PEYA12345'), 100);

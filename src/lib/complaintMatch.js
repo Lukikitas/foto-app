@@ -35,6 +35,13 @@ function coreCode(value) {
   return compactCode(value).replace(AGGREGATOR_PREFIX, '');
 }
 
+/** Order id for partner-portal search: PEYA-2277060160 → 2277060160 */
+export function clipboardOrderCode(value = '') {
+  const compact = compactCode(value);
+  const core = coreCode(value);
+  return core || compact;
+}
+
 function digitBody(value) {
   return compactCode(value).replace(/\D/g, '');
 }
