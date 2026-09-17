@@ -4,7 +4,7 @@ import {
   complaintRowStatus,
   mergeComplaintNotes,
 } from './complaintMatch.js';
-import { fetchPhotos, PHOTO_GALLERY_KINDS, updatePhoto } from './photos.js';
+import { fetchOrderPhotosMatchingNames, fetchPhotos, PHOTO_GALLERY_KINDS, updatePhoto } from './photos.js';
 import { toDateInputValue } from './date.js';
 
 const STORAGE_KEY = 'foto-app-complaints-batch';
@@ -47,13 +47,31 @@ export function complaintDateRange(complaints) {
   return { dateFrom: toDateInputValue(min), dateTo: toDateInputValue(max) };
 }
 
-export async function fetchPhotosForComplaints(complaints) {
-  const range = complaintDateRange(complaints);
-  return fetchPhotos({
-    kind: PHOTO_GALLERY_KINDS.orders,
-    dateFrom: range.dateFrom,
-    dateTo: range.dateTo,
+export function complaintPhotoSearchTokens(complaints) {
+  const tokens = [];
+  complaints.forEach((complaint) => {
+    const compact = compactCode(complaint.orderCode);
+    const digits = compact.replace(/\D/g, '');
+    if (compact.length >= 4) tokens.push(compact);
+    if (digits.length >= 4) tokens.push(digits);
+    if (digits.length >= 6) tokens.push(digits.slice(-6));
+    if (digits.length >= 4) tokens.push(digits.slice(-4));
   });
+  return tokens;
+}
+
+export async function fetchPhotosForComplaints(complaints) {
+  const recentFrom = new Date();
+  recentFrom.setDate(recentFrom.getDate() - 90);
+  const recent = await fetchPhotos({
+    kind: PHOTO_GALLERY_KINDS.orders,
+    dateFrom: toDateInputValue(recentFrom),
+    dateTo: toDateInputValue(new Date()),
+  });
+  const byName = await fetchOrderPhotosMatchingNames(complaintPhotoSearchTokens(complaints));
+  const byId = new Map();
+  [...recent, ...byName].forEach((photo) => byId.set(photo.id, photo));
+  return [...byId.values()];
 }
 
 export function saveComplaintBatch(complaints, pickedPhotoIds = {}) {

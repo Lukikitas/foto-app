@@ -29,6 +29,16 @@ export function digitTail(value = '', length) {
   return digits.slice(-length);
 }
 
+const AGGREGATOR_PREFIX = /^(RAPPITURBO|PEYA|RAPPI|MPD)/;
+
+function coreCode(value) {
+  return compactCode(value).replace(AGGREGATOR_PREFIX, '');
+}
+
+function digitBody(value) {
+  return compactCode(value).replace(/\D/g, '');
+}
+
 export function codeMatchScore(complaintCode, photoName) {
   const complaint = compactCode(complaintCode);
   const photo = compactCode(photoName);
@@ -37,16 +47,28 @@ export function codeMatchScore(complaintCode, photoName) {
 
   if (complaint === photo) return 100;
 
-  const complaintDigits = complaint.replace(/\D/g, '');
-  const photoDigits = photo.replace(/\D/g, '');
+  const complaintCore = coreCode(complaint);
+  const photoCore = coreCode(photo);
+  if (complaintCore && complaintCore === photoCore && complaintCore.length >= 4) {
+    return 96;
+  }
+
+  const complaintDigits = digitBody(complaint);
+  const photoDigits = digitBody(photo);
   if (complaintDigits && complaintDigits === photoDigits && complaintDigits.length >= 4) {
     return 92;
   }
 
-  if (complaint.includes(photo) && photo.length >= 6) return 85;
-  if (photo.includes(complaint) && complaint.length >= 6) return 85;
+  if (complaint.includes(photo) && photo.length >= 5) return 88;
+  if (photo.includes(complaint) && complaint.length >= 5) return 88;
 
-  if (digitTail(complaint, 6) && digitTail(complaint, 6) === digitTail(photo, 6)) return 70;
+  if (complaintDigits.length >= 5 && photoDigits.length >= 5) {
+    if (complaintDigits.endsWith(photoDigits) || photoDigits.endsWith(complaintDigits)) {
+      return 88;
+    }
+  }
+
+  if (digitTail(complaint, 6) && digitTail(complaint, 6) === digitTail(photo, 6)) return 75;
   if (digitTail(complaint, 4) && digitTail(complaint, 4) === digitTail(photo, 4)) return 40;
 
   return 0;
@@ -68,14 +90,16 @@ function circularMinuteDiff(a, b) {
 }
 
 function timeAcceptable(photo, complaint, score) {
+  if (score >= 85) return true;
+
   const photoAt = new Date(photo.created_at);
   if (Number.isNaN(photoAt.getTime())) return false;
 
   if (complaint.orderAtIso && !complaint.dateAssumed) {
     const orderAt = new Date(complaint.orderAtIso);
-    if (Number.isNaN(orderAt.getTime())) return score >= 85;
+    if (Number.isNaN(orderAt.getTime())) return score >= 70;
     const delta = photoAt.getTime() - orderAt.getTime();
-    if (score >= 85) return delta >= -TWELVE_HOURS && delta <= DAY_MS;
+    if (score >= 70) return delta >= -TWELVE_HOURS && delta <= DAY_MS;
     return delta >= -TWO_HOURS && delta <= EIGHT_HOURS;
   }
 
@@ -85,29 +109,41 @@ function timeAcceptable(photo, complaint, score) {
     const diff = circularMinuteDiff(minutesOfDay(photoAt), target);
     const recentEnough = Date.now() - photoAt.getTime() <= 2 * DAY_MS;
     const assumedOk = !complaint.dateAssumed || recentEnough;
-    if (score >= 85) return assumedOk;
+    if (score >= 70) return assumedOk;
     return assumedOk && diff <= 90;
   }
 
   return score >= 70;
 }
 
+function sortRanked(ranked, complaint) {
+  return [...ranked].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (!complaint.orderAtIso) return 0;
+    const orderAt = new Date(complaint.orderAtIso).getTime();
+    const aDelta = Math.abs(new Date(a.photo.created_at).getTime() - orderAt);
+    const bDelta = Math.abs(new Date(b.photo.created_at).getTime() - orderAt);
+    return aDelta - bDelta;
+  });
+}
+
 function rankPhotos(complaint, photos) {
-  return photos
+  const ranked = photos
     .filter((photo) => isOrderPhoto(photo) && !isUnidentifiedOrder(photo))
     .map((photo) => ({
       photo,
       score: codeMatchScore(complaint.orderCode, photo.name),
     }))
-    .filter((item) => item.score > 0 && timeAcceptable(item.photo, complaint, item.score))
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (!complaint.orderAtIso) return 0;
-      const orderAt = new Date(complaint.orderAtIso).getTime();
-      const aDelta = Math.abs(new Date(a.photo.created_at).getTime() - orderAt);
-      const bDelta = Math.abs(new Date(b.photo.created_at).getTime() - orderAt);
-      return aDelta - bDelta;
-    });
+    .filter((item) => item.score > 0);
+
+  const strong = ranked.filter((item) => item.score >= 85);
+  if (strong.length > 0) return sortRanked(strong, complaint);
+
+  const timed = ranked.filter((item) => timeAcceptable(item.photo, complaint, item.score));
+  if (timed.length > 0) return sortRanked(timed, complaint);
+
+  if (ranked.length === 1) return ranked;
+  return [];
 }
 
 export function matchComplaintToPhotos(complaint, photos, pickedPhotoId = null) {

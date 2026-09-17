@@ -177,15 +177,28 @@ export function parseComplaintOrderCode(value) {
     return detectedOnDate?.displayCode || '';
   }
 
-  const detected = detectOrderCode(text);
+  const scientific = text.match(/^(\d+(?:[.,]\d+)?)[eE]\+?(\d+)$/);
+  if (scientific) {
+    const number = Number(text.replace(',', '.'));
+    if (Number.isFinite(number) && number >= 1e4 && number < 1e13) {
+      return String(Math.round(number));
+    }
+  }
+
+  const cleaned = text
+    .replace(/^(?:pedido|nro|nº|n°|orden|id|#)\s*[:.-]?\s*/i, '')
+    .replace(/\.0+$/, '')
+    .trim();
+
+  const detected = detectOrderCode(cleaned) || detectOrderCode(text);
   if (detected?.displayCode) return detected.displayCode;
 
-  const compact = text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  const compact = cleaned.toUpperCase().replace(/[^A-Z0-9-]/g, '');
   if (/^(?:PEYA|RAPPI(?:TURBO)?|MPD)[A-Z0-9-]{3,28}$/.test(compact)) {
     return compact;
   }
 
-  const digits = text.replace(/\D/g, '');
+  const digits = cleaned.replace(/\D/g, '');
   if (digits.length >= 4 && digits.length <= 12) return digits;
   return '';
 }
