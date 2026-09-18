@@ -1,6 +1,7 @@
 import {
   matchComplaintsToPhotos,
   compactCode,
+  complaintPhotoSearchTokens,
   complaintRowStatus,
   mergeComplaintNotes,
 } from './complaintMatch.js';
@@ -47,40 +48,52 @@ export function complaintDateRange(complaints) {
   return { dateFrom: toDateInputValue(min), dateTo: toDateInputValue(max) };
 }
 
-export function complaintPhotoSearchTokens(complaints) {
-  const tokens = [];
-  complaints.forEach((complaint) => {
-    const compact = compactCode(complaint.orderCode);
-    const digits = compact.replace(/\D/g, '');
-    if (compact.length >= 4) tokens.push(compact);
-    if (digits.length >= 4) tokens.push(digits);
-    if (digits.length >= 6) tokens.push(digits.slice(-6));
-    if (digits.length >= 4) tokens.push(digits.slice(-4));
-  });
-  return tokens;
-}
-
-export async function fetchPhotosForComplaints(complaints) {
-  const range = complaintDateRange(complaints);
-  const tokens = complaintPhotoSearchTokens(complaints);
-  const byName = await fetchOrderPhotosMatchingNames(tokens, {
-    dateFrom: range.dateFrom,
-    dateTo: range.dateTo,
-  });
-
-  const weakCodes = complaints.some((complaint) => {
+function hasWeakComplaintCodes(complaints) {
+  return complaints.some((complaint) => {
     const digits = compactCode(complaint.orderCode).replace(/\D/g, '');
     return digits.length < 6;
   });
+}
 
-  if (byName.length > 0 && !weakCodes) {
+function needsGalleryFallback(complaints, photos) {
+  if (hasWeakComplaintCodes(complaints)) return true;
+  return matchComplaintsToPhotos(complaints, photos).some((row) => row.status !== 'matched');
+}
+
+export async function fetchPhotosForComplaints(complaints) {
+  let byName;
+  try {
+    byName = await fetchOrderPhotosMatchingNames(complaintPhotoSearchTokens(complaints));
+  } catch {
+    byName = [];
+  }
+
+  if (byName.length > 0 && !needsGalleryFallback(complaints, byName)) {
     return byName;
   }
 
+  if (hasWeakComplaintCodes(complaints) || byName.length === 0) {
+    try {
+      const extra = await fetchOrderPhotosMatchingNames(
+        complaintPhotoSearchTokens(complaints, { includeShort: true }),
+      );
+      const merged = new Map();
+      [...byName, ...extra].forEach((photo) => merged.set(photo.id, photo));
+      byName = [...merged.values()];
+    } catch {
+      // seguimos con lo que haya y el dump de 90 días
+    }
+    if (byName.length > 0 && !needsGalleryFallback(complaints, byName)) {
+      return byName;
+    }
+  }
+
+  const recentFrom = new Date();
+  recentFrom.setDate(recentFrom.getDate() - 90);
   const recent = await fetchPhotos({
     kind: PHOTO_GALLERY_KINDS.orders,
-    dateFrom: range.dateFrom,
-    dateTo: range.dateTo,
+    dateFrom: toDateInputValue(recentFrom),
+    dateTo: toDateInputValue(new Date()),
     columns: PHOTO_COLUMNS,
   });
   const byId = new Map();

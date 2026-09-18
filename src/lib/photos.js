@@ -162,11 +162,19 @@ export async function fetchPhotos({
   );
 }
 
+export function sanitizePhotoSearchToken(token) {
+  return String(token || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 export async function fetchOrderPhotosMatchingNames(tokens, { dateFrom, dateTo } = {}) {
   const clean = [...new Set(
     tokens
-      .map((token) => String(token || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
-      .filter((token) => token.length >= 4 && token.length <= 32),
+      .map((token) => sanitizePhotoSearchToken(token))
+      .filter((token) => token.length >= 4 && token.length <= 32 && !/[%_,]/.test(token)),
   )];
 
   if (clean.length === 0) return [];
@@ -177,7 +185,9 @@ export async function fetchOrderPhotosMatchingNames(tokens, { dateFrom, dateTo }
     let query = supabase
       .from('photos')
       .select(PHOTO_COLUMNS)
-      .or(chunk.map((token) => `name.ilike.%${token}%`).join(','));
+      .or(chunk.map((token) => `name.ilike.%${token}%`).join(','))
+      .order('created_at', { ascending: false })
+      .limit(1000);
 
     if (dateFrom) query = query.gte('created_at', startOfDay(dateFrom));
     if (dateTo) query = query.lte('created_at', endOfDay(dateTo));

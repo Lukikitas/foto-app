@@ -23,6 +23,40 @@ export function compactCode(value = '') {
     .replace(/[^A-Z0-9]/g, '');
 }
 
+export function photoNameSearchVariants(value) {
+  const raw = String(value || '').trim();
+  const compact = compactCode(raw);
+  if (compact.length < 4) return [];
+
+  const variants = [];
+  const add = (token) => {
+    if (token && token.length >= 4 && !variants.includes(token)) variants.push(token);
+  };
+
+  add(raw.toUpperCase());
+  add(compact);
+
+  const prefix = compact.match(/^(RAPPITURBO|PEYA|RAPPI|MPD|MP)/)?.[1];
+  const digits = compact.replace(/\D/g, '');
+  if (prefix && digits.length >= 4) add(`${prefix}-${digits}`);
+  if (digits.length >= 4) add(digits);
+  if (digits.length >= 6) add(digits.slice(-6));
+
+  return variants;
+}
+
+export function complaintPhotoSearchTokens(complaints, { includeShort = false } = {}) {
+  const tokens = [];
+  complaints.forEach((complaint) => {
+    photoNameSearchVariants(complaint.orderCode).forEach((token) => tokens.push(token));
+    if (includeShort) {
+      const digits = compactCode(complaint.orderCode).replace(/\D/g, '');
+      if (digits.length >= 4) tokens.push(digits.slice(-4));
+    }
+  });
+  return tokens;
+}
+
 export function digitTail(value = '', length) {
   const digits = String(value).replace(/\D/g, '');
   if (digits.length < length) return '';
