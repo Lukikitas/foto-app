@@ -739,6 +739,42 @@
   color: var(--accent);
 }
 
+.badge--aggregator-rappi {
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.16);
+  color: #ea580c;
+}
+
+.badge--aggregator-rappi_turbo {
+  border-color: #c2410c;
+  background: rgba(194, 65, 12, 0.2);
+  color: #9a3412;
+}
+
+.badge--aggregator-pedidosya {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.badge--aggregator-mercadopago {
+  border-color: var(--info-border);
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+:root[data-theme='dark'] .badge--aggregator-rappi {
+  color: #fdba74;
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.22);
+}
+
+:root[data-theme='dark'] .badge--aggregator-rappi_turbo {
+  color: #fdba74;
+  border-color: #ea580c;
+  background: rgba(194, 65, 12, 0.32);
+}
+
 .badge--missing-code {
   border-color: var(--warning-border);
   background: var(--warning-bg);
@@ -833,7 +869,8 @@
 .photo-card__select {
   position: absolute;
   top: 0.4rem;
-  left: 0.4rem;
+  right: 0.4rem;
+  left: auto;
   z-index: 3;
   display: flex;
   align-items: center;
@@ -1113,10 +1150,12 @@
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
+  right: 2.35rem;
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  max-width: calc(100% - 2.4rem);
 }
 
 .badge {
@@ -1139,6 +1178,24 @@
   background: var(--info-bg);
   color: var(--info);
   border: 1px solid var(--info-border);
+}
+
+.badge--aceptado {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+}
+
+.badge--refutado-aceptado {
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+}
+
+:root[data-theme='dark'] .badge--refutado-aceptado {
+  color: #c4b5fd;
+  background: rgba(167, 139, 250, 0.16);
+  border-color: rgba(167, 139, 250, 0.4);
 }
 
 .badge--file {
@@ -1756,6 +1813,26 @@
   width: 100%;
 }
 
+.complaints__views {
+  align-self: flex-start;
+}
+
+.complaints__history-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.complaints__search input {
+  min-width: 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+}
+
 .complaints__list {
   display: flex;
   flex-direction: column;
@@ -1779,6 +1856,14 @@
 
 .complaint-card--refutado {
   border-left: 3px solid var(--info);
+}
+
+.complaint-card--aceptado {
+  border-left: 3px solid var(--danger);
+}
+
+.complaint-card--refutado_aceptado {
+  border-left: 3px solid #7c3aed;
 }
 
 .complaint-card--sin_foto {
@@ -2373,11 +2458,54 @@
   background: var(--success);
 }
 
+.metrics-stack__refuted-accepted {
+  background: #7c3aed;
+}
+
 .metrics-stack__accepted {
   background: var(--danger);
 }
 
 .metrics-stack__pending {
+  background: var(--warning);
+}
+
+.metrics-stack-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.9rem;
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.metrics-stack-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.metrics-stack-legend span::before {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+}
+
+.metrics-stack-legend__refuted::before {
+  background: var(--success);
+}
+
+.metrics-stack-legend__refuted-accepted::before {
+  background: #7c3aed;
+}
+
+.metrics-stack-legend__accepted::before {
+  background: var(--danger);
+}
+
+.metrics-stack-legend__pending::before {
   background: var(--warning);
 }
 

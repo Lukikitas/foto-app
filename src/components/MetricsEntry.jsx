@@ -13,7 +13,7 @@ import {
   isOutOfTarget,
   upsertDayStats,
 } from '../lib/metrics';
-import { fetchPhotoFlags } from '../lib/metricsStore';
+import { fetchHistoryFlags, fetchPhotoFlags } from '../lib/metricsStore';
 import MetricsListPaste from './MetricsListPaste';
 
 function toField(value) {
@@ -27,6 +27,7 @@ function fieldsFromStats(stats = emptyDayStats()) {
     awt: toField(stats.awt),
     accepted: stats.accepted == null ? '' : String(stats.accepted),
     refuted: stats.refuted == null ? '' : String(stats.refuted),
+    refutedAccepted: stats.refutedAccepted == null ? '' : String(stats.refutedAccepted),
   };
 }
 
@@ -35,6 +36,7 @@ export default function MetricsEntry({ store, saving, onSave }) {
   const [day, setDay] = useState(today);
   const [drafts, setDrafts] = useState({});
   const [photoFlags, setPhotoFlags] = useState({});
+  const [historyFlags, setHistoryFlags] = useState({});
   const [showExtra, setShowExtra] = useState(false);
 
   const fields = drafts[day] || Object.fromEntries(
@@ -50,10 +52,19 @@ export default function MetricsEntry({ store, saving, onSave }) {
     let cancelled = false;
     async function loadFlags() {
       try {
-        const flags = await fetchPhotoFlags(addDays(day, -6), day);
-        if (!cancelled) setPhotoFlags(flags);
+        const [flags, history] = await Promise.all([
+          fetchPhotoFlags(addDays(day, -6), day),
+          fetchHistoryFlags(addDays(day, -6), day),
+        ]);
+        if (!cancelled) {
+          setPhotoFlags(flags);
+          setHistoryFlags(history);
+        }
       } catch {
-        if (!cancelled) setPhotoFlags({});
+        if (!cancelled) {
+          setPhotoFlags({});
+          setHistoryFlags({});
+        }
       }
     }
     loadFlags();
@@ -88,6 +99,7 @@ export default function MetricsEntry({ store, saving, onSave }) {
         awt: aggregator === AWT_AGGREGATOR ? row.awt : 0,
         accepted: row.accepted === '' ? null : row.accepted,
         refuted: row.refuted === '' ? null : row.refuted,
+        refutedAccepted: row.refutedAccepted === '' ? null : row.refutedAccepted,
       });
     }
     onSave(next, `Guardado ${formatDayLabel(day)}.`);
@@ -172,7 +184,12 @@ export default function MetricsEntry({ store, saving, onSave }) {
           const showAwt = aggregator === AWT_AGGREGATOR;
           const awtRate = showAwt ? complaintRate(row.orders, row.awt) : null;
           const awtBad = showAwt && isOutOfTarget(awtRate, store.targetAwtPct);
-          const autoRefuted = photoFlags?.[day]?.[aggregator]?.refutedPhotos || 0;
+          const autoRefuted = Math.max(
+            photoFlags?.[day]?.[aggregator]?.refutedPhotos || 0,
+            historyFlags?.[day]?.[aggregator]?.refuted || 0,
+          );
+          const autoAccepted = historyFlags?.[day]?.[aggregator]?.accepted || 0;
+          const autoRefutedAccepted = historyFlags?.[day]?.[aggregator]?.refutedAccepted || 0;
           return (
             <article
               key={aggregator}
@@ -245,15 +262,29 @@ export default function MetricsEntry({ store, saving, onSave }) {
                       type="number"
                       min="0"
                       inputMode="numeric"
-                      placeholder="auto"
+                      placeholder={autoAccepted ? `auto ${autoAccepted}` : 'auto'}
                       value={row.accepted}
                       onChange={(e) => updateField(aggregator, 'accepted', e.target.value)}
                     />
                   </label>
+                  <label>
+                    Refutados aceptados
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      placeholder={autoRefutedAccepted ? `auto ${autoRefutedAccepted}` : 'auto'}
+                      value={row.refutedAccepted}
+                      onChange={(e) => updateField(aggregator, 'refutedAccepted', e.target.value)}
+                    />
+                  </label>
                 </>
               )}
-              {!showExtra && autoRefuted > 0 && (
-                <p className="metrics-form-card__hint">Fotos refutadas ese día: {autoRefuted}</p>
+              {!showExtra && (autoRefuted > 0 || autoAccepted > 0 || autoRefutedAccepted > 0) && (
+                <p className="metrics-form-card__hint">
+                  Auto: {autoAccepted} aceptadas · {autoRefuted} refutadas
+                  {autoRefutedAccepted ? ` · ${autoRefutedAccepted} ref. aceptados` : ''}
+                </p>
               )}
               {showAwt && (
                 <p className="metrics-form-card__hint">
@@ -271,15 +302,16 @@ export default function MetricsEntry({ store, saving, onSave }) {
           className="btn btn--ghost"
           onClick={() => setShowExtra((open) => !open)}
         >
-          {showExtra ? 'Ocultar aceptadas / refutadas' : 'Cargar aceptadas y refutadas'}
+          {showExtra ? 'Ocultar resolución' : 'Cargar aceptadas y refutadas'}
         </button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? 'Guardando…' : 'Guardar día'}
         </button>
       </div>
       <p className="metrics-entry__note">
-        Cargá cada agregador por separado. Las refutadas se toman de las fotos marcadas, y las
-        aceptadas son las quejas que no se refutaron, salvo que las cargues a mano.
+        Cargá cada agregador por separado. Las aceptadas y refutadas salen del historial y de las
+        fotos. Un pedido puede ser refutado y aceptado a la vez: eso cuenta en % refutados
+        aceptados y también en % aceptados sobre todas las quejas.
       </p>
     </form>
     </div>

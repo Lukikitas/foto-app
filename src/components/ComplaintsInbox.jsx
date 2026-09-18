@@ -1,11 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateTime } from '../lib/date';
-import { detectAggregator, getAggregatorLabel, getComplaintAggregator, getPartnerPortal, openPartnerPortal, PARTNER_PORTALS } from '../lib/aggregators';
+import {
+  AGGREGATOR_OPTIONS,
+  aggregatorBadgeClass,
+  detectAggregator,
+  getAggregatorLabel,
+  getComplaintAggregator,
+  getPartnerPortal,
+  openPartnerPortal,
+  PARTNER_PORTALS,
+} from '../lib/aggregators';
 import {
   fetchComplaintSheetText,
   parseComplaintSheet,
 } from '../lib/complaintSheet';
 import { clipboardOrderCode, complaintRowStatus, matchComplaintsToPhotos } from '../lib/complaintMatch';
+import {
+  attachHistoryToRows,
+  historyItemToRow,
+  listHistoryItems,
+} from '../lib/complaintHistory';
+import {
+  cachedComplaintHistory,
+  importComplaintsToHistory,
+  loadComplaintHistory,
+  setHistoryResolution,
+  setHistoryResolutions,
+} from '../lib/complaintHistoryStore';
 import {
   applyComplaintToPhoto,
   applyComplaintsToPhotos,
@@ -29,10 +50,13 @@ const FILTERS = [
   { id: 'sin_foto', label: 'Sin foto' },
   { id: 'ambiguo', label: 'A revisar' },
   { id: 'pendiente', label: 'Pendientes' },
+  { id: 'aceptado', label: 'Aceptados' },
   { id: 'refutado', label: 'Refutados' },
+  { id: 'refutado_aceptado', label: 'Ref. aceptados' },
 ];
 
 const PORTAL_LINKS = [PARTNER_PORTALS.pedidosya, PARTNER_PORTALS.rappi];
+const HISTORY_AGGREGATORS = [{ id: 'all', label: 'Todos' }, ...AGGREGATOR_OPTIONS];
 
 function formatComplaintWhen(complaint) {
   if (complaint.orderAtIso) return formatDateTime(complaint.orderAtIso);
@@ -43,21 +67,44 @@ function formatComplaintWhen(complaint) {
 }
 
 function statusLabel(status) {
+  if (status === 'refutado_aceptado') return 'Refutado aceptado';
   if (status === 'refutado') return 'Refutado';
+  if (status === 'aceptado') return 'Aceptado';
   if (status === 'con_foto') return 'Con foto';
   if (status === 'ambiguo') return 'Elegí la foto';
   return 'Sin foto';
 }
 
+function statusBadgeClass(status) {
+  if (status === 'refutado_aceptado') return 'badge badge--refutado-aceptado';
+  if (status === 'refutado') return 'badge badge--refutado';
+  if (status === 'aceptado') return 'badge badge--aceptado';
+  if (status === 'con_foto') return 'badge badge--complaint';
+  if (status === 'sin_foto') return 'badge badge--file';
+  return 'badge badge--missing-code';
+}
+
+function rowAccepted(row) {
+  return Boolean(row.history?.accepted);
+}
+
+function rowRefutado(row) {
+  return Boolean(row.history?.refutado || row.photo?.is_refutado);
+}
+
 function rowMatchesFilter(row, filter) {
   const status = complaintRowStatus(row);
   if (filter === 'all') return true;
-  if (filter === 'pendiente') return status === 'con_foto' && !row.photo?.is_refutado;
+  if (filter === 'pendiente') return status === 'con_foto' || status === 'sin_foto' || status === 'ambiguo';
   return status === filter;
 }
 
 function readStoredBatch() {
   return loadComplaintBatch() || { complaints: [], pickedPhotoIds: {} };
+}
+
+function historyFromResult(result) {
+  return result?.store || result;
 }
 
 export default function ComplaintsInbox() {
@@ -67,10 +114,15 @@ export default function ComplaintsInbox() {
   const [complaints, setComplaints] = useState(storedBatch.complaints);
   const [photos, setPhotos] = useState([]);
   const [rows, setRows] = useState([]);
+  const [historyStore, setHistoryStore] = useState(cachedComplaintHistory);
   const [pickedPhotoIds, setPickedPhotoIds] = useState(storedBatch.pickedPhotoIds);
   const [skipped, setSkipped] = useState(0);
   const [filter, setFilter] = useState('all');
+  const [inboxView, setInboxView] = useState('cruzar');
+  const [historyAggregator, setHistoryAggregator] = useState('all');
+  const [historySearch, setHistorySearch] = useState('');
   const [loading, setLoading] = useState(storedBatch.complaints.length > 0);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
@@ -86,11 +138,27 @@ export default function ComplaintsInbox() {
     async (nextComplaints, nextPicks = {}) => {
       const data = await fetchPhotosForComplaints(nextComplaints);
       setPhotos(data);
-      rematch(nextComplaints, nextPicks, data);
-      saveComplaintBatch(nextComplaints, nextPicks);
+      return rematch(nextComplaints, nextPicks, data);
     },
     [rematch],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    loadComplaintHistory()
+      .then((store) => {
+        if (!cancelled) setHistoryStore(store);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || 'No se pudo leer el historial de reclamos.');
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!storedBatch.complaints.length) return undefined;
@@ -116,24 +184,61 @@ export default function ComplaintsInbox() {
     };
   }, [rematch, storedBatch]);
 
-  const visibleRows = useMemo(
-    () => rows.filter((row) => rowMatchesFilter(row, filter)),
-    [rows, filter],
+  const rowsWithHistory = useMemo(
+    () => attachHistoryToRows(rows, historyStore),
+    [rows, historyStore],
   );
 
+  const visibleRows = useMemo(
+    () => rowsWithHistory.filter((row) => rowMatchesFilter(row, filter)),
+    [rowsWithHistory, filter],
+  );
+
+  const historyBaseRows = useMemo(() => {
+    return listHistoryItems(historyStore, {
+      aggregator: historyAggregator,
+      search: historySearch,
+    }).map((item) => historyItemToRow(item, photos));
+  }, [historyStore, historyAggregator, historySearch, photos]);
+
+  const historyRows = useMemo(
+    () => historyBaseRows.filter((row) => rowMatchesFilter(row, filter)),
+    [historyBaseRows, filter],
+  );
+
+  const activeRows = inboxView === 'historial' ? historyRows : visibleRows;
+
   const stats = useMemo(() => {
-    const counts = { all: rows.length, con_foto: 0, sin_foto: 0, ambiguo: 0, refutado: 0, pendiente: 0 };
-    rows.forEach((row) => {
+    const source = inboxView === 'historial' ? historyBaseRows : rowsWithHistory;
+    const counts = {
+      all: source.length,
+      con_foto: 0,
+      sin_foto: 0,
+      ambiguo: 0,
+      pendiente: 0,
+      aceptado: 0,
+      refutado: 0,
+      refutado_aceptado: 0,
+    };
+    source.forEach((row) => {
       const status = complaintRowStatus(row);
       counts[status] += 1;
-      if (status === 'con_foto') counts.pendiente += 1;
+      if (status === 'con_foto' || status === 'sin_foto' || status === 'ambiguo') counts.pendiente += 1;
     });
     return counts;
-  }, [rows]);
+  }, [inboxView, historyBaseRows, rowsWithHistory]);
 
-  const matchedPending = useMemo(
-    () => rows.filter((row) => row.photo && !row.photo.is_refutado),
-    [rows],
+  const matchedUnaccepted = useMemo(
+    () => rowsWithHistory.filter((row) => row.photo?.id && !rowAccepted(row)),
+    [rowsWithHistory],
+  );
+  const matchedUnrefuted = useMemo(
+    () => rowsWithHistory.filter((row) => row.photo?.id && !rowRefutado(row)),
+    [rowsWithHistory],
+  );
+  const rowsWithPhotos = useMemo(
+    () => rowsWithHistory.filter((row) => row.photo),
+    [rowsWithHistory],
   );
 
   async function importText(text) {
@@ -145,10 +250,15 @@ export default function ComplaintsInbox() {
     setPickedPhotoIds({});
     setSkipped(parsed.skipped);
     setFilter('all');
-    await loadAndMatch(parsed.complaints, {});
+    const matched = await loadAndMatch(parsed.complaints, {});
+    saveComplaintBatch(parsed.complaints, {});
+    const result = await importComplaintsToHistory(parsed.complaints, matched);
+    setHistoryStore(historyFromResult(result));
     if (sheetUrl.trim()) saveSheetUrl(sheetUrl);
     setImportOpen(false);
-    setNotice(`${parsed.complaints.length} reclamos cruzados con las fotos.`);
+    setNotice(
+      `${parsed.complaints.length} reclamos cruzados · ${result.added} nuevos en historial · ${result.updated} ya estaban (sin duplicar).`,
+    );
   }
 
   async function runImport(reader) {
@@ -203,20 +313,38 @@ export default function ComplaintsInbox() {
     saveComplaintBatch(complaints, nextPicks);
   }
 
-  async function markRow(row, { refutado = false } = {}) {
-    if (!row.photo) return;
+  async function markRow(row, { accepted, refutado } = {}) {
     setLoading(true);
     setError(null);
     try {
-      const updated = await applyComplaintToPhoto(row.photo, row.complaint, { refutado });
-      applyUpdatedPhotos([updated]);
+      const jobs = [];
+      if (row.photo?.id && (accepted || refutado)) {
+        jobs.push(
+          applyComplaintToPhoto(row.photo, row.complaint, { refutado: Boolean(refutado) }).then((updated) => {
+            applyUpdatedPhotos([updated]);
+            return updated;
+          }),
+        );
+      } else {
+        jobs.push(Promise.resolve(row.photo));
+      }
+      jobs.push(
+        setHistoryResolution(row.complaint, row.photo, {
+          accepted,
+          refutado,
+        }),
+      );
+      const [, history] = await Promise.all(jobs);
+      setHistoryStore(historyFromResult(history));
       setNotice(
-        refutado
-          ? `Pedido ${row.complaint.orderCode} marcado como refutado.`
-          : `Reclamo marcado en ${row.complaint.orderCode}.`,
+        accepted && refutado
+          ? `Pedido ${row.complaint.orderCode} marcado como refutado aceptado.`
+          : accepted
+            ? `Pedido ${row.complaint.orderCode} marcado como aceptado.`
+            : `Pedido ${row.complaint.orderCode} marcado como refutado.`,
       );
     } catch (err) {
-      setError(err.message || 'No se pudo actualizar la foto.');
+      setError(err.message || 'No se pudo actualizar el reclamo.');
     } finally {
       setLoading(false);
     }
@@ -282,6 +410,8 @@ export default function ComplaintsInbox() {
     try {
       const updated = await applyComplaintToPhoto(row.photo, row.complaint, { refutado: false });
       applyUpdatedPhotos([updated]);
+      const history = await setHistoryResolution(row.complaint, updated, {});
+      setHistoryStore(historyFromResult(history));
       const code = clipboardOrderCode(updated.name || row.complaint.orderCode);
       await downloadPhoto(updated, new Set(), getEvidenceFilename(row.complaint, updated));
       await copyText(code);
@@ -298,32 +428,37 @@ export default function ComplaintsInbox() {
     }
   }
 
-  async function markMany(targetRows, { refutado = false } = {}) {
+  async function markMany(targetRows, { accepted, refutado } = {}) {
     if (targetRows.length === 0) return;
     setLoading(true);
     setError(null);
     try {
-      const updated = await applyComplaintsToPhotos(targetRows, { refutado });
-      applyUpdatedPhotos(updated);
+      const photoRows = targetRows.filter((row) => row.photo?.id);
+      const updated = photoRows.length
+        ? await applyComplaintsToPhotos(photoRows, { refutado: Boolean(refutado) })
+        : [];
+      if (updated.length) applyUpdatedPhotos(updated);
+      const history = await setHistoryResolutions(targetRows, { accepted, refutado });
+      setHistoryStore(historyFromResult(history));
       setNotice(
         refutado
-          ? `${updated.length} pedidos marcados como refutados.`
-          : `${updated.length} reclamos marcados en las fotos.`,
+          ? `${targetRows.length} pedidos marcados como refutados.`
+          : `${targetRows.length} pedidos marcados como aceptados.`,
       );
     } catch (err) {
-      setError(err.message || 'No se pudieron actualizar las fotos.');
+      setError(err.message || 'No se pudieron actualizar los reclamos.');
     } finally {
       setLoading(false);
     }
   }
 
   async function downloadMatchedEvidence() {
-    if (matchedPending.length === 0) return;
+    if (rowsWithPhotos.length === 0) return;
     setLoading(true);
     setError(null);
     try {
       const usedNames = new Set();
-      for (const row of matchedPending) {
+      for (const row of rowsWithPhotos) {
         await downloadPhoto(
           row.photo,
           usedNames,
@@ -331,7 +466,7 @@ export default function ComplaintsInbox() {
         );
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
-      setNotice(`${matchedPending.length} evidencias descargadas.`);
+      setNotice(`${rowsWithPhotos.length} evidencias descargadas.`);
     } catch (err) {
       setError(err.message || 'No se pudieron descargar las evidencias.');
     } finally {
@@ -340,8 +475,8 @@ export default function ComplaintsInbox() {
   }
 
   function exportSheet() {
-    const csv = buildComplaintExport(rows);
-    downloadTextFile('reclamos-con-fotos.csv', csv);
+    const csv = buildComplaintExport(inboxView === 'historial' ? historyRows : rowsWithHistory);
+    downloadTextFile(inboxView === 'historial' ? 'historial-reclamos.csv' : 'reclamos-con-fotos.csv', csv);
     setNotice('CSV listo para pegar de vuelta en el Google Sheet.');
   }
 
@@ -357,6 +492,10 @@ export default function ComplaintsInbox() {
     setImportOpen(true);
   }
 
+  const historyCount = Object.keys(historyStore.items || {}).length;
+  const showCruzarList = inboxView === 'cruzar' && rowsWithHistory.length > 0;
+  const showHistoryList = inboxView === 'historial';
+
   return (
     <section className="complaints">
       <h2 className="gallery__title">Reclamos</h2>
@@ -364,6 +503,7 @@ export default function ComplaintsInbox() {
         No podemos entrar a tu usuario de PedidosYa o Rappi: el navegador no deja manejar
         otro sitio. Sí podemos abrir el portal, copiar el código y dejarte la foto lista
         para adjuntar. El Google Sheet se lee de la web si está compartido con enlace.
+        Cada lista que cruzás queda en el historial: si la vuelven a subir, no se duplica.
       </p>
 
       <div className="complaints__portals">
@@ -380,7 +520,28 @@ export default function ComplaintsInbox() {
         ))}
       </div>
 
-      {rows.length > 0 && (
+      <div className="gallery__view-toggle complaints__views" role="tablist" aria-label="Vista de reclamos">
+        <button
+          type="button"
+          className={`gallery__view-btn${inboxView === 'cruzar' ? ' gallery__view-btn--active' : ''}`}
+          onClick={() => setInboxView('cruzar')}
+          role="tab"
+          aria-selected={inboxView === 'cruzar'}
+        >
+          Cruzar
+        </button>
+        <button
+          type="button"
+          className={`gallery__view-btn${inboxView === 'historial' ? ' gallery__view-btn--active' : ''}`}
+          onClick={() => setInboxView('historial')}
+          role="tab"
+          aria-selected={inboxView === 'historial'}
+        >
+          Historial{historyCount ? ` ${historyCount}` : ''}
+        </button>
+      </div>
+
+      {inboxView === 'cruzar' && rowsWithHistory.length > 0 && (
         <button
           type="button"
           className={`gallery__filters-toggle${importOpen ? ' gallery__filters-toggle--open' : ''}`}
@@ -391,7 +552,7 @@ export default function ComplaintsInbox() {
         </button>
       )}
 
-      {importOpen && (
+      {inboxView === 'cruzar' && importOpen && (
         <form className="complaints__import" onSubmit={handleSubmit}>
           <label className="complaints__field">
             <span>Pegar celdas del Google Sheet</span>
@@ -452,18 +613,48 @@ export default function ComplaintsInbox() {
         </p>
       )}
 
-      {rows.length > 0 && (
+      {showHistoryList && (
+        <div className="complaints__history-tools">
+          <div className="gallery__view-toggle complaints__filters" role="group" aria-label="Agregador">
+            {HISTORY_AGGREGATORS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`gallery__view-btn${historyAggregator === item.id ? ' gallery__view-btn--active' : ''}`}
+                onClick={() => setHistoryAggregator(item.id)}
+                aria-pressed={historyAggregator === item.id}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <label className="complaints__field complaints__search">
+            <span>Buscar en el historial</span>
+            <input
+              type="search"
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              placeholder="Código, motivo o comentario"
+            />
+          </label>
+        </div>
+      )}
+
+      {(showCruzarList || showHistoryList) && (
         <>
           <div className="complaints__summary">
             <p className="gallery__count">
               {stats.all} reclamo{stats.all !== 1 ? 's' : ''}
-              {skipped ? ` · ${skipped} filas sin código` : ''}
-              {` · ${stats.con_foto + stats.refutado} con foto`}
-              {` · ${stats.sin_foto} sin foto`}
+              {inboxView === 'cruzar' && skipped ? ` · ${skipped} filas sin código` : ''}
+              {` · ${stats.aceptado + stats.refutado_aceptado} aceptados`}
+              {` · ${stats.refutado + stats.refutado_aceptado} refutados`}
+              {` · ${stats.refutado_aceptado} ref. aceptados`}
             </p>
-            <button type="button" className="btn btn--ghost btn--small" onClick={handleClear}>
-              Limpiar
-            </button>
+            {inboxView === 'cruzar' && (
+              <button type="button" className="btn btn--ghost btn--small" onClick={handleClear}>
+                Limpiar
+              </button>
+            )}
           </div>
 
           <div className="gallery__view-toggle complaints__filters" role="group" aria-label="Filtrar reclamos">
@@ -481,24 +672,38 @@ export default function ComplaintsInbox() {
             ))}
           </div>
 
-          {matchedPending.length > 0 && (
+          {inboxView === 'cruzar' && (matchedUnaccepted.length > 0 || matchedUnrefuted.length > 0 || rowsWithPhotos.length > 0) && (
             <div className="complaints__batch">
-              <button
-                type="button"
-                className="btn btn--primary btn--small"
-                onClick={() => markMany(matchedPending)}
-                disabled={loading}
-              >
-                Marcar reclamos
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={downloadMatchedEvidence}
-                disabled={loading}
-              >
-                Descargar evidencias
-              </button>
+              {matchedUnaccepted.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn--primary btn--small"
+                  onClick={() => markMany(matchedUnaccepted, { accepted: true })}
+                  disabled={loading}
+                >
+                  Marcar aceptados
+                </button>
+              )}
+              {matchedUnrefuted.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  onClick={() => markMany(matchedUnrefuted, { refutado: true })}
+                  disabled={loading}
+                >
+                  Marcar refutados
+                </button>
+              )}
+              {rowsWithPhotos.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  onClick={downloadMatchedEvidence}
+                  disabled={loading}
+                >
+                  Descargar evidencias
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn--ghost btn--small"
@@ -507,32 +712,41 @@ export default function ComplaintsInbox() {
               >
                 Exportar CSV
               </button>
+            </div>
+          )}
+
+          {inboxView === 'historial' && activeRows.length > 0 && (
+            <div className="complaints__batch">
               <button
                 type="button"
                 className="btn btn--ghost btn--small"
-                onClick={() => markMany(matchedPending, { refutado: true })}
+                onClick={exportSheet}
                 disabled={loading}
               >
-                Marcar refutados
+                Exportar CSV
               </button>
             </div>
           )}
 
-          {loading && visibleRows.length === 0 && (
+          {((loading && inboxView === 'cruzar') || (historyLoading && inboxView === 'historial')) && activeRows.length === 0 && (
             <div className="gallery__state">
               <div className="spinner" aria-hidden="true" />
-              <p>Cruzando reclamos con las fotos…</p>
+              <p>{inboxView === 'historial' ? 'Leyendo historial…' : 'Cruzando reclamos con las fotos…'}</p>
             </div>
           )}
 
-          {visibleRows.length === 0 && !loading && (
+          {activeRows.length === 0 && !loading && !historyLoading && (
             <div className="gallery__state gallery__state--empty">
-              <p>No hay reclamos en este filtro.</p>
+              <p>
+                {inboxView === 'historial'
+                  ? 'Todavía no hay reclamos en el historial. Cruzá un Sheet para empezar a cargarlo.'
+                  : 'No hay reclamos en este filtro.'}
+              </p>
             </div>
           )}
 
           <div className="complaints__list">
-            {visibleRows.map((row) => (
+            {activeRows.map((row) => (
               <ComplaintCard
                 key={row.complaint.id}
                 row={row}
@@ -544,7 +758,7 @@ export default function ComplaintsInbox() {
                 onCopyCode={copyCode}
                 onOpenPortal={openPortal}
                 portal={portalFor(row)}
-                onMarkReclamo={(item) => markRow(item)}
+                onMarkAceptado={(item) => markRow(item, { accepted: true })}
                 onMarkRefutado={(item) => markRow(item, { refutado: true })}
                 onOpenPhoto={(photo) => setLightboxPhoto(photo)}
               />
@@ -574,18 +788,20 @@ function ComplaintCard({
   onCopyCode,
   onOpenPortal,
   portal,
-  onMarkReclamo,
+  onMarkAceptado,
   onMarkRefutado,
   onOpenPhoto,
 }) {
   const status = complaintRowStatus(row);
-  const aggregator = detectAggregator(row.complaint.orderCode);
+  const aggregator = detectAggregator(row.complaint.orderCode) || row.history?.aggregator;
   const photo = row.photo;
+  const accepted = rowAccepted(row);
+  const refutado = rowRefutado(row);
 
   return (
     <article className={`complaint-card complaint-card--${status}`}>
       <div className="complaint-card__top">
-        {photo ? (
+        {photo?.public_url ? (
           <button
             type="button"
             className="complaint-card__thumb"
@@ -605,11 +821,9 @@ function ComplaintCard({
           <p>{formatComplaintWhen(row.complaint)}</p>
           <div className="complaint-card__badges">
             {aggregator && (
-              <span className="badge badge--aggregator">{getAggregatorLabel(aggregator)}</span>
+              <span className={aggregatorBadgeClass(aggregator)}>{getAggregatorLabel(aggregator)}</span>
             )}
-            <span className={`badge badge--${status === 'sin_foto' ? 'file' : status === 'refutado' ? 'refutado' : status === 'con_foto' ? 'complaint' : 'missing-code'}`}>
-              {statusLabel(status)}
-            </span>
+            <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
           </div>
         </div>
       </div>
@@ -648,78 +862,76 @@ function ComplaintCard({
         </div>
       )}
 
-      {(photo || portal) && (
-        <div className="complaint-card__actions">
-          {photo && (
-            <button
-              type="button"
-              className="btn btn--primary btn--small"
-              onClick={() => onPrepare(row)}
-              disabled={disabled}
-            >
-              {portal ? `Preparar y abrir ${portal.label}` : 'Preparar evidencia'}
-            </button>
-          )}
-          {portal && (
-            <button
-              type="button"
-              className="btn btn--ghost btn--small"
-              onClick={() => onOpenPortal(row)}
-              disabled={disabled}
-            >
-              Abrir portal
-            </button>
-          )}
+      <div className="complaint-card__actions">
+        {!accepted && (
           <button
             type="button"
             className="btn btn--ghost btn--small"
-            onClick={() => onCopyCode(row)}
+            onClick={() => onMarkAceptado(row)}
             disabled={disabled}
           >
-            Copiar código
+            Marcar aceptado
           </button>
-          {photo && (
-            <>
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={() => onDownload(row)}
-                disabled={disabled}
-              >
-                Descargar
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={() => onCopy(row)}
-                disabled={disabled}
-              >
-                Copiar link
-              </button>
-              {!photo.has_complaint && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--small"
-                  onClick={() => onMarkReclamo(row)}
-                  disabled={disabled}
-                >
-                  Marcar reclamo
-                </button>
-              )}
-              {!photo.is_refutado && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--small"
-                  onClick={() => onMarkRefutado(row)}
-                  disabled={disabled}
-                >
-                  Marcar refutado
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
+        )}
+        {!refutado && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => onMarkRefutado(row)}
+            disabled={disabled}
+          >
+            Marcar refutado
+          </button>
+        )}
+        {photo?.id && (
+          <button
+            type="button"
+            className="btn btn--primary btn--small"
+            onClick={() => onPrepare(row)}
+            disabled={disabled}
+          >
+            {portal ? `Preparar y abrir ${portal.label}` : 'Preparar evidencia'}
+          </button>
+        )}
+        {portal && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => onOpenPortal(row)}
+            disabled={disabled}
+          >
+            Abrir portal
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn--ghost btn--small"
+          onClick={() => onCopyCode(row)}
+          disabled={disabled}
+        >
+          Copiar código
+        </button>
+        {photo?.public_url && (
+          <>
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => onDownload(row)}
+              disabled={disabled}
+            >
+              Descargar
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => onCopy(row)}
+              disabled={disabled}
+            >
+              Copiar link
+            </button>
+          </>
+        )}
+      </div>
     </article>
   );
 }

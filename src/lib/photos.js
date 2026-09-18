@@ -7,6 +7,9 @@ const ORDER_CODE = /^(?:\d{4,12}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 export const UNIDENTIFIED_ORDER_NAME = 'Código no encontrado';
 
+export const PHOTO_COLUMNS =
+  'id,name,file_path,public_url,created_at,notes,has_complaint,is_refutado,taken_by';
+
 export const PHOTO_GALLERY_KINDS = {
   orders: 'orders',
   files: 'files',
@@ -90,10 +93,11 @@ export async function fetchPhotos({
   isRefutado,
   takenBy,
   notes,
+  columns,
 } = {}) {
   let query = supabase
     .from('photos')
-    .select('*')
+    .select(columns || '*')
     .order('created_at', { ascending: false });
 
   const trimmedSearch = search?.trim();
@@ -158,7 +162,7 @@ export async function fetchPhotos({
   );
 }
 
-export async function fetchOrderPhotosMatchingNames(tokens) {
+export async function fetchOrderPhotosMatchingNames(tokens, { dateFrom, dateTo } = {}) {
   const clean = [...new Set(
     tokens
       .map((token) => String(token || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
@@ -170,11 +174,15 @@ export async function fetchOrderPhotosMatchingNames(tokens) {
   const photos = [];
   for (let index = 0; index < clean.length; index += 20) {
     const chunk = clean.slice(index, index + 20);
-    const { data, error } = await supabase
+    let query = supabase
       .from('photos')
-      .select('*')
+      .select(PHOTO_COLUMNS)
       .or(chunk.map((token) => `name.ilike.%${token}%`).join(','));
 
+    if (dateFrom) query = query.gte('created_at', startOfDay(dateFrom));
+    if (dateTo) query = query.lte('created_at', endOfDay(dateTo));
+
+    const { data, error } = await query;
     if (error) throw error;
     photos.push(...(data ?? []).filter(isOrderPhoto));
   }

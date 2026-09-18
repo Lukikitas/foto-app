@@ -28,6 +28,11 @@ export function getAggregatorLabel(aggregator) {
   return AGGREGATORS[aggregator]?.label || 'Sin agregador';
 }
 
+export function aggregatorBadgeClass(aggregator) {
+  if (!aggregator || !AGGREGATORS[aggregator]) return 'badge badge--aggregator';
+  return `badge badge--aggregator badge--aggregator-${aggregator}`;
+}
+
 export function getPhotoAggregator(photo) {
   const parts = photo?.file_path?.split('/') || [];
   const aggregator = parts[0] === 'orders' && parts.length > 2 ? parts[1] : null;

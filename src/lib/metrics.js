@@ -34,7 +34,7 @@ export const PERIOD_PRESETS = [
 ];
 
 export function emptyDayStats() {
-  return { orders: 0, complaints: 0, accepted: null, refuted: null, awt: 0 };
+  return { orders: 0, complaints: 0, accepted: null, refuted: null, refutedAccepted: null, awt: 0 };
 }
 
 export function emptyStore() {
@@ -86,6 +86,7 @@ export function normalizeDayStats(row = {}) {
     complaints: toCount(row.complaints),
     accepted: toOptionalCount(row.accepted),
     refuted: toOptionalCount(row.refuted),
+    refutedAccepted: toOptionalCount(row.refutedAccepted),
     awt: toCount(row.awt),
   };
 }
@@ -234,18 +235,25 @@ export function groupPhotoFlags(photos = []) {
   return map;
 }
 
-export function resolveDayAggregator(store, photoFlags, day, aggregator) {
+export function resolveDayAggregator(store, photoFlags, day, aggregator, historyFlags = {}) {
   const entered = store?.days?.[day]?.[aggregator] || emptyDayStats();
   const photos = photoFlags?.[day]?.[aggregator] || { complaintPhotos: 0, refutedPhotos: 0 };
+  const history = historyFlags?.[day]?.[aggregator] || { accepted: 0, refuted: 0, refutedAccepted: 0 };
   const orders = toCount(entered.orders);
   const complaints = toCount(entered.complaints);
   const refuted =
-    entered.refuted == null ? toCount(photos.refutedPhotos) : toCount(entered.refuted);
+    entered.refuted == null
+      ? Math.max(toCount(photos.refutedPhotos), toCount(history.refuted))
+      : toCount(entered.refuted);
+  const refutedAccepted =
+    entered.refutedAccepted == null ? toCount(history.refutedAccepted) : toCount(entered.refutedAccepted);
   const accepted =
     entered.accepted == null
-      ? Math.max(0, complaints - refuted)
+      ? history.accepted > 0
+        ? toCount(history.accepted)
+        : Math.max(0, complaints - refuted)
       : toCount(entered.accepted);
-  const pending = Math.max(0, complaints - refuted - accepted);
+  const pending = Math.max(0, complaints - accepted - refuted + refutedAccepted);
   const awt = toCount(entered.awt);
   const rate = complaintRate(orders, complaints);
 
@@ -257,6 +265,7 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator) {
     awt,
     refuted,
     accepted,
+    refutedAccepted,
     pending,
     photoRefuted: toCount(photos.refutedPhotos),
     photoComplaints: toCount(photos.complaintPhotos),
@@ -266,13 +275,16 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator) {
     awtPct: complaintRate(orders, awt),
     refutedPctOfComplaints: ratioPct(refuted, complaints),
     acceptedPctOfComplaints: ratioPct(accepted, complaints),
+    refutedAcceptedPctOfComplaints: ratioPct(refutedAccepted, complaints),
   };
 }
 
-export function summarizeRange(store, photoFlags, from, to) {
+export function summarizeRange(store, photoFlags, from, to, historyFlags = {}) {
   const days = enumerateDays(from, to);
   const aggregators = METRIC_AGGREGATORS.map((aggregator) => {
-    const rows = days.map((day) => resolveDayAggregator(store, photoFlags, day, aggregator));
+    const rows = days.map((day) =>
+      resolveDayAggregator(store, photoFlags, day, aggregator, historyFlags),
+    );
     return rollupRows(aggregator, rows);
   });
 
@@ -280,7 +292,7 @@ export function summarizeRange(store, photoFlags, from, to) {
   const overall = rollupRows('all', overallRows);
   const daily = days.map((day) => {
     const rows = METRIC_AGGREGATORS.map((aggregator) =>
-      resolveDayAggregator(store, photoFlags, day, aggregator),
+      resolveDayAggregator(store, photoFlags, day, aggregator, historyFlags),
     );
     return { day, ...rollupRows(day, rows), aggregators: rows };
   });
@@ -304,6 +316,7 @@ export function compareSummaries(current, previous, target, awtTarget = DEFAULT_
     awtPct: delta(current.awtPct, previous.awtPct),
     refuted: delta(current.refuted, previous.refuted),
     accepted: delta(current.accepted, previous.accepted),
+    refutedAccepted: delta(current.refutedAccepted, previous.refutedAccepted),
     outOfTarget: isOutOfTarget(current.complaintPct, target),
     outOfAwtTarget: isOutOfTarget(current.awtPct, awtTarget),
     previousOutOfTarget: isOutOfTarget(previous.complaintPct, target),
@@ -320,7 +333,8 @@ export function upsertDayStats(store, day, aggregator, stats) {
     normalized.complaints === 0 &&
     normalized.awt === 0 &&
     normalized.accepted == null &&
-    normalized.refuted == null;
+    normalized.refuted == null &&
+    normalized.refutedAccepted == null;
 
   if (!next.days[day]) next.days[day] = {};
   if (empty) delete next.days[day][aggregator];
@@ -361,6 +375,7 @@ function rollupRows(id, rows) {
   const awt = rows.reduce((sum, row) => sum + toCount(row.awt), 0);
   const refuted = rows.reduce((sum, row) => sum + toCount(row.refuted), 0);
   const accepted = rows.reduce((sum, row) => sum + toCount(row.accepted), 0);
+  const refutedAccepted = rows.reduce((sum, row) => sum + toCount(row.refutedAccepted), 0);
   const pending = rows.reduce((sum, row) => sum + toCount(row.pending), 0);
   return {
     id,
@@ -370,11 +385,13 @@ function rollupRows(id, rows) {
     awt,
     refuted,
     accepted,
+    refutedAccepted,
     pending,
     complaintPct: complaintRate(orders, complaints),
     awtPct: complaintRate(orders, awt),
     refutedPctOfComplaints: ratioPct(refuted, complaints),
     acceptedPctOfComplaints: ratioPct(accepted, complaints),
+    refutedAcceptedPctOfComplaints: ratioPct(refutedAccepted, complaints),
   };
 }
 

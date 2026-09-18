@@ -1,6 +1,8 @@
 import { supabase } from './supabase.js';
 import { emptyStore, parseStore, METRIC_AGGREGATORS, groupPhotoFlags } from './metrics.js';
 import { fetchPhotos, PHOTO_GALLERY_KINDS } from './photos.js';
+import { loadComplaintHistory } from './complaintHistoryStore.js';
+import { groupHistoryFlags } from './complaintHistory.js';
 
 const BUCKET = 'photos';
 const FILE_PATH = 'metrics/dashboard.json';
@@ -78,8 +80,18 @@ export async function fetchPhotoFlags(dateFrom, dateTo) {
     kind: PHOTO_GALLERY_KINDS.orders,
     dateFrom,
     dateTo,
+    columns: 'id,file_path,created_at,has_complaint,is_refutado',
   });
   return groupPhotoFlags(photos);
+}
+
+export async function fetchHistoryFlags(dateFrom, dateTo) {
+  try {
+    const store = await loadComplaintHistory();
+    return groupHistoryFlags(store, dateFrom, dateTo);
+  } catch {
+    return {};
+  }
 }
 
 export function getMetricsView() {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
-import { getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
+import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
 import CompleteOrderCode from './CompleteOrderCode';
@@ -28,7 +28,7 @@ function PhotoBadges({ photo }) {
   return (
     <div className="photo-card__badges">
       {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
-      {aggregator && <span className="badge badge--aggregator">{getAggregatorLabel(aggregator)}</span>}
+      {aggregator && <span className={aggregatorBadgeClass(aggregator)}>{getAggregatorLabel(aggregator)}</span>}
       {codeNotFound && <span className="badge badge--missing-code">Código no encontrado</span>}
       {photo.has_complaint && (
         <span className="badge badge--complaint">Reclamo</span>

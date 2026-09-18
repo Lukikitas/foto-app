@@ -18,7 +18,7 @@ import {
   setTargetComplaintPct,
   summarizeRange,
 } from '../lib/metrics';
-import { fetchPhotoFlags, getSavedPeriod, savePeriod } from '../lib/metricsStore';
+import { fetchPhotoFlags, fetchHistoryFlags, getSavedPeriod, savePeriod } from '../lib/metricsStore';
 
 function formatDelta(value, { pct = false } = {}) {
   if (value == null || Number.isNaN(Number(value))) return '—';
@@ -64,15 +64,20 @@ function RateMeter({ rate, target, label }) {
   );
 }
 
-function StackedBar({ accepted, refuted, pending }) {
-  const total = accepted + refuted + pending;
+function StackedBar({ accepted, refuted, refutedAccepted = 0, pending }) {
+  const acceptedOnly = Math.max(0, accepted - refutedAccepted);
+  const refutedOnly = Math.max(0, refuted - refutedAccepted);
+  const total = acceptedOnly + refutedOnly + refutedAccepted + pending;
   if (total <= 0) {
     return <div className="metrics-stack metrics-stack--empty" aria-hidden="true" />;
   }
   return (
     <div className="metrics-stack" aria-hidden="true">
-      {refuted > 0 && <span className="metrics-stack__refuted" style={{ flexGrow: refuted }} />}
-      {accepted > 0 && <span className="metrics-stack__accepted" style={{ flexGrow: accepted }} />}
+      {refutedOnly > 0 && <span className="metrics-stack__refuted" style={{ flexGrow: refutedOnly }} />}
+      {refutedAccepted > 0 && (
+        <span className="metrics-stack__refuted-accepted" style={{ flexGrow: refutedAccepted }} />
+      )}
+      {acceptedOnly > 0 && <span className="metrics-stack__accepted" style={{ flexGrow: acceptedOnly }} />}
       {pending > 0 && <span className="metrics-stack__pending" style={{ flexGrow: pending }} />}
     </div>
   );
@@ -124,6 +129,7 @@ export default function MetricsDashboard({ store, hasData, saving, view, onSave,
   const [complaintDraft, setComplaintDraft] = useState(null);
   const [awtDraft, setAwtDraft] = useState(null);
   const [photoFlags, setPhotoFlags] = useState({});
+  const [historyFlags, setHistoryFlags] = useState({});
   const [photoError, setPhotoError] = useState(null);
 
   const complaintValue = complaintDraft ?? String(store.targetComplaintPct);
@@ -146,9 +152,13 @@ export default function MetricsDashboard({ store, hasData, saving, view, onSave,
     let cancelled = false;
     async function loadFlags() {
       try {
-        const flags = await fetchPhotoFlags(previous.from, period.to);
+        const [flags, history] = await Promise.all([
+          fetchPhotoFlags(previous.from, period.to),
+          fetchHistoryFlags(previous.from, period.to),
+        ]);
         if (!cancelled) {
           setPhotoFlags(flags);
+          setHistoryFlags(history);
           setPhotoError(null);
         }
       } catch (err) {
@@ -162,12 +172,12 @@ export default function MetricsDashboard({ store, hasData, saving, view, onSave,
   }, [period.from, period.to, previous.from]);
 
   const current = useMemo(
-    () => summarizeRange(store, photoFlags, period.from, period.to),
-    [store, photoFlags, period],
+    () => summarizeRange(store, photoFlags, period.from, period.to, historyFlags),
+    [store, photoFlags, historyFlags, period],
   );
   const previousSummary = useMemo(
-    () => summarizeRange(store, photoFlags, previous.from, previous.to),
-    [store, photoFlags, previous],
+    () => summarizeRange(store, photoFlags, previous.from, previous.to, historyFlags),
+    [store, photoFlags, historyFlags, previous],
   );
 
   const ranked = METRIC_AGGREGATORS.map((id) => current.aggregators.find((row) => row.id === id));
@@ -350,6 +360,12 @@ function Overview({ ranked, withData, badCount, store, previousSummary, hasData,
                 queja{item.complaints === 1 ? '' : 's'}
                 {deltaPct != null ? ` · ${formatDelta(deltaPct, { pct: true })}` : ''}
               </p>
+              {item.complaints > 0 && (
+                <p className="metrics-agg__meta">
+                  {formatPct(item.acceptedPctOfComplaints)} aceptadas · {formatPct(item.refutedAcceptedPctOfComplaints)} ref.
+                  aceptados
+                </p>
+              )}
               {item.id === AWT_AGGREGATOR && (
                 <div className={`metrics-awt${status.awtBad ? ' is-bad' : ''}`}>
                   <div className="metrics-awt__head">
@@ -466,6 +482,11 @@ function AggregatorDetail({ aggregator, current, previousSummary, store, hasData
               hint={`${formatPct(item.acceptedPctOfComplaints)} de las quejas`}
             />
             <Kpi
+              label="Ref. aceptados"
+              value={formatNumber(item.refutedAccepted)}
+              hint={`${formatPct(item.refutedAcceptedPctOfComplaints)} de las quejas`}
+            />
+            <Kpi
               label="Pendientes"
               value={formatNumber(item.pending)}
               hint={item.pending ? 'Quejas sin cerrar' : 'Sin pendientes'}
@@ -476,7 +497,18 @@ function AggregatorDetail({ aggregator, current, previousSummary, store, hasData
             <header>
               <h3>Resolución de quejas</h3>
             </header>
-            <StackedBar accepted={item.accepted} refuted={item.refuted} pending={item.pending} />
+            <StackedBar
+              accepted={item.accepted}
+              refuted={item.refuted}
+              refutedAccepted={item.refutedAccepted}
+              pending={item.pending}
+            />
+            <p className="metrics-stack-legend">
+              <span className="metrics-stack-legend__refuted">Refutados</span>
+              <span className="metrics-stack-legend__refuted-accepted">Ref. aceptados</span>
+              <span className="metrics-stack-legend__accepted">Aceptadas</span>
+              <span className="metrics-stack-legend__pending">Pendientes</span>
+            </p>
             <dl>
               <div>
                 <dt>Refutados</dt>
@@ -490,6 +522,13 @@ function AggregatorDetail({ aggregator, current, previousSummary, store, hasData
                 <dd>
                   {formatNumber(item.accepted)}
                   <small>{formatPct(item.acceptedPctOfComplaints)}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Refutados aceptados</dt>
+                <dd>
+                  {formatNumber(item.refutedAccepted)}
+                  <small>{formatPct(item.refutedAcceptedPctOfComplaints)}</small>
                 </dd>
               </div>
               <div>
@@ -535,6 +574,7 @@ function AggregatorDetail({ aggregator, current, previousSummary, store, hasData
                   )}
                   <th>Ref.</th>
                   <th>Acep.</th>
+                  <th>Ref. ac.</th>
                 </tr>
               </thead>
               <tbody>
@@ -556,6 +596,7 @@ function AggregatorDetail({ aggregator, current, previousSummary, store, hasData
                     )}
                     <td>{formatNumber(day.refuted)}</td>
                     <td>{formatNumber(day.accepted)}</td>
+                    <td>{formatNumber(day.refutedAccepted)}</td>
                   </tr>
                 ))}
               </tbody>

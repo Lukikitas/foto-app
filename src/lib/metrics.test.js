@@ -116,6 +116,37 @@ test('auto-fills refuted from photos and accepted from leftover complaints', () 
   assert.equal(row.usedPhotoRefuted, true);
 });
 
+test('counts refuted-accepted separately and still shows accepted over all complaints', () => {
+  const store = upsertDayStats(emptyStore(), '2026-09-17', 'pedidosya', {
+    orders: 100,
+    complaints: 10,
+  });
+  const historyFlags = {
+    '2026-09-17': {
+      pedidosya: { accepted: 4, refuted: 3, refutedAccepted: 2 },
+    },
+  };
+  const row = resolveDayAggregator(store, {}, '2026-09-17', 'pedidosya', historyFlags);
+  assert.equal(row.accepted, 4);
+  assert.equal(row.refuted, 3);
+  assert.equal(row.refutedAccepted, 2);
+  assert.equal(row.pending, 5);
+  assert.equal(row.acceptedPctOfComplaints, 40);
+  assert.equal(row.refutedAcceptedPctOfComplaints, 20);
+
+  const overridden = upsertDayStats(store, '2026-09-17', 'pedidosya', {
+    orders: 100,
+    complaints: 10,
+    accepted: 6,
+    refuted: 4,
+    refutedAccepted: 1,
+  });
+  const manual = resolveDayAggregator(overridden, {}, '2026-09-17', 'pedidosya', historyFlags);
+  assert.equal(manual.accepted, 6);
+  assert.equal(manual.refutedAccepted, 1);
+  assert.equal(manual.acceptedPctOfComplaints, 60);
+});
+
 test('dashboard rolls up a range and flags the target', () => {
   let store = emptyStore();
   store = upsertDayStats(store, '2026-09-16', 'pedidosya', { orders: 100, complaints: 1 });

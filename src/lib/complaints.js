@@ -4,7 +4,7 @@ import {
   complaintRowStatus,
   mergeComplaintNotes,
 } from './complaintMatch.js';
-import { fetchOrderPhotosMatchingNames, fetchPhotos, PHOTO_GALLERY_KINDS, updatePhoto } from './photos.js';
+import { fetchOrderPhotosMatchingNames, fetchPhotos, PHOTO_COLUMNS, PHOTO_GALLERY_KINDS, updatePhoto } from './photos.js';
 import { toDateInputValue } from './date.js';
 
 const STORAGE_KEY = 'foto-app-complaints-batch';
@@ -61,14 +61,28 @@ export function complaintPhotoSearchTokens(complaints) {
 }
 
 export async function fetchPhotosForComplaints(complaints) {
-  const recentFrom = new Date();
-  recentFrom.setDate(recentFrom.getDate() - 90);
+  const range = complaintDateRange(complaints);
+  const tokens = complaintPhotoSearchTokens(complaints);
+  const byName = await fetchOrderPhotosMatchingNames(tokens, {
+    dateFrom: range.dateFrom,
+    dateTo: range.dateTo,
+  });
+
+  const weakCodes = complaints.some((complaint) => {
+    const digits = compactCode(complaint.orderCode).replace(/\D/g, '');
+    return digits.length < 6;
+  });
+
+  if (byName.length > 0 && !weakCodes) {
+    return byName;
+  }
+
   const recent = await fetchPhotos({
     kind: PHOTO_GALLERY_KINDS.orders,
-    dateFrom: toDateInputValue(recentFrom),
-    dateTo: toDateInputValue(new Date()),
+    dateFrom: range.dateFrom,
+    dateTo: range.dateTo,
+    columns: PHOTO_COLUMNS,
   });
-  const byName = await fetchOrderPhotosMatchingNames(complaintPhotoSearchTokens(complaints));
   const byId = new Map();
   [...recent, ...byName].forEach((photo) => byId.set(photo.id, photo));
   return [...byId.values()];
@@ -122,10 +136,14 @@ export async function applyComplaintToPhoto(photo, complaint, { refutado = false
 }
 
 export async function applyComplaintsToPhotos(rows, { refutado = false } = {}) {
+  const targets = rows.filter((row) => row.photo);
   const updated = [];
-  for (const row of rows) {
-    if (!row.photo) continue;
-    updated.push(await applyComplaintToPhoto(row.photo, row.complaint, { refutado }));
+  for (let index = 0; index < targets.length; index += 8) {
+    const chunk = targets.slice(index, index + 8);
+    const batch = await Promise.all(
+      chunk.map((row) => applyComplaintToPhoto(row.photo, row.complaint, { refutado })),
+    );
+    updated.push(...batch);
   }
   return updated;
 }

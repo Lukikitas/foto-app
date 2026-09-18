@@ -204,7 +204,11 @@ export function matchComplaintsToPhotos(complaints, photos, pickedPhotoIds = {})
 }
 
 export function complaintRowStatus(row) {
-  if (row.photo?.is_refutado) return 'refutado';
+  const accepted = Boolean(row.history?.accepted);
+  const refutado = Boolean(row.history?.refutado || row.photo?.is_refutado);
+  if (accepted && refutado) return 'refutado_aceptado';
+  if (refutado) return 'refutado';
+  if (accepted) return 'aceptado';
   if (row.status === 'matched') return 'con_foto';
   if (row.status === 'ambiguous') return 'ambiguo';
   return 'sin_foto';

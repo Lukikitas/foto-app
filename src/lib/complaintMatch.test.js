@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   clipboardOrderCode,
   codeMatchScore,
+  complaintRowStatus,
   matchComplaintToPhotos,
   matchComplaintsToPhotos,
 } from './complaintMatch.js';
@@ -121,6 +122,33 @@ test('keeps unmatched complaints when there is no photo', () => {
   const rows = matchComplaintsToPhotos([complaint()], []);
   assert.equal(rows[0].status, 'unmatched');
   assert.equal(rows[0].photo, null);
+});
+
+test('complaint status can be accepted even when the photo is already refuted', () => {
+  assert.equal(
+    complaintRowStatus({
+      status: 'matched',
+      photo: photo({ is_refutado: true, has_complaint: true }),
+      history: { accepted: true, refutado: true },
+    }),
+    'refutado_aceptado',
+  );
+  assert.equal(
+    complaintRowStatus({
+      status: 'matched',
+      photo: photo({ is_refutado: true, has_complaint: true }),
+      history: { accepted: false, refutado: true },
+    }),
+    'refutado',
+  );
+  assert.equal(
+    complaintRowStatus({
+      status: 'matched',
+      photo: photo({ is_refutado: false, has_complaint: true }),
+      history: { accepted: true, refutado: false },
+    }),
+    'aceptado',
+  );
 });
 
 test('appends reclamo notes without duplicating them', () => {
