@@ -94,8 +94,9 @@ export default defineConfig({
       workbox: {
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm,gz}'],
+        globIgnores: ['**/node_modules/**', '**/presentacion/**'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/tesseract\//],
+        navigateFallbackDenylist: [/^\/tesseract\//, /^\/presentacion(\/|$)/],
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
     }),

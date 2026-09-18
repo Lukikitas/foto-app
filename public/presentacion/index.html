@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#121212" />
+    <meta name="robots" content="noindex" />
+    <title>Delivery La Plata · Meet</title>
+    <link rel="icon" type="image/png" href="/pwa-192.png" />
+    <style>
+      :root {
+        --red: #e4002b;
+        --red-2: #ff3355;
+        --bg: #0e0e0e;
+        --slide: #121212;
+        --card: #1c1c1c;
+        --line: #2d2d2d;
+        --text: #c5c9d1;
+        --head: #f3f4f6;
+        --muted: #8b919c;
+        --ok: #4ade80;
+        --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        overflow: hidden;
+      }
+
+      .progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 3px;
+        width: 0;
+        background: var(--red);
+        z-index: 20;
+        transition: width 0.25s ease;
+      }
+
+      .slide {
+        display: none;
+        width: 100vw;
+        height: 100vh;
+        padding: 4.2vh 4.5vw 7.5vh;
+        flex-direction: column;
+        gap: 1.4vh;
+        background: var(--slide);
+      }
+      .slide.is-on { display: flex; }
+
+      .kicker {
+        color: var(--red-2);
+        font-size: clamp(0.7rem, 1.4vh, 0.9rem);
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1, h2 {
+        margin: 0;
+        color: var(--head);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+      }
+      h1 { font-size: clamp(2.1rem, 6.2vh, 4.4rem); }
+      h2 { font-size: clamp(1.45rem, 3.8vh, 2.4rem); }
+      .lead {
+        margin: 0;
+        max-width: 42rem;
+        font-size: clamp(1rem, 2.2vh, 1.25rem);
+        line-height: 1.4;
+      }
+      .muted { color: var(--muted); }
+
+      .grow { flex: 1; min-height: 0; }
+      .row {
+        display: grid;
+        gap: 1.2rem;
+        min-height: 0;
+        flex: 1;
+      }
+      .row-2 { grid-template-columns: 1fr 1fr; }
+      .row-4 { grid-template-columns: repeat(4, 1fr); align-items: stretch; flex: 0 0 auto; }
+      .row-phone { grid-template-columns: minmax(240px, 320px) 1fr; align-items: center; }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 1.25rem 1.25rem 1.35rem;
+      }
+      .card h3 {
+        margin: 0 0 0.45rem;
+        color: var(--head);
+        font-size: clamp(1.02rem, 2.2vh, 1.25rem);
+      }
+      .card p { margin: 0; font-size: clamp(0.92rem, 1.9vh, 1.08rem); line-height: 1.45; }
+      .n {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.55rem;
+        height: 1.55rem;
+        margin-bottom: 0.7rem;
+        border-radius: 999px;
+        background: var(--red);
+        color: #fff;
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+
+      .shot-wrap {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        background: #0a0a0a;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .shot-wrap img,
+      .shot-wrap video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+        background: #0a0a0a;
+      }
+      .shot-wrap--video video,
+      .shot-wrap--fit img { object-fit: contain; }
+      .caption {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+        color: var(--muted);
+        font-size: clamp(0.82rem, 1.7vh, 0.98rem);
+      }
+      .caption strong { color: var(--head); font-weight: 700; }
+
+      .pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.9rem; }
+      .pill {
+        padding: 0.28rem 0.7rem;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #181818;
+        color: var(--head);
+        font-size: 0.86rem;
+        font-weight: 700;
+      }
+      .pill--on { border-color: var(--red); color: #fff; background: var(--red); }
+
+      .stat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .stat b {
+        color: var(--ok);
+        font-size: clamp(1.6rem, 4.4vh, 2.4rem);
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+      .stat span { color: var(--muted); font-size: 0.88rem; }
+
+      .phone {
+        width: min(320px, 32vw);
+        margin: 0 auto;
+        padding: 10px;
+        background: #1a1a1a;
+        border-radius: 28px;
+        border: 1px solid #3a3a3a;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        border-radius: 18px;
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1.1rem;
+        padding: 0.7rem 1.1rem;
+        border-radius: 999px;
+        background: var(--red);
+        color: #fff;
+        font-weight: 800;
+        text-decoration: none;
+      }
+      .cta:hover { background: var(--red-2); }
+      .ghost {
+        display: inline-flex;
+        margin-left: 0.6rem;
+        padding: 0.7rem 1.1rem;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--head);
+        text-decoration: none;
+        font-weight: 700;
+      }
+
+      .hud {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.55rem 1.1rem 0.7rem;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        user-select: none;
+      }
+      .hud b { color: var(--head); }
+      .hud button {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: #1c1c1c;
+        color: var(--head);
+        border-radius: 8px;
+        width: 2.1rem;
+        height: 2.1rem;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      .hud button:disabled { opacity: 0.35; cursor: default; }
+      .keys { color: #6e7480; }
+
+      .notes {
+        display: none;
+        position: fixed;
+        right: 1rem;
+        bottom: 3.4rem;
+        z-index: 30;
+        max-width: 22rem;
+        padding: 0.85rem 1rem;
+        background: #1c1c1c;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        color: var(--head);
+        font-size: 0.9rem;
+        line-height: 1.4;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+      }
+      .notes.is-on { display: block; }
+      .notes small { display: block; color: var(--muted); margin-bottom: 0.35rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 800; }
+
+      .hero {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 2.2rem;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+      }
+      .hero img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top;
+        filter: brightness(0.42) saturate(0.95);
+      }
+      .hero .copy { position: relative; z-index: 1; max-width: 42rem; }
+      .hero .copy .kicker { margin: 0 0 0.65rem; }
+      .hero .copy p { margin: 0.55rem 0 0; font-size: clamp(1rem, 2.2vh, 1.2rem); }
+      .takeaways { margin: 1.1rem 0 0; padding: 0; list-style: none; }
+      .takeaways li {
+        position: relative;
+        margin: 0.45rem 0;
+        padding-left: 1.1rem;
+        color: var(--head);
+        font-size: clamp(0.95rem, 2vh, 1.12rem);
+      }
+      .takeaways li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.55em;
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 99px;
+        background: var(--red);
+      }
+
+      @media (max-width: 860px) {
+        .row-2, .row-4, .row-phone { grid-template-columns: 1fr; }
+        .phone { width: min(240px, 70vw); }
+        .slide { padding: 3vh 4vw 8.5vh; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="progress" id="progress"></div>
+
+    <section class="slide is-on" data-notes="Está en producción, en el celular del local. Sin login. Hoy recorremos qué hace, no cómo está hecha.">
+      <div class="hero">
+        <img src="01-metricas.png" alt="" />
+        <div class="copy">
+          <p class="kicker">Meet · operación</p>
+          <h1>Delivery La Plata</h1>
+          <p>Fotos de pedidos, cruce de reclamos y métricas por agregador. Todo en una PWA.</p>
+        </div>
+      </div>
+      <p class="caption"><span><strong>v1.10</strong> · ya está en producción</span><span>delivery.star-app.com.ar</span></p>
+    </section>
+
+    <section class="slide" data-notes="El punto clave: no hay API de PedidosYa ni Rappi, y el navegador no deja entrar a esos portales. El local fotografía el ticket y pega el Excel.">
+      <p class="kicker">El problema</p>
+      <h2>Cuatro agregadores. Sin API. Un local.</h2>
+      <p class="lead muted">Hay que operar PedidosYa, Rappi, Rappi Turbo y Mercado Pago, cruzar quejas de un Sheet y mirar si cada uno está dentro del objetivo.</p>
+      <div class="row row-4">
+        <article class="card">
+          <span class="n">1</span>
+          <h3>Sin API ni scraping</h3>
+          <p>El navegador no deja entrar a la cuenta de PedidosYa o Rappi. La app no se loguea en esos sitios.</p>
+        </article>
+        <article class="card">
+          <span class="n">2</span>
+          <h3>El ticket es la fuente</h3>
+          <p>Se saca foto del pedido, se lee el código y queda en la galería, en vivo, para todo el local.</p>
+        </article>
+        <article class="card">
+          <span class="n">3</span>
+          <h3>Quejas en Excel / Sheet</h3>
+          <p>Se pega la lista o se comparte el Google Sheet. La app cruza por código de pedido, no por horario.</p>
+        </article>
+        <article class="card">
+          <span class="n">4</span>
+          <h3>Objetivo por agregador</h3>
+          <p>Quejas ~2% sobre <em>sus</em> pedidos. PedidosYa también mide AWT (demorados), tope 11%.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" data-notes="Video silencioso de 20 segundos, pantallas reales de producción. Dejarlo correr. Después entramos a cada parte.">
+      <p class="kicker">Recorrido</p>
+      <h2>Lo que se ve al abrirla</h2>
+      <p class="caption"><span>Métricas → detalle PedidosYa → cargar Excel → foto → galería → reclamos → celular</span><span>20 segundos · producción</span></p>
+      <div class="shot-wrap shot-wrap--video grow">
+        <video id="demo" src="recorrido-app.mp4" muted loop playsinline controls preload="auto" poster="01-metricas.png"></video>
+      </div>
+    </section>
+
+    <section class="slide" data-notes="No usar un % mezclado de todos los agregadores: miente. Cada tarjeta es un canal. Esta semana PedidosYa está OK en quejas y en AWT.">
+      <p class="kicker">Métricas</p>
+      <h2>Cada agregador se mide solo</h2>
+      <div class="row row-2" style="flex: 0 0 auto; min-height: unset;">
+        <div class="stat">
+          <b>1,97%</b>
+          <span>quejas PedidosYa · 458 pedidos · 9 quejas · objetivo 2%</span>
+        </div>
+        <div class="stat">
+          <b>8,73%</b>
+          <span>AWT PedidosYa · 40 demorados · tope 11%</span>
+        </div>
+      </div>
+      <div class="shot-wrap grow">
+        <img src="01-metricas.png" alt="Dashboard de métricas por agregador" />
+      </div>
+      <p class="caption"><span>Hoy / ayer / 7 días / semana / mes / rango. Objetivos editables.</span><span>Verde = dentro del tope</span></p>
+    </section>
+
+    <section class="slide" data-notes="En Cargar se pega la lista de Excel: un renglón por día, con pedidos, quejas y AWT. También se puede cargar día por día.">
+      <p class="kicker">Carga</p>
+      <h2>Se pega la lista de Excel</h2>
+      <p class="lead muted">Un renglón por día: fecha, pedidos, quejas y AWT. La app arma el % con dos decimales.</p>
+      <div class="shot-wrap grow">
+        <img src="03-cargar.png" alt="Pegar lista de métricas desde Excel" />
+      </div>
+    </section>
+
+    <section class="slide" data-notes="Sacar foto: cámara, código, quién lo subió, y si es un refutado. Pedidos: galería real, PEYA y Rappi, en vivo.">
+      <p class="kicker">Fotos</p>
+      <h2>Ticket en foto, pedido en galería</h2>
+      <div class="row row-2 grow">
+        <div class="shot-wrap shot-wrap--fit">
+          <img src="04-form.png" alt="Pantalla para sacar foto del pedido" />
+        </div>
+        <div class="shot-wrap">
+          <img src="05-pedidos.png" alt="Galería de pedidos con tickets reales" />
+        </div>
+      </div>
+      <p class="caption"><span>Cámara, código, quién subió, marca de <strong>refutado</strong>.</span><span>Galería en vivo · PedidosYa y Rappi</span></p>
+    </section>
+
+    <section class="slide" data-notes="Reclamos no entra al portal: lo abre, copia el código numérico, y cruza el Sheet contra las fotos por código. Si hay foto de refutado, queda marcada.">
+      <p class="kicker">Reclamos</p>
+      <h2>Cruza el Sheet contra las fotos</h2>
+      <p class="lead muted">Abre el portal de PedidosYa o Rappi, pega el Excel o el link del Google Sheet, y encuentra el pedido por código — no por horario.</p>
+      <div class="shot-wrap grow">
+        <img src="06-reclamos.png" alt="Bandeja de reclamos con cruce por código" />
+      </div>
+    </section>
+
+    <section class="slide" data-notes="Cerrar con la URL. Presentación en /presentacion/. App en la raíz. PWA: se instala y avisa Actualización disponible. Preguntas.">
+      <p class="kicker">En el local</p>
+      <h2>Ya está en el celular</h2>
+      <div class="row row-phone grow">
+        <div class="phone">
+          <img src="08-metricas-mobile.png" alt="Métricas en el celular" />
+        </div>
+        <div>
+          <p class="lead">Se instala como app. Primera pantalla: métricas. Si hay versión nueva, avisa <strong style="color: var(--head)">Actualización disponible</strong>.</p>
+          <ul class="takeaways">
+            <li>Cada agregador se mide solo — no un % mezclado</li>
+            <li>Foto del ticket y galería en vivo</li>
+            <li>Reclamos cruzados por código de pedido</li>
+            <li>Excel pegado: un renglón por día</li>
+          </ul>
+          <div class="pills">
+            <span class="pill pill--on">Métricas</span>
+            <span class="pill">Sacar foto</span>
+            <span class="pill">Pedidos</span>
+            <span class="pill">Reclamos</span>
+            <span class="pill">Archivos</span>
+          </div>
+          <p class="lead" style="margin-top: 1.2rem"><strong style="color: var(--head)">delivery.star-app.com.ar</strong></p>
+          <a class="cta" href="https://delivery.star-app.com.ar/" target="_blank" rel="noreferrer">Abrir la app</a>
+          <a class="ghost" href="https://delivery.star-app.com.ar/presentacion/" target="_blank" rel="noreferrer">Esta presentación</a>
+        </div>
+      </div>
+    </section>
+
+    <aside class="notes" id="notes"></aside>
+
+    <nav class="hud">
+      <span>Delivery La Plata</span>
+      <span>
+        <button type="button" id="prev" aria-label="Anterior">←</button>
+        <b id="pos">1 / 8</b>
+        <button type="button" id="next" aria-label="Siguiente">→</button>
+      </span>
+      <span class="keys">→ siguiente · F pantalla completa · N notas</span>
+    </nav>
+
+    <script>
+      const slides = [...document.querySelectorAll('.slide')];
+      const notesEl = document.getElementById('notes');
+      const posEl = document.getElementById('pos');
+      const progressEl = document.getElementById('progress');
+      const prevBtn = document.getElementById('prev');
+      const nextBtn = document.getElementById('next');
+      const demo = document.getElementById('demo');
+      let i = 0;
+      let notesOn = false;
+
+      function hashIndex() {
+        const n = Number((location.hash || '').replace('#', ''));
+        return Number.isInteger(n) && n >= 1 && n <= slides.length ? n - 1 : 0;
+      }
+
+      function show(n, pushHash) {
+        i = Math.max(0, Math.min(slides.length - 1, n));
+        slides.forEach((s, k) => s.classList.toggle('is-on', k === i));
+        posEl.textContent = i + 1 + ' / ' + slides.length;
+        progressEl.style.width = ((i + 1) / slides.length) * 100 + '%';
+        prevBtn.disabled = i === 0;
+        nextBtn.disabled = i === slides.length - 1;
+        notesEl.innerHTML = '<small>Notas</small>' + (slides[i].dataset.notes || '');
+        notesEl.classList.toggle('is-on', notesOn);
+        if (pushHash !== false) history.replaceState(null, '', '#' + (i + 1));
+        if (demo) {
+          if (slides[i].contains(demo)) demo.play().catch(() => {});
+          else demo.pause();
+        }
+      }
+
+      function onNotes() {
+        notesEl.classList.toggle('is-on', notesOn);
+        const text = slides[i].dataset.notes || '';
+        notesEl.innerHTML = '<small>Notas</small>' + text;
+      }
+
+      prevBtn.addEventListener('click', () => show(i - 1));
+      nextBtn.addEventListener('click', () => show(i + 1));
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+          e.preventDefault();
+          show(i + 1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+          e.preventDefault();
+          show(i - 1);
+        } else if (e.key === 'Home') {
+          show(0);
+        } else if (e.key === 'End') {
+          show(slides.length - 1);
+        } else if (e.key === 'f' || e.key === 'F') {
+          if (document.fullscreenElement) document.exitFullscreen();
+          else document.documentElement.requestFullscreen().catch(() => {});
+        } else if (e.key === 'n' || e.key === 'N') {
+          notesOn = !notesOn;
+          onNotes();
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('a, button, video, .notes, .hud')) return;
+        const x = e.clientX / window.innerWidth;
+        show(x < 0.22 ? i - 1 : i + 1);
+      });
+
+      let touchX = null;
+      document.addEventListener('touchstart', (e) => { touchX = e.changedTouches[0].clientX; }, { passive: true });
+      document.addEventListener('touchend', (e) => {
+        if (touchX == null) return;
+        const dx = e.changedTouches[0].clientX - touchX;
+        if (dx > 50) show(i - 1);
+        if (dx < -50) show(i + 1);
+        touchX = null;
+      }, { passive: true });
+
+      window.addEventListener('hashchange', () => show(hashIndex(), false));
+      show(hashIndex(), false);
+      onNotes();
+    </script>
+  </body>
+</html>
