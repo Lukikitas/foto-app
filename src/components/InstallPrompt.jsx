@@ -33,7 +33,7 @@ export default function InstallPrompt() {
   }
 
   return (
-    <div className="install-banner" role="region" aria-label="Instalar aplicación">
+    <div className="install-banner install-banner--install" role="region" aria-label="Instalar aplicación">
       <div>
         <strong>Instalá la app</strong>
         <p>Accedé más rápido desde el inicio de tu celular.</p>

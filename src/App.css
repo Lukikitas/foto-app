@@ -3222,9 +3222,13 @@ button.metrics-agg:focus-visible {
   .metrics__header {
     flex-direction: row;
     justify-content: space-between;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 1rem;
     padding-right: 3.4rem;
+  }
+
+  .install-banner--install {
+    display: none;
   }
 
   .metrics-kpis {
@@ -3292,7 +3296,7 @@ button.metrics-agg:focus-visible {
 
   .complaints__list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 36rem), 1fr));
     gap: 0.75rem;
   }
 
