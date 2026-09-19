@@ -1,4 +1,7 @@
 const TAKEN_BY_KEY = 'foto-app-taken-by';
+const TAKEN_BY_HISTORY_KEY = 'foto-app-taken-by-history';
+const TAKEN_BY_HISTORY_LIMIT = 8;
+const CAMERA_FLASH_KEY = 'foto-app-camera-flash';
 const GALLERY_VIEW_KEY = 'foto-app-gallery-view';
 const FILTERS_OPEN_KEY = 'foto-app-filters-open';
 const NAV_COLLAPSED_KEY = 'foto-app-nav-collapsed';
@@ -11,11 +14,56 @@ export function getLastTakenBy() {
   }
 }
 
+export function getTakenByHistory() {
+  const last = getLastTakenBy().trim();
+  let names = [];
+
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TAKEN_BY_HISTORY_KEY) || '[]');
+    if (Array.isArray(parsed)) {
+      names = parsed.map((name) => String(name).trim()).filter(Boolean);
+    }
+  } catch {
+    names = [];
+  }
+
+  if (last && !names.some((name) => name.toLowerCase() === last.toLowerCase())) {
+    names = [last, ...names];
+  }
+
+  return names.slice(0, TAKEN_BY_HISTORY_LIMIT);
+}
+
 export function saveLastTakenBy(name) {
   try {
-    if (name?.trim()) {
-      localStorage.setItem(TAKEN_BY_KEY, name.trim());
-    }
+    const trimmed = name?.trim();
+    if (!trimmed) return;
+
+    localStorage.setItem(TAKEN_BY_KEY, trimmed);
+    const history = getTakenByHistory().filter(
+      (item) => item.toLowerCase() !== trimmed.toLowerCase(),
+    );
+    history.unshift(trimmed);
+    localStorage.setItem(
+      TAKEN_BY_HISTORY_KEY,
+      JSON.stringify(history.slice(0, TAKEN_BY_HISTORY_LIMIT)),
+    );
+  } catch {
+    // localStorage no disponible
+  }
+}
+
+export function getCameraFlash() {
+  try {
+    return localStorage.getItem(CAMERA_FLASH_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
+export function saveCameraFlash(on) {
+  try {
+    localStorage.setItem(CAMERA_FLASH_KEY, on ? 'on' : 'off');
   } catch {
     // localStorage no disponible
   }

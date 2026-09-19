@@ -4,6 +4,7 @@ import { startDailyImportScheduler } from './lib/complaintDailyImport';
 import { setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, toggleTheme } from './lib/theme';
 import { getNavCollapsed, saveNavCollapsed } from './lib/storage';
+import { isPhoneViewport } from './lib/viewport';
 import { APP_VERSION } from './lib/version';
 import ComplaintsInbox from './components/ComplaintsInbox';
 import InstallPrompt from './components/InstallPrompt';
@@ -34,7 +35,7 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState(TABS.metrics);
+  const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
   const [navCollapsed, setNavCollapsed] = useState(getNavCollapsed);
@@ -86,7 +87,7 @@ export default function App() {
               <button
                 key={item.id}
                 type="button"
-                className={`app-nav__btn${active ? ' app-nav__btn--active' : ''}`}
+                className={`app-nav__btn app-nav__btn--${item.id}${active ? ' app-nav__btn--active' : ''}`}
                 onClick={() => setTab(item.id)}
                 aria-current={active ? 'page' : undefined}
                 title={navCollapsed ? item.label : undefined}

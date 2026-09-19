@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
+import { getCameraFlash, getTakenByHistory, saveCameraFlash, saveLastTakenBy } from '../lib/storage';
 import { subscribe } from '../lib/uploadQueue';
+import PhotographerPicker from './PhotographerPicker';
 
 const STEPS = {
   ticket: 'ticket',
@@ -80,21 +83,43 @@ function makePhoto(video, name) {
   return canvasToFile(canvas, name, 'image/jpeg', 0.95);
 }
 
-export default function OrderCamera({ onCapturePair, onCancel }) {
+function getLiveTrack(stream) {
+  return stream?.getVideoTracks?.()[0] || null;
+}
+
+export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, onCancel }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const ticketFileRef = useRef(null);
+  const flashOnRef = useRef(getCameraFlash());
   const [status, setStatus] = useState('starting');
   const [step, setStep] = useState(STEPS.ticket);
   const [error, setError] = useState(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [queuedPairs, setQueuedPairs] = useState(0);
   const [pendingTasks, setPendingTasks] = useState(0);
+  const [flashOn, setFlashOn] = useState(getCameraFlash);
+  const [flashSupported, setFlashSupported] = useState(false);
+  const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
+  const [whoOpen, setWhoOpen] = useState(() => !takenBy?.trim());
+
+  useEffect(() => {
+    flashOnRef.current = flashOn;
+  }, [flashOn]);
 
   useEffect(() => {
     let active = true;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    async function applyFlash(track) {
+      const supported = trackSupportsTorch(track);
+      if (!active) return;
+      setFlashSupported(supported);
+      if (supported) {
+        await setTrackTorch(track, flashOnRef.current);
+      }
+    }
 
     async function startCamera() {
       try {
@@ -121,6 +146,7 @@ export default function OrderCamera({ onCapturePair, onCancel }) {
         await waitForVideo(videoRef.current);
         if (!active) return;
         setStatus('ready');
+        await applyFlash(getLiveTrack(stream));
       } catch (startError) {
         if (active) {
           setError(startError.message || 'No se pudo abrir la cámara.');
@@ -130,6 +156,11 @@ export default function OrderCamera({ onCapturePair, onCancel }) {
     }
 
     startCamera();
+
+    const torchRetry = window.setTimeout(() => {
+      if (!active) return;
+      applyFlash(getLiveTrack(streamRef.current));
+    }, 700);
 
     const unsubscribe = subscribe((items) => {
       setPendingTasks(
@@ -141,8 +172,13 @@ export default function OrderCamera({ onCapturePair, onCancel }) {
 
     return () => {
       active = false;
+      window.clearTimeout(torchRetry);
       unsubscribe();
       document.body.style.overflow = previousOverflow;
+      const track = getLiveTrack(streamRef.current);
+      if (track && flashOnRef.current) {
+        setTrackTorch(track, false);
+      }
       streamRef.current?.getTracks().forEach((track) => track.stop());
       ticketFileRef.current = null;
     };
@@ -159,14 +195,60 @@ export default function OrderCamera({ onCapturePair, onCancel }) {
     onCancel();
   }
 
+  function handlePhotographerChange(name, meta) {
+    onTakenByChange(name);
+    if (meta?.selected && name.trim()) {
+      saveLastTakenBy(name);
+      setTakenByHistory(getTakenByHistory());
+      setWhoOpen(false);
+    }
+    if (name.trim()) setError(null);
+  }
+
+  async function handleFlashToggle() {
+    if (status !== 'ready') return;
+
+    const track = getLiveTrack(streamRef.current);
+    const supported = trackSupportsTorch(track);
+    setFlashSupported(supported);
+    if (!supported || !track) {
+      setError('Este celular no deja usar el flash desde la app.');
+      return;
+    }
+
+    const next = !flashOn;
+    const applied = await setTrackTorch(track, next);
+    if (!applied) {
+      setFlashSupported(false);
+      setError('Este celular no deja usar el flash desde la app.');
+      return;
+    }
+
+    setFlashOn(next);
+    flashOnRef.current = next;
+    saveCameraFlash(next);
+    setError(null);
+  }
+
   async function handleCapture() {
     if (status !== 'ready' || takingPhoto) return;
 
+    if (!takenBy?.trim()) {
+      setWhoOpen(true);
+      setError('Poné quién está sacando la foto.');
+      return;
+    }
+
+    setWhoOpen(false);
     setTakingPhoto(true);
     try {
       if (!videoRef.current?.videoWidth) {
         throw new Error('La cámara todavía no está lista.');
       }
+
+      saveLastTakenBy(takenBy);
+      setTakenByHistory(getTakenByHistory());
+      if (navigator.vibrate) navigator.vibrate(25);
 
       if (step === STEPS.ticket) {
         ticketFileRef.current = await makePhoto(videoRef.current, `ticket-${Date.now()}.jpg`);
@@ -198,18 +280,20 @@ export default function OrderCamera({ onCapturePair, onCancel }) {
   }
 
   const isTicketStep = step === STEPS.ticket;
-  const stepLabel = isTicketStep ? '1 de 2 · Foto del ticket' : '2 de 2 · Foto de evidencia';
+  const photographerReady = Boolean(takenBy?.trim());
+  const stepLabel = isTicketStep ? '1 de 2 · Ticket' : '2 de 2 · Pedido';
   const guideText = isTicketStep
     ? 'Acercá la parte de arriba del ticket, donde dice CODIGO:'
     : 'Bolsa, contenido y ticket a la vista';
   const captureLabel = takingPhoto
     ? 'Tomando foto…'
     : isTicketStep
-      ? 'Foto del ticket'
-      : 'Foto de evidencia';
+      ? 'Sacar foto del ticket'
+      : 'Sacar foto del pedido';
+  const canCapture = status === 'ready' && !takingPhoto && photographerReady;
 
   return (
-    <section className="order-camera" aria-label="Cámara rápida de pedidos">
+    <section className={`order-camera${whoOpen ? ' order-camera--who-open' : ''}`} aria-label="Cámara rápida de pedidos">
       <div className="order-camera__viewport">
         <video ref={videoRef} className="order-camera__video" autoPlay muted playsInline />
         <div
@@ -221,15 +305,61 @@ export default function OrderCamera({ onCapturePair, onCancel }) {
         </div>
       </div>
 
-      <p
-        className={`order-camera__status order-camera__status--${status}`}
-        role="status"
-        aria-live="polite"
-      >
-        {status === 'starting' && 'Preparando cámara…'}
-        {status === 'error' && 'No se pudo abrir la cámara.'}
-        {status === 'ready' && stepLabel}
-      </p>
+      <header className="order-camera__top">
+        <button
+          type="button"
+          className="order-camera__icon-btn"
+          onClick={handleCancel}
+          aria-label="Cerrar cámara"
+        >
+          ✕
+        </button>
+        <p
+          className={`order-camera__status order-camera__status--${status}`}
+          role="status"
+          aria-live="polite"
+        >
+          {status === 'starting' && 'Preparando cámara…'}
+          {status === 'error' && 'No se pudo abrir la cámara.'}
+          {status === 'ready' && !photographerReady && 'Poné tu nombre'}
+          {status === 'ready' && photographerReady && stepLabel}
+        </p>
+        <button
+          type="button"
+          className={`order-camera__flash${flashOn ? ' order-camera__flash--on' : ''}`}
+          onClick={handleFlashToggle}
+          disabled={status !== 'ready'}
+          aria-pressed={flashOn}
+          aria-label={flashOn ? 'Apagar flash' : 'Prender flash'}
+          title={status === 'ready' && !flashSupported ? 'Flash no disponible en este celular' : undefined}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 2h10l-3 8h6L7 22l3.5-9H7L7 2z" />
+          </svg>
+          <span>{flashOn ? 'On' : 'Off'}</span>
+        </button>
+      </header>
+
+      <div className="order-camera__who">
+        {photographerReady && !whoOpen ? (
+          <button
+            type="button"
+            className="order-camera__who-toggle"
+            onClick={() => setWhoOpen(true)}
+          >
+            Saca la foto: <strong>{takenBy.trim()}</strong>
+          </button>
+        ) : (
+          <PhotographerPicker
+            value={takenBy}
+            history={takenByHistory}
+            onChange={handlePhotographerChange}
+            compact
+            autoFocus={!photographerReady}
+          />
+        )}
+      </div>
+
       {(queuedPairs > 0 || pendingTasks > 0) && (
         <p className="order-camera__summary" role="status" aria-live="polite">
           {queuedPairs > 0 && (
@@ -248,24 +378,27 @@ export default function OrderCamera({ onCapturePair, onCancel }) {
       {error && <p className="message message--error">{error}</p>}
 
       <div className="order-camera__actions">
-        <button
-          type="button"
-          className="btn btn--primary btn--large order-camera__shutter"
-          disabled={status !== 'ready' || takingPhoto}
-          onClick={handleCapture}
-        >
-          {captureLabel}
-        </button>
-        <div className="order-camera__secondary">
-          {step === STEPS.evidence && (
-            <button type="button" className="btn btn--ghost" onClick={resetToTicket}>
-              Repetir ticket
-            </button>
-          )}
-          <button type="button" className="btn btn--ghost" onClick={handleCancel}>
-            Cancelar
+        <div className="order-camera__shutter-row">
+          <div className="order-camera__shutter-side">
+            {step === STEPS.evidence && (
+              <button type="button" className="btn btn--ghost order-camera__repeat" onClick={resetToTicket}>
+                Repetir ticket
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            className="order-camera__shutter"
+            disabled={!canCapture}
+            onClick={handleCapture}
+            aria-label={captureLabel}
+          >
+            <span className="order-camera__shutter-ring" />
+            <span className="order-camera__shutter-core" />
           </button>
+          <div className="order-camera__shutter-side" />
         </div>
+        <p className="order-camera__shutter-label">{captureLabel}</p>
       </div>
     </section>
   );

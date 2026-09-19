@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import OrderCamera from './OrderCamera';
+import PhotographerPicker from './PhotographerPicker';
 import { isValidOrderDigits } from '../lib/photos';
-import { getLastTakenBy, saveLastTakenBy } from '../lib/storage';
+import { getLastTakenBy, getTakenByHistory, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
+import { isPhoneViewport } from '../lib/viewport';
 
 const EMPTY_META = {
   notes: '',
@@ -28,9 +30,10 @@ export default function PhotoUploader() {
   const [orderDigits, setOrderDigits] = useState('');
   const [detectedOrder, setDetectedOrder] = useState(null);
   const [showManualOrder, setShowManualOrder] = useState(false);
-  const [orderCameraOpen, setOrderCameraOpen] = useState(false);
+  const [orderCameraOpen, setOrderCameraOpen] = useState(() => isPhoneViewport());
   const [title, setTitle] = useState('');
   const [meta, setMeta] = useState(EMPTY_META);
+  const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [error, setError] = useState(null);
   const [queuedMessage, setQueuedMessage] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -39,6 +42,14 @@ export default function PhotoUploader() {
     setMeta((prev) => ({ ...prev, [key]: value }));
     setError(null);
     setQueuedMessage(null);
+  }
+
+  function handlePhotographerChange(name, changeMeta) {
+    updateMeta('taken_by', name);
+    if (changeMeta?.selected && name.trim()) {
+      saveLastTakenBy(name);
+      setTakenByHistory(getTakenByHistory());
+    }
   }
 
   function changeMode(mode) {
@@ -79,9 +90,23 @@ export default function PhotoUploader() {
     }
   }
 
+  function openOrderCamera() {
+    const name = meta.taken_by.trim();
+    if (!name) {
+      setError('Poné quién está sacando la foto.');
+      return;
+    }
+
+    saveLastTakenBy(name);
+    setTakenByHistory(getTakenByHistory());
+    setOrderCameraOpen(true);
+    setError(null);
+  }
+
   function handleOrderCapture({ ticketFile, evidenceFile }) {
     setError(null);
     saveLastTakenBy(meta.taken_by);
+    setTakenByHistory(getTakenByHistory());
     enqueue({
       file: evidenceFile,
       ticketFile,
@@ -114,6 +139,7 @@ export default function PhotoUploader() {
       ...EMPTY_META,
       taken_by: getLastTakenBy(),
     });
+    setTakenByHistory(getTakenByHistory());
     clearInputs();
   }
 
@@ -139,6 +165,7 @@ export default function PhotoUploader() {
     setSaving(true);
     try {
       saveLastTakenBy(meta.taken_by);
+      setTakenByHistory(getTakenByHistory());
 
       enqueue({
         file,
@@ -167,16 +194,26 @@ export default function PhotoUploader() {
   }
 
   const isOrderMode = uploadMode === UPLOAD_MODES.order;
+  const photographerReady = Boolean(meta.taken_by.trim());
 
   return (
     <section className="uploader">
       {orderCameraOpen && (
         <OrderCamera
+          takenBy={meta.taken_by}
+          onTakenByChange={(name) => updateMeta('taken_by', name)}
           onCapturePair={handleOrderCapture}
           onCancel={() => setOrderCameraOpen(false)}
         />
       )}
       <form className="uploader__form" onSubmit={handleSubmit}>
+        <PhotographerPicker
+          value={meta.taken_by}
+          history={takenByHistory}
+          onChange={handlePhotographerChange}
+          autoFocus={!photographerReady && !orderCameraOpen}
+        />
+
         <div className="uploader__mode" role="group" aria-label="Tipo de carga">
           <button
             type="button"
@@ -202,13 +239,10 @@ export default function PhotoUploader() {
           {isOrderMode ? (
             <button
               type="button"
-              className="uploader__file-btn uploader__mobile-camera"
-              onClick={() => {
-                setOrderCameraOpen(true);
-                setError(null);
-              }}
+              className="uploader__file-btn uploader__mobile-camera uploader__file-btn--camera"
+              onClick={openOrderCamera}
             >
-              Abrir cámara rápida
+              Sacar foto
             </button>
           ) : (
             <label className="uploader__file-label uploader__mobile-camera">
@@ -220,7 +254,7 @@ export default function PhotoUploader() {
                 onChange={handleFileChange}
                 className="uploader__file-input"
               />
-              <span className="uploader__file-btn">Sacar foto</span>
+              <span className="uploader__file-btn uploader__file-btn--camera">Sacar foto</span>
             </label>
           )}
 
@@ -329,18 +363,6 @@ export default function PhotoUploader() {
             />
           </label>
         )}
-
-        <label className="uploader__name-label">
-          Quién lo subió
-          <input
-            type="text"
-            value={meta.taken_by}
-            onChange={(e) => updateMeta('taken_by', e.target.value)}
-            placeholder="Ej: Lucas, María..."
-            maxLength={80}
-            autoComplete="name"
-          />
-        </label>
 
         <label className="uploader__name-label">
           Anotaciones
