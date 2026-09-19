@@ -562,18 +562,33 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       if (row.photo?.public_url) {
         await downloadPhoto(row.photo, new Set(), getEvidenceFilename(row.complaint, row.photo));
       }
-      if (code) await copyText(code);
+      let copied = false;
+      if (code) {
+        try {
+          await copyText(code);
+          copied = true;
+        } catch {
+          copied = false;
+        }
+      }
       if (portal && code) {
         setNotice(
-          portal.opened
-            ? `Se abrió ${portal.label}. Código ${code} copiado. Adjuntá la foto descargada.`
-            : `${portal.label} ya estaba abierto. Código ${code} copiado.`,
+          [
+            portal.opened ? `Se abrió ${portal.label}.` : `${portal.label} ya estaba abierto.`,
+            copied ? `Código ${code} copiado.` : `Copiá el código ${code}.`,
+            row.photo?.public_url ? 'Adjuntá la foto descargada.' : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
         );
       } else if (code) {
         setNotice(
-          row.photo?.public_url
-            ? `Código ${code} copiado y foto descargada.`
-            : `Código ${code} copiado.`,
+          [
+            copied ? `Código ${code} copiado.` : `Copiá el código ${code}.`,
+            row.photo?.public_url ? 'Foto descargada.' : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
         );
       }
     } catch (err) {
