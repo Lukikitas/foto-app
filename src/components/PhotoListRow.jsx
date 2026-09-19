@@ -5,6 +5,7 @@ import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
 import PhotoEditForm from './PhotoEditForm';
 import CompleteOrderCode from './CompleteOrderCode';
+import { syncGalleryComplaintToHistory } from '../lib/complaintHistoryStore';
 import {
   deletePhoto,
   downloadPhoto,
@@ -109,6 +110,16 @@ export default function PhotoListRow({
         has_complaint: isOrder ? form.has_complaint : false,
         is_refutado: isOrder ? form.is_refutado : false,
       });
+      if (isOrder) {
+        try {
+          await syncGalleryComplaintToHistory(updated);
+        } catch (err) {
+          onUpdated?.(updated);
+          setEditing(false);
+          setError(err.message || 'La foto se guardó, pero no se pudo actualizar el historial.');
+          return;
+        }
+      }
       onUpdated?.(updated);
       setEditing(false);
     } catch (err) {

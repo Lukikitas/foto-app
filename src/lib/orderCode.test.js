@@ -22,21 +22,21 @@ test('reads a clean aggregator code after CODIGO', () => {
   });
 });
 
-test('reads hyphenated aggregator codes', () => {
-  assert.deepEqual(code('CODIGO: PEYA-9K2X18'), {
-    displayCode: 'PEYA-9K2X18',
+test('reads hyphenated aggregator codes as prefix plus digits', () => {
+  assert.deepEqual(code('CODIGO: PEYA-998877'), {
+    displayCode: 'PEYA998877',
     aggregator: 'pedidosya',
   });
   assert.deepEqual(code('CODIGO: RAPPI-998877'), {
-    displayCode: 'RAPPI-998877',
+    displayCode: 'RAPPI998877',
     aggregator: 'rappi',
   });
-  assert.deepEqual(code('CODIGO: RAPPITURBO-1122'), {
-    displayCode: 'RAPPITURBO-1122',
+  assert.deepEqual(code('CODIGO: RAPPITURBO-112233'), {
+    displayCode: 'RAPPITURBO112233',
     aggregator: 'rappi_turbo',
   });
   assert.deepEqual(code('CODIGO: MPD-445566'), {
-    displayCode: 'MPD-445566',
+    displayCode: 'MPD445566',
     aggregator: 'mercadopago',
   });
 });
@@ -121,10 +121,26 @@ test('accepts spaced letters inside CODIGO', () => {
   });
 });
 
-test('reads PEYA codes that continue with letters', () => {
-  assert.deepEqual(code('CODIGO: PEYAX7K29'), {
-    displayCode: 'PEYAX7K29',
+test('does not keep letters in the numeric order code', () => {
+  assert.equal(code('CODIGO: PEYAX7K29'), null);
+  assert.deepEqual(code('CODIGO: PEYA9K2X18'), {
+    displayCode: 'PEYA9218',
     aggregator: 'pedidosya',
+  });
+});
+
+test('strips the repeated last four digits from Mercado Pago codes', () => {
+  assert.deepEqual(code('CODIGO: MPD123456785678'), {
+    displayCode: 'MPD12345678',
+    aggregator: 'mercadopago',
+  });
+  assert.deepEqual(code('CODIGO: MPD998877667766'), {
+    displayCode: 'MPD99887766',
+    aggregator: 'mercadopago',
+  });
+  assert.deepEqual(code('ticket MPD4455665566 bolsa'), {
+    displayCode: 'MPD445566',
+    aggregator: 'mercadopago',
   });
 });
 

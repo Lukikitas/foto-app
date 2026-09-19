@@ -243,56 +243,60 @@ export default function PhotoUploader() {
         <div className="uploader__workspace">
         <div className="uploader__media">
         <div className="uploader__file-actions">
-          {isOrderMode ? (
-            <button
-              type="button"
-              className="uploader__file-btn uploader__mobile-camera uploader__file-btn--camera"
-              onClick={openOrderCamera}
-            >
-              Sacar foto
-            </button>
-          ) : (
-            <label className="uploader__file-label uploader__mobile-camera">
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileChange}
-                className="uploader__file-input"
-              />
-              <span className="uploader__file-btn uploader__file-btn--camera">Sacar foto</span>
-            </label>
-          )}
+          <div className="uploader__file-hero">
+            {isOrderMode ? (
+              <button
+                type="button"
+                className="uploader__file-btn uploader__mobile-camera uploader__file-btn--camera"
+                onClick={openOrderCamera}
+              >
+                Sacar foto
+              </button>
+            ) : (
+              <label className="uploader__file-label uploader__mobile-camera">
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="uploader__file-input"
+                />
+                <span className="uploader__file-btn uploader__file-btn--camera">Sacar foto</span>
+              </label>
+            )}
+          </div>
 
-          {isOrderMode && (
-            <label className="uploader__file-label uploader__mobile-camera">
+          <div className="uploader__file-secondary">
+            {isOrderMode && (
+              <label className="uploader__file-label uploader__mobile-camera">
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="uploader__file-input"
+                />
+                <span className="uploader__file-btn uploader__file-btn--secondary">
+                  Foto sin lectura
+                </span>
+              </label>
+            )}
+
+            <label className="uploader__file-label">
               <input
-                ref={cameraInputRef}
+                ref={fileInputRef}
                 type="file"
-                accept="image/*"
-                capture="environment"
+                accept={isOrderMode ? 'image/*' : undefined}
                 onChange={handleFileChange}
                 className="uploader__file-input"
               />
-              <span className="uploader__file-btn uploader__file-btn--secondary">
-                Foto sin lectura
+              <span className="uploader__file-btn uploader__file-btn--secondary uploader__file-btn--pick">
+                {isOrderMode ? 'Elegir de galería' : 'Elegir archivo'}
               </span>
             </label>
-          )}
-
-          <label className="uploader__file-label">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={isOrderMode ? 'image/*' : undefined}
-              onChange={handleFileChange}
-              className="uploader__file-input"
-            />
-            <span className="uploader__file-btn uploader__file-btn--secondary uploader__file-btn--pick">
-              {isOrderMode ? 'Elegir de galería' : 'Elegir archivo'}
-            </span>
-          </label>
+          </div>
         </div>
 
         {!preview && !file && (

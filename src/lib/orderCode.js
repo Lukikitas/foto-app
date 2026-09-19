@@ -85,14 +85,33 @@ function stripTrailingJunk(value = '') {
   return value.replace(COMPACT_JUNK, '').replace(/[A-Z]{4,}$/g, '');
 }
 
+function mapDigitLookalikes(value = '') {
+  return value.replace(/O/g, '0').replace(/[IL]/g, '1');
+}
+
+function digitsFromToken(token) {
+  return mapDigitLookalikes(token).replace(/\D/g, '');
+}
+
+export function stripRepeatedLastFour(digits = '') {
+  let next = String(digits || '');
+  while (next.length >= 8 && next.slice(-4) === next.slice(-8, -4)) {
+    next = next.slice(0, -4);
+  }
+  return next;
+}
+
+function finalizeNumericRest(prefix, digits) {
+  if (!digits) return '';
+  return prefix === 'MPD' ? stripRepeatedLastFour(digits) : digits;
+}
+
 function collectCodeRest(source, startIndex) {
-  const rawAfter = source.slice(startIndex);
-  const leadingHyphen = /^\s*-/.test(rawAfter);
-  const after = rawAfter.trim().replace(/^-+/, '').trim();
+  const after = source.slice(startIndex).trim().replace(/^-+/, '').trim();
   if (!after) return '';
 
   const tokens = after.split(/\s+/).filter(Boolean);
-  const parts = [];
+  let digits = '';
 
   for (const token of tokens) {
     if (/^\d+[.,]\d{2}$/.test(token)) break;
@@ -102,21 +121,20 @@ function collectCodeRest(source, startIndex) {
     if (STOP_WORDS.has(compact) || STOP_WORDS.has(compactAlnum(compact))) break;
 
     const lettersOnly = /^[A-Z]+$/.test(compactAlnum(compact));
-    if (parts.length > 0 && lettersOnly && compactAlnum(compact).length >= 4) break;
+    if (lettersOnly) break;
 
-    parts.push(compact);
+    const tokenDigits = digitsFromToken(compact);
+    if (!tokenDigits) break;
+    digits += tokenDigits;
   }
 
-  const rest = parts.join('');
-  if (!rest) return '';
-  return leadingHyphen ? `-${rest}` : rest;
+  return digits;
 }
 
 function isReliableCode(prefix, rest) {
-  const restBody = compactAlnum(rest);
+  const digits = String(rest || '').replace(/\D/g, '');
   const needed = MIN_EXTRA[prefix] || 4;
-  const digits = rest.replace(/\D/g, '');
-  return restBody.length >= needed && digits.length >= 3;
+  return digits.length >= needed && digits.length >= 3;
 }
 
 function parseAggregatorPrefixMatch(source) {
@@ -125,7 +143,7 @@ function parseAggregatorPrefixMatch(source) {
 
   while ((match = matcher.exec(source))) {
     const prefix = match[1];
-    const rest = collectCodeRest(source, match.index + match[0].length);
+    const rest = finalizeNumericRest(prefix, collectCodeRest(source, match.index + match[0].length));
     if (!isReliableCode(prefix, rest)) continue;
 
     const aggregator = detectAggregator(prefix);
@@ -154,7 +172,9 @@ function parseCompactAggregator(text) {
       if (idx === -1) break;
       from = idx + 1;
 
-      let rest = stripTrailingJunk(compact.slice(idx + prefix.length)).slice(0, 28);
+      const rawRest = stripTrailingJunk(compact.slice(idx + prefix.length)).slice(0, 28);
+      const leading = mapDigitLookalikes(rawRest).match(/^\d+/);
+      let rest = finalizeNumericRest(prefix, leading ? leading[0] : '');
       if (!isReliableCode(prefix, rest)) continue;
 
       return makeAggregatorResult(`${prefix}${rest}`, aggregator);

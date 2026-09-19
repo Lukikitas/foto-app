@@ -13,6 +13,8 @@ import {
   listHistoryItems,
   parseHistory,
   patchHistoryItem,
+  PENDING_COMPLAINT_DETAILS,
+  syncGalleryComplaintInStore,
   upsertHistoryItems,
 } from './complaintHistory.js';
 
@@ -203,6 +205,82 @@ test('history can be filtered by a single day or a period', () => {
   const range = listHistoryItems(store, { from: '2026-09-18', to: '2026-09-19' });
   assert.equal(range.length, 2);
   assert.equal(listHistoryItems(store, { from: '2026-09-20', to: '2026-09-20' }).length, 0);
+});
+
+test('marking a gallery order creates a pending queja in history', () => {
+  const photo = {
+    id: 'photo-gal-1',
+    name: 'PEYA-2286878556',
+    public_url: 'https://example.com/gal.jpg',
+    created_at: '2026-09-17T17:51:00.000-03:00',
+    has_complaint: true,
+    is_refutado: false,
+  };
+  const store = syncGalleryComplaintInStore(emptyHistory(), photo);
+  const items = listHistoryItems(store);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].status, COMPLAINT_STATUSES.queja);
+  assert.equal(items[0].reason, PENDING_COMPLAINT_DETAILS);
+  assert.equal(items[0].photoId, 'photo-gal-1');
+  assert.equal(items[0].orderCode, 'PEYA-2286878556');
+});
+
+test('unmarking a pending gallery complaint removes it from history', () => {
+  const photo = {
+    id: 'photo-gal-2',
+    name: 'PEYA-2286878556',
+    public_url: 'https://example.com/gal.jpg',
+    created_at: '2026-09-17T17:51:00.000-03:00',
+    has_complaint: true,
+  };
+  const marked = syncGalleryComplaintInStore(emptyHistory(), photo);
+  const unmarked = syncGalleryComplaintInStore(marked, { ...photo, has_complaint: false });
+  assert.equal(Object.keys(unmarked.items).length, 0);
+});
+
+test('unmarking does not delete a complaint that already has sheet details', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const photo = {
+    id: 'photo-gal-3',
+    name: 'PEYA-2286878556',
+    public_url: 'https://example.com/gal.jpg',
+    created_at: '2026-09-17T17:51:00.000-03:00',
+    has_complaint: true,
+  };
+  const attached = syncGalleryComplaintInStore(seeded, photo);
+  const unmarked = syncGalleryComplaintInStore(attached, { ...photo, has_complaint: false });
+  const item = Object.values(unmarked.items)[0];
+  assert.equal(item.reason, 'Faltó producto');
+  assert.equal(item.amount, 8990);
+  assert.equal(item.photoId, 'photo-gal-3');
+});
+
+test('cruzar replaces pending gallery details with the sheet row', () => {
+  const photo = {
+    id: 'photo-gal-4',
+    name: 'PEYA-2286878556',
+    public_url: 'https://example.com/gal.jpg',
+    created_at: '2026-09-16T21:10:00.000-03:00',
+    has_complaint: true,
+  };
+  const pending = syncGalleryComplaintInStore(emptyHistory(), photo);
+  const pendingItem = Object.values(pending.items)[0];
+  assert.equal(pendingItem.reason, PENDING_COMPLAINT_DETAILS);
+  assert.notEqual(pendingItem.day, '2026-09-17');
+
+  const crossed = upsertHistoryItems(pending, [complaint()]);
+  assert.equal(crossed.added, 0);
+  assert.equal(crossed.updated, 1);
+  assert.equal(Object.keys(crossed.store.items).length, 1);
+  const item = Object.values(crossed.store.items)[0];
+  assert.equal(item.reason, 'Faltó producto');
+  assert.equal(item.comment, 'Sin papas');
+  assert.equal(item.amount, 8990);
+  assert.equal(item.combo, 'Combo Crispy');
+  assert.equal(item.photoId, 'photo-gal-4');
+  assert.equal(item.day, '2026-09-17');
+  assert.equal(item.status, COMPLAINT_STATUSES.queja);
+  assert.equal(item.id, complaintHistoryId(complaint()));
 });
 
 test('parseHistory drops broken records and keeps a valid map', () => {

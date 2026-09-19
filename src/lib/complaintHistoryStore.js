@@ -8,6 +8,7 @@ import {
   emptyHistory,
   parseHistory,
   patchHistoryItem,
+  syncGalleryComplaintInStore,
   upsertHistoryItems,
 } from './complaintHistory.js';
 
@@ -212,6 +213,11 @@ export function deleteHistoryItemById(id) {
 
 export function clearComplaintHistory() {
   return mutateComplaintHistory((store) => clearHistoryItems(store));
+}
+
+export function syncGalleryComplaintToHistory(photo) {
+  if (!photo) return Promise.resolve(cachedComplaintHistory());
+  return mutateComplaintHistory((store) => syncGalleryComplaintInStore(store, photo));
 }
 
 export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado } = {}) {

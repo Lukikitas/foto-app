@@ -18,6 +18,12 @@ export const COMPLAINT_STATUS_LABELS = {
 
 export const EMPTY_COMBO_LABEL = 'Sin combo';
 
+export const PENDING_COMPLAINT_DETAILS = 'Pendiente de cargar detalles del reclamo';
+
+export function isPendingComplaintDetails(reason) {
+  return String(reason || '').trim() === PENDING_COMPLAINT_DETAILS;
+}
+
 export function emptyHistory() {
   return {
     version: 2,
@@ -161,6 +167,22 @@ function mergeText(current, incoming) {
   return `${prev}\n${next}`.slice(0, 500);
 }
 
+function findHistoryForSheetComplaint(store, id, compact) {
+  if (store.items[id]) return store.items[id];
+  if (!compact) return undefined;
+  return Object.values(store.items).find(
+    (item) => item.compact === compact && isPendingComplaintDetails(item.reason),
+  );
+}
+
+function mergeSheetReason(existingReason, incomingReason) {
+  const next = String(incomingReason || '').trim();
+  const prev = String(existingReason || '').trim();
+  if (isPendingComplaintDetails(prev)) return next;
+  if (isPendingComplaintDetails(next)) return prev;
+  return mergeText(prev, next);
+}
+
 export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
   const next = parseHistory(store);
   const stamp = importedAt || nowIso();
@@ -169,7 +191,8 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
 
   complaints.forEach((complaint) => {
     const id = complaintHistoryId(complaint);
-    const existing = next.items[id];
+    const compact = compactCode(complaint?.orderCode);
+    const existing = findHistoryForSheetComplaint(next, id, compact);
     const incoming = normalizeHistoryItem(
       {
         ...complaint,
@@ -186,7 +209,7 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
     if (!incoming) return;
 
     if (existing) {
-      incoming.reason = mergeText(existing.reason, complaint.reason);
+      incoming.reason = mergeSheetReason(existing.reason, complaint.reason);
       incoming.comment = mergeText(existing.comment, complaint.comment);
       incoming.combo = String(complaint.combo || existing.combo || '').trim();
       incoming.amount = toAmount(complaint.amount ?? existing.amount);
@@ -197,6 +220,7 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
       incoming.photoUrl = existing.photoUrl || incoming.photoUrl;
       incoming.importedAt = existing.importedAt;
       incoming.updatedAt = stamp;
+      if (existing.id !== id) delete next.items[existing.id];
       next.items[id] = incoming;
       updated += 1;
     } else {
@@ -240,6 +264,93 @@ export function clearHistoryItems(store) {
   const next = emptyHistory();
   next.updatedAt = store?.updatedAt ? nowIso() : nowIso();
   return next;
+}
+
+function galleryComplaintFromPhoto(photo) {
+  return {
+    orderCode: photo?.name,
+    orderAtIso: photo?.created_at || null,
+    reason: PENDING_COMPLAINT_DETAILS,
+    comment: '',
+    status: photo?.is_refutado ? COMPLAINT_STATUSES.refutado : COMPLAINT_STATUSES.queja,
+    photoId: photo?.id || null,
+    photoName: photo?.name || null,
+    photoUrl: photo?.public_url || null,
+  };
+}
+
+export function upsertGalleryComplaint(store, photo) {
+  const next = parseHistory(store);
+  const compact = compactCode(photo?.name);
+  if (!compact || photo?.name === 'Código no encontrado') return next;
+
+  const stamp = nowIso();
+  const existing = findHistoryForPhoto(next, photo);
+  const incoming = galleryComplaintFromPhoto(photo);
+  const status =
+    existing?.status === COMPLAINT_STATUSES.queja && photo?.is_refutado
+      ? COMPLAINT_STATUSES.refutado
+      : existing?.status || incoming.status;
+
+  if (existing) {
+    const pending = isPendingComplaintDetails(existing.reason);
+    const nextCode = pending ? String(photo.name || existing.orderCode).trim() : existing.orderCode;
+    const nextId =
+      pending && compact !== existing.compact
+        ? complaintHistoryId({ orderCode: nextCode, orderAtIso: existing.orderAtIso || photo.created_at })
+        : existing.id;
+    const item = normalizeHistoryItem(
+      {
+        ...existing,
+        orderCode: nextCode,
+        reason: pending || !existing.reason ? PENDING_COMPLAINT_DETAILS : existing.reason,
+        photoId: photo.id || existing.photoId,
+        photoName: photo.name || existing.photoName,
+        photoUrl: photo.public_url || existing.photoUrl,
+        status,
+        id: nextId,
+        updatedAt: stamp,
+      },
+      existing,
+    );
+    if (!item) return next;
+    if (existing.id !== item.id) delete next.items[existing.id];
+    next.items[item.id] = item;
+    next.updatedAt = stamp;
+    return next;
+  }
+
+  const created = normalizeHistoryItem({
+    ...incoming,
+    id: complaintHistoryId(incoming),
+    importedAt: stamp,
+    updatedAt: stamp,
+  });
+  if (!created) return next;
+  next.items[created.id] = created;
+  next.updatedAt = stamp;
+  return next;
+}
+
+export function removePendingGalleryComplaint(store, photo) {
+  const next = parseHistory(store);
+  const existing = findHistoryForPhoto(next, photo);
+  if (!existing) return next;
+  if (!isPendingComplaintDetails(existing.reason)) return next;
+  if (existing.amount != null) return next;
+  if (String(existing.combo || '').trim()) return next;
+  if (String(existing.comment || '').trim()) return next;
+  delete next.items[existing.id];
+  next.updatedAt = nowIso();
+  return next;
+}
+
+export function syncGalleryComplaintInStore(store, photo) {
+  if (!photo || !compactCode(photo.name) || photo.name === 'Código no encontrado') {
+    return parseHistory(store);
+  }
+  if (photo.has_complaint) return upsertGalleryComplaint(store, photo);
+  return removePendingGalleryComplaint(store, photo);
 }
 
 export function attachPhotosToHistory(store, rows) {
