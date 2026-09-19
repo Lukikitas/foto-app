@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#121212" />
     <meta name="robots" content="noindex" />
-    <title>Delivery La Plata · Meet</title>
+    <title>Delivery La Plata · Dirección</title>
     <link rel="icon" type="image/png" href="/pwa-192.png" />
     <style>
       :root {
@@ -72,7 +72,7 @@
       h2 { font-size: clamp(1.45rem, 3.8vh, 2.4rem); }
       .lead {
         margin: 0;
-        max-width: 42rem;
+        max-width: 44rem;
         font-size: clamp(1rem, 2.2vh, 1.25rem);
         line-height: 1.4;
       }
@@ -145,18 +145,6 @@
       }
       .caption strong { color: var(--head); font-weight: 700; }
 
-      .pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.9rem; }
-      .pill {
-        padding: 0.28rem 0.7rem;
-        border-radius: 999px;
-        border: 1px solid var(--line);
-        background: #181818;
-        color: var(--head);
-        font-size: 0.86rem;
-        font-weight: 700;
-      }
-      .pill--on { border-color: var(--red); color: #fff; background: var(--red); }
-
       .stat {
         display: flex;
         flex-direction: column;
@@ -169,6 +157,8 @@
         line-height: 1;
       }
       .stat span { color: var(--muted); font-size: 0.88rem; }
+      .stat b.plain { color: var(--head); }
+      .stat b.risk { color: #f97066; }
 
       .phone {
         width: min(320px, 32vw);
@@ -279,9 +269,10 @@
         height: 100%;
         object-fit: cover;
         object-position: top;
-        filter: brightness(0.42) saturate(0.95);
+        filter: brightness(0.38) saturate(0.95);
       }
-      .hero .copy { position: relative; z-index: 1; max-width: 42rem; }
+      .hero .copy { position: relative; z-index: 1; max-width: 50rem; }
+      .hero .copy h1 { text-shadow: 0 10px 40px rgba(0, 0, 0, 0.75); }
       .hero .copy .kicker { margin: 0 0 0.65rem; }
       .hero .copy p { margin: 0.55rem 0 0; font-size: clamp(1rem, 2.2vh, 1.2rem); }
       .takeaways { margin: 1.1rem 0 0; padding: 0; list-style: none; }
@@ -397,149 +388,159 @@
   <body>
     <div class="progress" id="progress"></div>
 
-    <section class="slide is-on" data-notes="Abrí con esto: no es un sistema de oficina. Es la app del piso de KFC. Práctica, rápida, intuitiva. El resto de las slides muestra por qué: cámara abierta y OCR solo.">
+    <section class="slide is-on" data-notes="Abrí con plata y velocidad. No es un sistema de oficina: es cómo el local deja de perder minutos en packing y pesos en quejas.">
       <div class="hero">
-        <img src="05-pedidos.png" alt="" />
+        <img src="01-metricas.png" alt="" />
         <div class="copy">
-          <p class="kicker">Operación KFC · La Plata</p>
-          <h1>Práctica. Rápida. Intuitiva.</h1>
-          <p>Abrís la cámara y no la cerrás. El código del ticket se busca solo, en segundo plano.</p>
+          <p class="kicker">KFC La Plata · Dirección</p>
+          <h1>Menos tiempo por pedido.<br />Más plata recuperada.</h1>
+          <p>Cada queja sin foto se pierde. Cada código tipeado a mano frena el packing. Esta app ataca las dos cosas.</p>
         </div>
       </div>
-      <p class="caption"><span><strong>Delivery La Plata</strong> · ya está en el celular del local</span><span>delivery.star-app.com.ar</span></p>
+      <p class="caption"><span><strong>Delivery La Plata</strong> · ya está en el local</span><span>delivery.star-app.com.ar</span></p>
     </section>
 
-    <section class="slide" data-notes="Tres palabras y listo. En hora pico no hay tiempo para tipear PEYA-2286878556. Un botón, ticket, bolsa, siguiente. Lucas queda recordado. Sin login.">
-      <p class="kicker">Pensada para el piso</p>
-      <h2>Se usa en el turno, no en una oficina.</h2>
-      <p class="lead muted">Un packing de KFC: ticket, bolsa, siguiente pedido. La app copia ese ritmo.</p>
-      <div class="row row-3" style="flex: 0 0 auto;">
+    <section class="slide" data-notes="Números de esta semana en la app: 604 pedidos, 12 quejas, $9.025 en juego, $2.443 recuperado, quedan $6.582. Objetivo 2,4%; vamos 1,99%. El número que se llevan: cuánto se recupera y cuánto sigue perdido.">
+      <p class="kicker">Esta semana · en la app</p>
+      <h2>La queja se mide en pesos, no en tickets.</h2>
+      <p class="lead muted">PedidosYa, Rappi, Turbo y Mercado Pago en un tablero. Objetivo de quejas 2,4%.</p>
+      <div class="row row-4" style="flex: 0 0 auto;">
+        <article class="card stat">
+          <b class="plain">604</b>
+          <span>pedidos del período</span>
+        </article>
+        <article class="card stat">
+          <b>1,99%</b>
+          <span>quejas · objetivo 2,4%</span>
+        </article>
+        <article class="card stat">
+          <b class="risk">$ 9.025</b>
+          <span>$ en quejas (en juego)</span>
+        </article>
+        <article class="card stat">
+          <b>$ 2.443</b>
+          <span>$ recuperado · queda $ 6.582</span>
+        </article>
+      </div>
+      <div class="shot-wrap grow shot-wrap--fit">
+        <img src="01-metricas.png" alt="Tablero de operación y plata por agregador" />
+      </div>
+      <p class="caption"><span>Plata perdida = quejas menos lo reconocido por el agregador</span><span>Se actualiza al marcar Ref. aceptado</span></p>
+    </section>
+
+    <section class="slide" data-notes="Tres fugas de plata: sin foto se paga; tipear el código saca menos evidencias; sin cruce no se disputa. Un flujo las cierra.">
+      <p class="kicker">Dónde se va la plata</p>
+      <h2>Tres fugas. Un solo flujo las cierra.</h2>
+      <div class="row row-3">
         <article class="card">
           <span class="n">1</span>
-          <h3>Práctica</h3>
-          <p>Sin login. Un botón: <strong style="color: var(--head)">Abrir cámara rápida</strong>. El nombre de quien empaca queda recordado. Listo.</p>
+          <h3>Sin foto, se paga</h3>
+          <p>El agregador cobra la queja. Si no hay evidencia del pedido, no hay con qué disputar. Esa plata no vuelve.</p>
         </article>
         <article class="card">
           <span class="n">2</span>
-          <h3>Rápida</h3>
-          <p>No tipeás el código. No cerrás la cámara entre pedidos. Mientras sacás el 4, el 1, 2 y 3 se están leyendo solos.</p>
+          <h3>Tipear el código cuesta turnos</h3>
+          <p>PEYA-2286878556 a mano, en hora pico, es tiempo que no se empaca. Menos fotos = más quejas sin defensa.</p>
         </article>
         <article class="card">
           <span class="n">3</span>
-          <h3>Intuitiva</h3>
-          <p>Paso 1: foto del ticket donde dice CODIGO. Paso 2: bolsa + contenido. Y otra vez. Como empacás.</p>
+          <h3>Sin cruce, no hay recupero</h3>
+          <p>El Sheet llega con 20 filas. Buscar cada foto a ojo se saltea reclamos. Lo que no se marca, no se recupera.</p>
         </article>
       </div>
     </section>
 
-    <section class="slide" data-notes="Demo hablada: abrís cámara una vez. Ticket, evidencia, ticket, evidencia. No volvés al menú. Abajo: 5 pares tomados · 3 buscando código. Eso es hora pico.">
-      <p class="kicker">Cámara rápida</p>
-      <h2>No se cierra. Seguí sacando fotos.</h2>
-      <p class="lead muted">Ticket y evidencia, y de nuevo. La cola organiza atrás. Vos no esperás.</p>
+    <section class="slide" data-notes="Velocidad: cámara abierta, ticket + bolsa, OCR atrás. 5 pares tomados y 3 códigos buscándose solos. Packing que no se frena.">
+      <p class="kicker">Velocidad en packing</p>
+      <h2>Cero tipear. La cámara no se cierra.</h2>
+      <p class="lead muted">Ticket y evidencia, y el siguiente. El código se lee solo, en paralelo, mientras sigue el turno.</p>
       <div class="row row-2 grow">
         <div class="cam">
-          <div class="cam__bar">1 de 2 · Foto del ticket</div>
+          <div class="cam__bar">1 · Ticket (el código)</div>
           <img src="cam-ticket.png" alt="Ticket PedidosYa real" />
-          <div class="cam__hint">Acercá la parte de arriba del ticket, donde dice CODIGO:</div>
+          <div class="cam__hint">Donde dice CODIGO. Nadie lo escribe.</div>
           <div class="cam__btn">Foto del ticket</div>
         </div>
         <div class="cam">
-          <div class="cam__bar">2 de 2 · Foto de evidencia</div>
+          <div class="cam__bar">2 · Evidencia (la defensa)</div>
           <img src="ejemplo-bolsa.png" alt="Bolsa KFC con ticket" />
           <div class="cam__hint">Bolsa, contenido y ticket a la vista</div>
           <div class="cam__btn">Foto de evidencia</div>
         </div>
       </div>
-      <p class="queue-pill">Ejemplo hora pico: <em>5 pares tomados · 3 buscando código</em> · la cámara sigue abierta</p>
+      <p class="queue-pill">Hora pico: <em>5 pares tomados · 3 códigos leyéndose</em> · packing no espera</p>
     </section>
 
-    <section class="slide" data-notes="Los códigos de acá son reales, de producción, 17/09. Nadie los escribió. El OCR recorta el ticket, mejora el contraste, busca la línea CODIGO y corrige P3YA → PEYA. Si no lee, igual guarda la foto.">
-      <p class="kicker">OCR en segundo plano</p>
-      <h2>El código se busca solo.</h2>
-      <p class="lead muted">Mientras seguís empacando, lee el ticket, corrige errores típicos y nombra el pedido. Sin tipear.</p>
+    <section class="slide" data-notes="El OCR es el puente a la plata: sin código no hay cruce, sin cruce no hay recupero. Si el ticket sale mal, igual se guarda la evidencia.">
+      <p class="kicker">El código es el cobro</p>
+      <h2>Si no hay código, no hay recupero.</h2>
+      <p class="lead muted">El OCR nombra el pedido. Con eso se cruza el Sheet, se abre el portal y se disputa el peso.</p>
       <div class="row row-3 grow">
         <article class="ex">
           <img src="ejemplo-peya.png" alt="Ticket PedidosYa leído por OCR" />
           <div class="body">
-            <h3>PedidosYa · producción</h3>
-            <div class="from">Ticket: CODIGO: PEYA-2286878556</div>
-            <div class="to">→ Pedido #PEYA-2286878556</div>
+            <h3>PedidosYa</h3>
+            <div class="from">CODIGO: PEYA-2286878556</div>
+            <div class="to">→ listo para cruzar y disputar</div>
           </div>
         </article>
         <article class="ex">
           <img src="ejemplo-rappi.png" alt="Ticket Rappi leído por OCR" />
           <div class="body">
-            <h3>Rappi · producción</h3>
-            <div class="from">Ticket: CODIGO: RAPPI-480403041</div>
-            <div class="to">→ Pedido #RAPPI-480403041</div>
+            <h3>Rappi</h3>
+            <div class="from">CODIGO: RAPPI-480403041</div>
+            <div class="to">→ listo para cruzar y disputar</div>
           </div>
         </article>
         <article class="ex">
           <div class="body" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
             <h3>Si el ticket sale mal</h3>
             <div class="from">OCR ve: C0D1GO P3YA 99881</div>
-            <div class="to">→ guarda PEYA99881</div>
-            <p style="margin: 0.85rem 0 0; font-size: 0.92rem;">Recorta la zona del código, mejora el contraste, prueba rotaciones. Si no lo lee, igual sube la evidencia: el pedido no se pierde.</p>
+            <div class="to">→ igual guarda PEYA99881</div>
+            <p style="margin: 0.85rem 0 0; font-size: 0.92rem;">La evidencia no se pierde. Un pedido sin foto es un reclamo que se paga entero.</p>
           </div>
         </article>
       </div>
-      <p class="queue-pill">En pantalla: <em>Buscando código…</em> después <em>Pedido #PEYA-2286878556</em></p>
     </section>
 
-    <section class="slide" data-notes="Esta galería es el resultado: 12 pedidos, PEYA y RAPPI, códigos puestos por el OCR. Nadie los tipeó. En vivo para todo el local.">
-      <p class="kicker">Galería</p>
-      <h2>Cuando cerrás la cámara, ya está ordenado.</h2>
-      <p class="lead muted">Los pedidos aparecen con su código, el agregador y quién lo subió. En vivo, para todo el local.</p>
-      <div class="shot-wrap grow">
-        <img src="05-pedidos.png" alt="Galería de pedidos con códigos detectados" />
-      </div>
-      <p class="caption"><span>Ejemplos reales: <strong>#PEYA-2286878556</strong> · <strong>#RAPPI-480403041</strong></span><span>Subió: Lucas · 17/09</span></p>
-    </section>
-
-    <section class="slide" data-notes="Video silencioso 20s de las pantallas reales. Dejarlo correr. Después métricas y reclamos, que también viven del código que el OCR ya puso.">
-      <p class="kicker">Recorrido</p>
-      <h2>Toda la app, 20 segundos</h2>
-      <div class="shot-wrap shot-wrap--video grow">
-        <video id="demo" src="recorrido-app.mp4" muted loop playsinline controls preload="auto" poster="05-pedidos.png"></video>
-      </div>
-    </section>
-
-    <section class="slide" data-notes="El código que el OCR puso sirve acá: cada agregador se mide solo, y Reclamos cruza el Sheet contra esas fotos. Pegar Excel en Cargar. Objetivo ~2% quejas, AWT 11% PEYA.">
-      <p class="kicker">Después del turno</p>
-      <h2>Métricas y reclamos, con ese mismo código</h2>
+    <section class="slide" data-notes="Reclamos: pegás el Sheet o se lee solo después de las 13:30. Cruzar con fotos. Marcar refutado. Abrir portal. Historial con $ por queja.">
+      <p class="kicker">Recupero</p>
+      <h2>El Sheet se cruza. La queja se disputa.</h2>
+      <p class="lead muted">Después de las 13:30 el cruce es compartido entre dispositivos. Otra lista se pega en segundos.</p>
       <div class="row row-2 grow">
-        <div class="shot-wrap">
-          <img src="01-metricas.png" alt="Métricas por agregador" />
+        <div class="shot-wrap shot-wrap--fit">
+          <img src="06-reclamos.png" alt="Cruzar reclamos con fotos" />
         </div>
-        <div class="shot-wrap">
-          <img src="06-reclamos.png" alt="Reclamos cruzados por código" />
+        <div class="shot-wrap shot-wrap--fit">
+          <img src="07-historial.png" alt="Historial de quejas con montos" />
         </div>
       </div>
-      <p class="caption"><span>PedidosYa esta semana: <strong>1,97%</strong> quejas · <strong>8,73%</strong> AWT</span><span>El Sheet se cruza por código, no por horario</span></p>
+      <p class="caption"><span>Cruzar → foto + código + $ → <strong>Refutado</strong> → portal</span><span>Historial con monto por queja</span></p>
     </section>
 
-    <section class="slide" data-notes="Cerrar: práctica, rápida, intuitiva. Cámara abierta + OCR solo. URL. Preguntas.">
-      <p class="kicker">En el local</p>
-      <h2>Ya está en el celular de KFC</h2>
+    <section class="slide" data-notes="Video 20s en silencio. Después el cierre con URL.">
+      <p class="kicker">La app</p>
+      <h2>20 segundos. Piso y plata.</h2>
+      <div class="shot-wrap shot-wrap--video grow">
+        <video id="demo" src="recorrido-app.mp4" muted loop playsinline controls preload="auto" poster="01-metricas.png"></video>
+      </div>
+    </section>
+
+    <section class="slide" data-notes="Cerrar con lo que se llevan: no se tipean códigos, cada queja tiene foto y $, se ve recuperado vs perdido. URL. Preguntas.">
+      <p class="kicker">En el local · ahora</p>
+      <h2>Ya está corriendo el turno.</h2>
       <div class="row row-phone grow">
         <div class="phone">
           <img src="08-metricas-mobile.png" alt="La app en el celular" />
         </div>
         <div>
-          <p class="lead">Se instala como app. Sin login. Si hay versión nueva, avisa <strong style="color: var(--head)">Actualización disponible</strong>.</p>
+          <p class="lead">Sin login. Se instala como app. El packing no espera a un sistema de oficina.</p>
           <ul class="takeaways">
-            <li>Práctica: un botón y seguís empacando</li>
-            <li>Rápida: la cámara no se cierra; el OCR corre atrás</li>
-            <li>Intuitiva: ticket → bolsa → siguiente</li>
-            <li>El código se busca solo. Vos no lo tipeás</li>
+            <li>Packing más rápido: 0 tipeo de código, cámara siempre abierta</li>
+            <li>Cada queja queda con foto, código y monto</li>
+            <li>Se ve $ recuperado vs $ perdido, por agregador</li>
+            <li>El Sheet se cruza solo después de las 13:30</li>
           </ul>
-          <div class="pills">
-            <span class="pill">Métricas</span>
-            <span class="pill pill--on">Sacar foto</span>
-            <span class="pill">Pedidos</span>
-            <span class="pill">Reclamos</span>
-            <span class="pill">Archivos</span>
-          </div>
           <p class="lead" style="margin-top: 1.2rem"><strong style="color: var(--head)">delivery.star-app.com.ar</strong></p>
           <a class="cta" href="https://delivery.star-app.com.ar/" target="_blank" rel="noreferrer">Abrir la app</a>
           <a class="ghost" href="https://delivery.star-app.com.ar/presentacion/" target="_blank" rel="noreferrer">Esta presentación</a>
@@ -550,7 +551,7 @@
     <aside class="notes" id="notes"></aside>
 
     <nav class="hud">
-      <span>KFC La Plata</span>
+      <span>KFC La Plata · Dirección</span>
       <span>
         <button type="button" id="prev" aria-label="Anterior">←</button>
         <b id="pos">1 / 8</b>
