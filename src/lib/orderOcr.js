@@ -3,10 +3,13 @@ import {
   inspectOrderFromOcrTexts,
   isConfidentOrderMatch,
 } from './orderCode.js';
+import {
+  buildRecognitionPasses,
+  OCR_MAX_SIDE,
+  TICKET_TARGET_SIDE,
+} from './ocrPlan.js';
 import { loadTesseract, OCR_ENGINE_ERROR, tessAssetUrl } from './tesseract';
 
-const OCR_MAX_SIDE = 2800;
-const TICKET_TARGET_SIDE = 2600;
 const OCR_CHAR_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-: ';
 const NEIGHBORS = [
   [0, 1],
@@ -345,7 +348,7 @@ function findTicketRegions(canvas) {
     });
   }
 
-  return regions.sort((left, right) => right.score - left.score).slice(0, 5);
+  return regions.sort((left, right) => right.score - left.score).slice(0, 2);
 }
 
 function rotatedCanvas(source, rotation) {
@@ -373,52 +376,47 @@ function rotatedCanvas(source, rotation) {
   return canvas;
 }
 
-function prepareCanvases(bitmap) {
+function prepareTicketViews(bitmap) {
   const original = canvasFromSource(bitmap, OCR_MAX_SIDE);
   const enhancedFull = cloneCanvas(original);
   enhanceInPlace(enhancedFull);
 
-  const canvases = [enhancedFull];
-  for (const region of findTicketRegions(enhancedFull)) {
-    canvases.push(cropRegion(original, region, TICKET_TARGET_SIDE));
-  }
+  const regionCrops = findTicketRegions(enhancedFull).map((region) =>
+    cropRegion(original, region, TICKET_TARGET_SIDE),
+  );
+  const extraBands = [
+    cropBand(original, { height: 0.4 }),
+    cropBand(original, { top: 0.04, left: 0.04, width: 0.92, height: 0.32 }),
+  ].filter(Boolean);
 
-  const bands = [
-    { height: 0.4 },
-    { height: 0.55 },
-    { left: 0.06, width: 0.88, height: 0.46 },
-    { top: 0.06, left: 0.04, width: 0.92, height: 0.3 },
-  ];
-  for (const band of bands) {
-    const cropped = cropBand(original, band);
-    if (cropped) canvases.push(cropped);
-  }
-
-  return canvases;
+  return { enhancedFull, regionCrops, extraBands };
 }
 
-function withVariants(canvases) {
-  const variants = [...canvases];
-
-  for (const canvas of canvases.slice(0, 5)) {
-    const binary = cloneCanvas(canvas);
-    thresholdInPlace(binary, otsuThreshold(binary));
-    variants.push(binary);
+function applyPassVariants(sources, variants) {
+  const out = [];
+  if (variants.includes('plain')) out.push(...sources);
+  if (variants.includes('binary')) {
+    for (const source of sources) {
+      const binary = cloneCanvas(source);
+      thresholdInPlace(binary, otsuThreshold(binary));
+      out.push(binary);
+    }
   }
-
-  for (const canvas of canvases.slice(0, 2)) {
-    const inverted = cloneCanvas(canvas);
-    invertInPlace(inverted);
-    variants.push(inverted);
+  if (variants.includes('invert')) {
+    for (const source of sources) {
+      const inverted = cloneCanvas(source);
+      invertInPlace(inverted);
+      out.push(inverted);
+    }
   }
-
-  return variants;
+  return out;
 }
 
-async function collectGroup(worker, { sources, rotations, psms }, texts) {
+async function collectGroup(worker, { sources, rotations, psms, variants }, texts) {
+  const prepared = applyPassVariants(sources, variants || ['plain']);
   for (const psm of psms) {
     for (const rotation of rotations) {
-      for (const source of sources) {
+      for (const source of prepared) {
         let found;
         try {
           found = await recognizeTexts(worker, rotatedCanvas(source, rotation), psm);
@@ -439,7 +437,7 @@ async function readBitmap(file) {
   }
 }
 
-async function readOrderFromFile(worker, PSM, file) {
+async function readOrderFromFile(worker, PSM, file, { thorough = true } = {}) {
   let bitmap;
   try {
     bitmap = await readBitmap(file);
@@ -449,34 +447,11 @@ async function readOrderFromFile(worker, PSM, file) {
 
   try {
     const texts = [];
-    const canvases = prepareCanvases(bitmap);
-    const variants = withVariants(canvases);
+    const views = prepareTicketViews(bitmap);
+    const passes = buildRecognitionPasses({ ...views, PSM, thorough });
 
-    const groups = [
-      {
-        sources: variants.slice(0, 8),
-        rotations: [0],
-        psms: [PSM.SINGLE_BLOCK, PSM.SPARSE_TEXT],
-      },
-      {
-        sources: variants.slice(0, 6),
-        rotations: [0],
-        psms: [PSM.SINGLE_LINE, PSM.AUTO],
-      },
-      {
-        sources: canvases.slice(0, 4),
-        rotations: [180],
-        psms: [PSM.SINGLE_BLOCK, PSM.AUTO],
-      },
-      {
-        sources: canvases.slice(0, 2),
-        rotations: [90, 270],
-        psms: [PSM.AUTO],
-      },
-    ];
-
-    for (const group of groups) {
-      await collectGroup(worker, group, texts);
+    for (const pass of passes) {
+      await collectGroup(worker, pass, texts);
       const inspection = inspectOrderFromOcrTexts(texts);
       if (isConfidentOrderMatch(inspection)) return inspection.order;
     }
@@ -492,12 +467,12 @@ export async function detectOrderFromPhoto(file, options = {}) {
   if (!file) fail();
 
   const { worker, PSM } = await getWorker();
-  const found = await readOrderFromFile(worker, PSM, file);
+  const found = await readOrderFromFile(worker, PSM, file, { thorough: true });
   if (found) return found;
 
   for (const extra of options.fallbackFiles || []) {
     if (!extra || extra === file) continue;
-    const fallback = await readOrderFromFile(worker, PSM, extra);
+    const fallback = await readOrderFromFile(worker, PSM, extra, { thorough: false });
     if (fallback) return fallback;
   }
 

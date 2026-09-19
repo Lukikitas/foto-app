@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { startDailyImportScheduler } from './lib/complaintDailyImport';
-import { setUploadCompleteHandler } from './lib/uploadQueue';
+import { restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, toggleTheme } from './lib/theme';
 import { getNavCollapsed, saveNavCollapsed } from './lib/storage';
 import { isPhoneViewport } from './lib/viewport';
@@ -44,6 +44,7 @@ export default function App() {
     setUploadCompleteHandler(() => {
       setRefreshKey((k) => k + 1);
     });
+    restorePersistedQueue();
   }, []);
 
   useEffect(() => startDailyImportScheduler(), []);
@@ -119,11 +120,9 @@ export default function App() {
         <InstallPrompt />
 
         <main className={`app__main${tab === TABS.capture ? ' app__main--capture' : ''}`}>
+          <UploadQueueStatus />
           {tab === TABS.capture && (
-            <>
-              <PhotoUploader />
-              <UploadQueueStatus />
-            </>
+            <PhotoUploader />
           )}
           {tab === TABS.orders && (
             <PhotoGallery
