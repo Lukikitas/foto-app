@@ -36,6 +36,7 @@ import {
   setHistoryPhoto,
   setHistoryResolution,
   setHistoryResolutions,
+  subscribeComplaintHistory,
 } from '../lib/complaintHistoryStore';
 import {
   applyComplaintToPhoto,
@@ -152,12 +153,11 @@ export default function ComplaintsInbox() {
     [rematch],
   );
 
+  useEffect(() => subscribeComplaintHistory(setHistoryStore), []);
+
   useEffect(() => {
     let cancelled = false;
     loadComplaintHistory()
-      .then((store) => {
-        if (!cancelled) setHistoryStore(store);
-      })
       .catch((err) => {
         if (!cancelled) setError(err.message || 'No se pudo leer el historial de reclamos.');
       })

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { emptyHistory } from '../lib/complaintHistory';
 import {
+  cachedComplaintHistory,
   clearComplaintHistory,
   deleteHistoryItemById,
   loadComplaintHistory,
   setHistoryPhoto,
+  subscribeComplaintHistory,
 } from '../lib/complaintHistoryStore';
 import { argentinaToday, emptyStore, METRIC_PAGE_TABS, resolvePeriod } from '../lib/metrics';
 import {
@@ -65,7 +66,7 @@ function useMetricsPeriod() {
 export default function MetricsPage() {
   const [view, setView] = useState(getMetricsView);
   const [store, setStore] = useState(emptyStore);
-  const [history, setHistory] = useState(emptyHistory);
+  const [history, setHistory] = useState(cachedComplaintHistory);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -76,17 +77,17 @@ export default function MetricsPage() {
   const range = focusDay ? { from: focusDay, to: focusDay } : periodState.period;
   const hasData = useMemo(() => Object.keys(store.days || {}).length > 0, [store]);
 
+  useEffect(() => subscribeComplaintHistory(setHistory), []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const [nextStore, nextHistory] = await Promise.all([loadMetricsStore(), loadComplaintHistory()]);
-        if (!cancelled) {
-          setStore(nextStore);
-          setHistory(nextHistory);
-        }
+        const nextStore = await loadMetricsStore();
+        await loadComplaintHistory();
+        if (!cancelled) setStore(nextStore);
       } catch (err) {
         if (!cancelled) setError(err.message || 'No se pudieron leer las métricas.');
       } finally {

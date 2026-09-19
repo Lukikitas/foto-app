@@ -41,9 +41,34 @@ function writeCache(store) {
 let memoryStore = null;
 let loadPromise = null;
 let writeChain = Promise.resolve();
+const listeners = new Set();
+
+function emitComplaintHistory(store) {
+  listeners.forEach((listener) => {
+    try {
+      listener(store);
+    } catch {
+      // un subscriber no debe frenar el guardado
+    }
+  });
+}
+
+function remember(store) {
+  memoryStore = store;
+  writeCache(store);
+  emitComplaintHistory(store);
+  return store;
+}
 
 export function cachedComplaintHistory() {
   return memoryStore || readCache() || emptyHistory();
+}
+
+export function subscribeComplaintHistory(listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export async function loadComplaintHistory({ force = false } = {}) {
@@ -54,25 +79,29 @@ export async function loadComplaintHistory({ force = false } = {}) {
     const { data, error } = await supabase.storage.from(BUCKET).download(FILE_PATH);
     if (error) {
       if (isMissingObject(error)) {
-        memoryStore = emptyHistory();
-        writeCache(memoryStore);
-        return memoryStore;
+        return remember(emptyHistory());
       }
       const cached = readCache();
       if (cached) {
-        memoryStore = cached;
-        return cached;
+        return remember(cached);
       }
       throw new Error(error.message || 'No se pudo leer el historial de reclamos.');
     }
 
+    let parsed;
     try {
-      memoryStore = parseHistory(JSON.parse(await data.text()));
+      parsed = parseHistory(JSON.parse(await data.text()));
     } catch {
-      memoryStore = emptyHistory();
+      parsed = emptyHistory();
     }
-    writeCache(memoryStore);
-    return memoryStore;
+    if (
+      memoryStore?.updatedAt &&
+      parsed.updatedAt &&
+      Date.parse(memoryStore.updatedAt) > Date.parse(parsed.updatedAt)
+    ) {
+      return memoryStore;
+    }
+    return remember(parsed);
   })().finally(() => {
     loadPromise = null;
   });
@@ -93,9 +122,7 @@ export async function saveComplaintHistory(store) {
     cacheControl: '0',
   });
   if (error) throw new Error(error.message || 'No se pudo guardar el historial de reclamos.');
-  memoryStore = next;
-  writeCache(next);
-  return next;
+  return remember(next);
 }
 
 export function mutateComplaintHistory(mutator) {
