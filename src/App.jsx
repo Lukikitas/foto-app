@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
+import { startDailyImportScheduler } from './lib/complaintDailyImport';
 import { setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, toggleTheme } from './lib/theme';
 import { APP_VERSION } from './lib/version';
@@ -30,6 +31,8 @@ export default function App() {
       setRefreshKey((k) => k + 1);
     });
   }, []);
+
+  useEffect(() => startDailyImportScheduler(), []);
 
   function handleThemeToggle() {
     setTheme(toggleTheme(theme));

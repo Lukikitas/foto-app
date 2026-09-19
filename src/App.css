@@ -1741,6 +1741,14 @@
   line-height: 1.45;
 }
 
+.complaints__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .complaints__portals {
   display: flex;
   flex-wrap: wrap;
@@ -1794,7 +1802,7 @@
 
 .complaints__url-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 0.4rem;
 }
 

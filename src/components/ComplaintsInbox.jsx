@@ -52,8 +52,16 @@ import {
   saveComplaintBatch,
   uploadComplaintPhotoFile,
 } from '../lib/complaints';
+import { maybeRunDailyImport, subscribeDailyImport } from '../lib/complaintDailyImport';
+import { dailyImportStatusMessage } from '../lib/complaintSync';
+import {
+  cachedComplaintSync,
+  loadComplaintSync,
+  recordManualCruzar,
+  saveSharedSheetUrl,
+} from '../lib/complaintSyncStore';
 import { downloadPhoto, isImagePhoto } from '../lib/photos';
-import { getSavedSheetUrl, saveSheetUrl } from '../lib/storage';
+import { getSavedSheetUrl } from '../lib/storage';
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
 
@@ -120,7 +128,8 @@ function historyFromResult(result) {
 export default function ComplaintsInbox() {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
-  const [sheetUrl, setSheetUrl] = useState(getSavedSheetUrl);
+  const [sync, setSync] = useState(cachedComplaintSync);
+  const [sheetUrl, setSheetUrl] = useState(() => cachedComplaintSync().sheetUrl || getSavedSheetUrl());
   const [complaints, setComplaints] = useState(storedBatch.complaints);
   const [photos, setPhotos] = useState([]);
   const [rows, setRows] = useState([]);
@@ -154,6 +163,49 @@ export default function ComplaintsInbox() {
   );
 
   useEffect(() => subscribeComplaintHistory(setHistoryStore), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadComplaintSync()
+      .then((loaded) => {
+        if (cancelled) return;
+        setSync(loaded);
+        setSheetUrl(loaded.sheetUrl || '');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(
+    () =>
+      subscribeDailyImport((result) => {
+        if (result?.sync) {
+          setSync(result.sync);
+          setSheetUrl(result.sync.sheetUrl || '');
+        }
+        if (result?.replay) return;
+        if (result?.status === 'error' && result.error) {
+          setError(result.error);
+          return;
+        }
+        if (result?.status === 'imported' && result.complaints?.length) {
+          setError(null);
+          setComplaints(result.complaints);
+          setPickedPhotoIds({});
+          setSkipped(result.skipped || 0);
+          setFilter('all');
+          saveComplaintBatch(result.complaints, {});
+          loadAndMatch(result.complaints, {}).catch(() => {});
+          setImportOpen(false);
+          setNotice(
+            `Cruce automático: ${result.complaints.length} reclamos · ${result.added} nuevos · ${result.updated} ya estaban.`,
+          );
+        }
+      }),
+    [loadAndMatch],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -247,7 +299,7 @@ export default function ComplaintsInbox() {
     [rowsWithHistory],
   );
 
-  async function importText(text) {
+  async function importText(text, { fromSheetUrl = false } = {}) {
     const parsed = parseComplaintSheet(text);
     if (parsed.complaints.length === 0) {
       throw new Error('No encontré códigos de pedido. Copiá las columnas de código, hora y motivo.');
@@ -260,19 +312,23 @@ export default function ComplaintsInbox() {
     saveComplaintBatch(parsed.complaints, {});
     const result = await importComplaintsToHistory(parsed.complaints, matched);
     setHistoryStore(historyFromResult(result));
-    if (sheetUrl.trim()) saveSheetUrl(sheetUrl);
+    if (fromSheetUrl && sheetUrl.trim()) {
+      setSync(await recordManualCruzar(sheetUrl));
+    } else if (sheetUrl.trim()) {
+      setSync(await saveSharedSheetUrl(sheetUrl));
+    }
     setImportOpen(false);
     setNotice(
       `${parsed.complaints.length} reclamos cruzados · ${result.added} nuevos en historial · ${result.updated} ya estaban (sin duplicar).`,
     );
   }
 
-  async function runImport(reader) {
+  async function runImport(reader, options = {}) {
     setLoading(true);
     setError(null);
     setNotice(null);
     try {
-      await importText(await reader());
+      await importText(await reader(), options);
     } catch (err) {
       setError(err.message || 'No se pudo leer el Sheet.');
     } finally {
@@ -287,7 +343,7 @@ export default function ComplaintsInbox() {
       return;
     }
     if (sheetUrl.trim()) {
-      await runImport(() => fetchComplaintSheetText(sheetUrl));
+      await runImport(() => fetchComplaintSheetText(sheetUrl), { fromSheetUrl: true });
     }
   }
 
@@ -300,7 +356,29 @@ export default function ComplaintsInbox() {
 
   async function handleUrl() {
     if (!sheetUrl.trim()) return;
-    await runImport(() => fetchComplaintSheetText(sheetUrl));
+    await runImport(() => fetchComplaintSheetText(sheetUrl), { fromSheetUrl: true });
+  }
+
+  async function handleSaveUrl() {
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const saved = await saveSharedSheetUrl(sheetUrl);
+      setSync(saved);
+      setNotice(
+        saved.sheetUrl
+          ? 'Link guardado. El cruce automático se comparte entre todos los dispositivos, después de las 13:30.'
+          : 'Se borró el link compartido.',
+      );
+      if (saved.sheetUrl) {
+        await maybeRunDailyImport();
+      }
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar el link.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function applyUpdatedPhotos(updatedList) {
@@ -542,9 +620,9 @@ export default function ComplaintsInbox() {
     <section className="complaints">
       <h2 className="gallery__title">Reclamos</h2>
       <p className="complaints__lead">
-        Pegá el Excel del día (código, monto, combo y el resto de columnas). Cruzamos las
-        fotos, guardamos todas las quejas y después marcás Queja → Refutado → Ref. aceptado
-        o Ref. rechazado. La plata recuperada se ve en Métricas.
+        Pegá el Excel del día o guardá el link del Sheet. Después de las 13:30, la primera vez
+        que alguien abre la app se cruza solo y queda en todos los dispositivos. Marcás Queja →
+        Refutado → Ref. aceptado o Ref. rechazado. La plata recuperada se ve en Métricas.
       </p>
 
       <div className="complaints__portals">
@@ -581,6 +659,10 @@ export default function ComplaintsInbox() {
           Historial{historyCount ? ` ${historyCount}` : ''}
         </button>
       </div>
+
+      {inboxView === 'cruzar' && (
+        <p className="complaints__hint">{dailyImportStatusMessage(sync)}</p>
+      )}
 
       {inboxView === 'cruzar' && rowsWithHistory.length > 0 && (
         <button
@@ -630,6 +712,14 @@ export default function ComplaintsInbox() {
                 placeholder="https://docs.google.com/spreadsheets/…"
                 disabled={loading}
               />
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={handleSaveUrl}
+                disabled={loading}
+              >
+                Guardar link
+              </button>
               <button
                 type="button"
                 className="btn btn--ghost"
