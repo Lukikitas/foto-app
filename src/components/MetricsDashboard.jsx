@@ -5,7 +5,6 @@ import {
   AWT_AGGREGATOR,
   METRIC_AGGREGATORS,
   PERIOD_PRESETS,
-  argentinaToday,
   compareSummaries,
   formatDayLabel,
   formatMoney,
@@ -13,13 +12,10 @@ import {
   formatPct,
   isOutOfTarget,
   previousPeriod,
-  resolvePeriod,
   setTargetAwtPct,
   setTargetComplaintPct,
   summarizeRange,
 } from '../lib/metrics';
-import { getSavedPeriod, savePeriod } from '../lib/metricsStore';
-
 function formatDelta(value, { pct = false, money = false } = {}) {
   if (value == null || Number.isNaN(Number(value))) return '—';
   const formatted = money ? formatMoney(Math.abs(value)) : pct ? formatPct(Math.abs(value)) : formatNumber(Math.abs(value));
@@ -178,7 +174,10 @@ export default function MetricsDashboard({
   onFocusDay,
   onAggregator,
 }) {
-  const range = focusDay ? { from: focusDay, to: focusDay } : period;
+  const range = useMemo(
+    () => (focusDay ? { from: focusDay, to: focusDay } : period),
+    [focusDay, period],
+  );
   const previous = useMemo(() => previousPeriod(range.from, range.to), [range]);
   const historyFlags = useMemo(
     () => groupHistoryFlags(history, previous.from, range.to),
@@ -345,46 +344,4 @@ export default function MetricsDashboard({
       )}
     </div>
   );
-}
-
-export function useMetricsPeriod() {
-  const savedPeriod = getSavedPeriod();
-  const [preset, setPreset] = useState(savedPeriod.preset || 'week');
-  const [customFrom, setCustomFrom] = useState(savedPeriod.customFrom || '');
-  const [customTo, setCustomTo] = useState(savedPeriod.customTo || '');
-  const today = argentinaToday();
-  const period = useMemo(
-    () => resolvePeriod(preset, today, customFrom, customTo),
-    [preset, today, customFrom, customTo],
-  );
-
-  function applyPreset(id) {
-    setPreset(id);
-    savePeriod({ preset: id, customFrom, customTo });
-    if (id === 'custom') {
-      const next = resolvePeriod(preset === 'custom' ? 'week' : preset, today, customFrom, customTo);
-      setCustomFrom(customFrom || next.from);
-      setCustomTo(customTo || next.to);
-    }
-  }
-
-  function changeCustomFrom(value) {
-    setCustomFrom(value);
-    savePeriod({ preset, customFrom: value, customTo });
-  }
-
-  function changeCustomTo(value) {
-    setCustomTo(value);
-    savePeriod({ preset, customFrom, customTo: value });
-  }
-
-  return {
-    preset,
-    customFrom,
-    customTo,
-    period,
-    applyPreset,
-    changeCustomFrom,
-    changeCustomTo,
-  };
 }

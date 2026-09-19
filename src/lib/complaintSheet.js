@@ -204,15 +204,15 @@ export function parseMoneyAmount(value) {
   }
 
   const text = String(value).trim();
-  if (!text || /[/\-]/.test(text)) return null;
+  if (!text || /[/-]/.test(text)) return null;
 
   let cleaned = text.replace(/\s/g, '');
   if (/[a-z]/i.test(cleaned) && !/(ars|usd|pesos)/i.test(cleaned)) return null;
   cleaned = cleaned
     .replace(/^(ars|usd|pesos)/i, '')
     .replace(/(ars|usd|pesos)$/i, '')
-    .replace(/^[\$€]/, '')
-    .replace(/[\$€]$/, '');
+    .replace(/^[$€]/, '')
+    .replace(/[$€]$/, '');
   if (!cleaned || !/^\d{1,3}([.,]\d{3})*([.,]\d{1,2})?$|^\d+([.,]\d{1,2})?$/.test(cleaned)) {
     return null;
   }
@@ -245,7 +245,7 @@ export function parseMoneyAmount(value) {
 function looksLikeMoneyCell(value) {
   const text = String(value || '').trim();
   if (!text) return false;
-  if (/[\$€]|ars|pesos/i.test(text)) return parseMoneyAmount(text) != null;
+  if (/[$€]|ars|pesos/i.test(text)) return parseMoneyAmount(text) != null;
   if (/[.,]\d{1,2}$/.test(text.replace(/\s/g, ''))) return parseMoneyAmount(text) != null;
   const amount = parseMoneyAmount(text);
   if (amount == null || amount === 0) return false;

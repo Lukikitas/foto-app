@@ -6,17 +6,61 @@ import {
   loadComplaintHistory,
   setHistoryPhoto,
 } from '../lib/complaintHistoryStore';
-import { emptyStore, METRIC_PAGE_TABS } from '../lib/metrics';
+import { argentinaToday, emptyStore, METRIC_PAGE_TABS, resolvePeriod } from '../lib/metrics';
 import {
+  getMetricsView,
+  getSavedPeriod,
   loadMetricsStore,
   saveMetricsStore,
   saveMetricsView,
-  getMetricsView,
+  savePeriod,
 } from '../lib/metricsStore';
 import MetricsComplaintsList from './MetricsComplaintsList';
-import MetricsDashboard, { MetricsPeriodBar, useMetricsPeriod } from './MetricsDashboard';
+import MetricsDashboard, { MetricsPeriodBar } from './MetricsDashboard';
 import MetricsEntry from './MetricsEntry';
 import MetricsReport from './MetricsReport';
+
+function useMetricsPeriod() {
+  const savedPeriod = getSavedPeriod();
+  const [preset, setPreset] = useState(savedPeriod.preset || 'week');
+  const [customFrom, setCustomFrom] = useState(savedPeriod.customFrom || '');
+  const [customTo, setCustomTo] = useState(savedPeriod.customTo || '');
+  const today = argentinaToday();
+  const period = useMemo(
+    () => resolvePeriod(preset, today, customFrom, customTo),
+    [preset, today, customFrom, customTo],
+  );
+
+  function applyPreset(id) {
+    setPreset(id);
+    savePeriod({ preset: id, customFrom, customTo });
+    if (id === 'custom') {
+      const next = resolvePeriod(preset === 'custom' ? 'week' : preset, today, customFrom, customTo);
+      setCustomFrom(customFrom || next.from);
+      setCustomTo(customTo || next.to);
+    }
+  }
+
+  function changeCustomFrom(value) {
+    setCustomFrom(value);
+    savePeriod({ preset, customFrom: value, customTo });
+  }
+
+  function changeCustomTo(value) {
+    setCustomTo(value);
+    savePeriod({ preset, customFrom, customTo: value });
+  }
+
+  return {
+    preset,
+    customFrom,
+    customTo,
+    period,
+    applyPreset,
+    changeCustomFrom,
+    changeCustomTo,
+  };
+}
 
 export default function MetricsPage() {
   const [view, setView] = useState(getMetricsView);
