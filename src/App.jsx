@@ -40,56 +40,11 @@ export default function App() {
 
   return (
     <div className="app">
-      <UpdatePrompt />
-      <InstallPrompt />
-
-      <button
-        type="button"
-        className="app__theme-toggle"
-        onClick={handleThemeToggle}
-        aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-      >
-        {theme === 'dark' ? '☀' : '☾'}
-      </button>
-
-      <main className="app__main">
-        {tab === TABS.capture && (
-          <>
-            <PhotoUploader />
-            <UploadQueueStatus />
-          </>
-        )}
-        {tab === TABS.orders && (
-          <PhotoGallery
-            key="orders-gallery"
-            refreshKey={refreshKey}
-            kind={PHOTO_GALLERY_KINDS.orders}
-            title="Pedidos"
-            itemLabel="pedido"
-            emptyMessage="Todavia no hay fotos de pedidos registradas. Subi la primera."
-            searchLabel="Pedido"
-            searchPlaceholder="PEYA12345 o 4696"
-          />
-        )}
-        {tab === TABS.complaints && <ComplaintsInbox />}
-        <div hidden={tab !== TABS.metrics}>
-          <MetricsPage />
-        </div>
-        {tab === TABS.files && (
-          <PhotoGallery
-            key="files-gallery"
-            refreshKey={refreshKey}
-            kind={PHOTO_GALLERY_KINDS.files}
-            title="Archivos"
-            itemLabel="archivo"
-            emptyMessage="Todavia no hay archivos generales registrados. Subi el primero."
-            searchLabel="Archivo"
-            searchPlaceholder="remito, factura..."
-          />
-        )}
-      </main>
-
       <nav className="app-nav" aria-label="Navegacion principal">
+        <p className="app-nav__brand">
+          Delivery
+          <span>La Plata</span>
+        </p>
         <span className="app__version">v{APP_VERSION}</span>
         <div className="app-nav__buttons">
           <button
@@ -134,6 +89,57 @@ export default function App() {
           </button>
         </div>
       </nav>
+
+      <div className="app__shell">
+        <UpdatePrompt />
+        <InstallPrompt />
+
+        <button
+          type="button"
+          className="app__theme-toggle"
+          onClick={handleThemeToggle}
+          aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        >
+          {theme === 'dark' ? '☀' : '☾'}
+        </button>
+
+        <main className="app__main">
+          {tab === TABS.capture && (
+            <>
+              <PhotoUploader />
+              <UploadQueueStatus />
+            </>
+          )}
+          {tab === TABS.orders && (
+            <PhotoGallery
+              key="orders-gallery"
+              refreshKey={refreshKey}
+              kind={PHOTO_GALLERY_KINDS.orders}
+              title="Pedidos"
+              itemLabel="pedido"
+              emptyMessage="Todavia no hay fotos de pedidos registradas. Subi la primera."
+              searchLabel="Pedido"
+              searchPlaceholder="PEYA12345 o 4696"
+            />
+          )}
+          {tab === TABS.complaints && <ComplaintsInbox />}
+          <div hidden={tab !== TABS.metrics}>
+            <MetricsPage />
+          </div>
+          {tab === TABS.files && (
+            <PhotoGallery
+              key="files-gallery"
+              refreshKey={refreshKey}
+              kind={PHOTO_GALLERY_KINDS.files}
+              title="Archivos"
+              itemLabel="archivo"
+              emptyMessage="Todavia no hay archivos generales registrados. Subi el primero."
+              searchLabel="Archivo"
+              searchPlaceholder="remito, factura..."
+            />
+          )}
+        </main>
+      </div>
     </div>
   );
 }
