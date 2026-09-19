@@ -5,21 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#121212" />
     <meta name="robots" content="noindex" />
-    <title>Delivery La Plata · Dirección</title>
+    <title>Delivery La Plata · KFC La Plata</title>
     <link rel="icon" type="image/png" href="/pwa-192.png" />
     <style>
       :root {
         --red: #e4002b;
-        --red-2: #ff3355;
-        --bg: #0e0e0e;
-        --slide: #121212;
-        --card: #1c1c1c;
-        --line: #2d2d2d;
-        --text: #c5c9d1;
-        --head: #f3f4f6;
-        --muted: #8b919c;
-        --ok: #4ade80;
-        --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+        --bg: #0c0c0d;
+        --slide: #111113;
+        --card: #1a1b1e;
+        --line: #2c2e33;
+        --text: #c3c6ce;
+        --head: #f4f5f7;
+        --muted: #8a8f99;
+        --ok: #3dcc7a;
+        --sans: 'Segoe UI', system-ui, Roboto, sans-serif;
       }
 
       * { box-sizing: border-box; }
@@ -36,7 +35,7 @@
         position: fixed;
         top: 0;
         left: 0;
-        height: 3px;
+        height: 2px;
         width: 0;
         background: var(--red);
         z-index: 20;
@@ -47,127 +46,128 @@
         display: none;
         width: 100vw;
         height: 100vh;
-        padding: 4.2vh 4.5vw 7.5vh;
+        padding: 4.6vh 4.4vw 7.2vh;
         flex-direction: column;
-        gap: 1.4vh;
+        gap: 1.15vh;
         background: var(--slide);
       }
       .slide.is-on { display: flex; }
 
       .kicker {
-        color: var(--red-2);
-        font-size: clamp(0.7rem, 1.4vh, 0.9rem);
-        font-weight: 800;
-        letter-spacing: 0.16em;
+        margin: 0;
+        color: var(--red);
+        font-size: clamp(0.68rem, 1.35vh, 0.82rem);
+        font-weight: 700;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
       }
       h1, h2 {
         margin: 0;
         color: var(--head);
-        font-weight: 800;
+        font-weight: 700;
         letter-spacing: -0.03em;
-        line-height: 1.08;
+        line-height: 1.12;
       }
-      h1 { font-size: clamp(2.1rem, 6.2vh, 4.4rem); }
-      h2 { font-size: clamp(1.45rem, 3.8vh, 2.4rem); }
+      h1 { font-size: clamp(2rem, 5.6vh, 3.6rem); }
+      h2 { font-size: clamp(1.35rem, 3.4vh, 2.15rem); }
       .lead {
         margin: 0;
-        max-width: 44rem;
-        font-size: clamp(1rem, 2.2vh, 1.25rem);
-        line-height: 1.4;
+        max-width: 48rem;
+        font-size: clamp(0.95rem, 2.05vh, 1.18rem);
+        line-height: 1.45;
       }
       .muted { color: var(--muted); }
 
       .grow { flex: 1; min-height: 0; }
       .row {
         display: grid;
-        gap: 1.2rem;
+        gap: 1.05rem;
         min-height: 0;
         flex: 1;
       }
       .row-2 { grid-template-columns: 1fr 1fr; }
       .row-3 { grid-template-columns: repeat(3, 1fr); }
-      .row-4 { grid-template-columns: repeat(4, 1fr); align-items: stretch; flex: 0 0 auto; }
-      .row-phone { grid-template-columns: minmax(240px, 320px) 1fr; align-items: center; }
+      .row-split { grid-template-columns: minmax(280px, 0.78fr) 1.32fr; }
+      .row-copy-shot { grid-template-columns: minmax(300px, 0.9fr) 1.2fr; }
+      .row-phone { grid-template-columns: minmax(210px, 250px) minmax(210px, 250px) 1fr; align-items: center; }
+      .row-stats { grid-template-columns: repeat(4, 1fr); flex: 0 0 auto; }
 
       .card {
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 1.25rem 1.25rem 1.35rem;
+        border-radius: 12px;
+        padding: 1.05rem 1.1rem 1.15rem;
       }
       .card h3 {
-        margin: 0 0 0.45rem;
+        margin: 0 0 0.4rem;
         color: var(--head);
-        font-size: clamp(1.02rem, 2.2vh, 1.25rem);
+        font-size: clamp(0.98rem, 2.1vh, 1.18rem);
+        font-weight: 700;
       }
-      .card p { margin: 0; font-size: clamp(0.92rem, 1.9vh, 1.08rem); line-height: 1.45; }
-      .n {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1.55rem;
-        height: 1.55rem;
-        margin-bottom: 0.7rem;
-        border-radius: 999px;
-        background: var(--red);
-        color: #fff;
-        font-size: 0.8rem;
-        font-weight: 800;
+      .card p {
+        margin: 0;
+        font-size: clamp(0.86rem, 1.75vh, 1rem);
+        line-height: 1.42;
+      }
+      .card .mod {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: var(--red);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
       }
 
-      .shot-wrap {
+      .shot {
         flex: 1;
         min-height: 0;
         display: flex;
-        background: #0a0a0a;
+        background: #09090a;
         border: 1px solid var(--line);
-        border-radius: 14px;
+        border-radius: 12px;
         overflow: hidden;
       }
-      .shot-wrap img,
-      .shot-wrap video {
+      .shot img,
+      .shot video {
         width: 100%;
         height: 100%;
-        object-fit: cover;
-        object-position: top center;
-        background: #0a0a0a;
+        object-fit: contain;
+        object-position: center;
+        background: #09090a;
       }
-      .shot-wrap--video video,
-      .shot-wrap--fit img { object-fit: contain; }
+      .shot--top img { object-fit: cover; object-position: top center; }
       .caption {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        align-items: baseline;
         color: var(--muted);
-        font-size: clamp(0.82rem, 1.7vh, 0.98rem);
+        font-size: clamp(0.78rem, 1.55vh, 0.92rem);
       }
-      .caption strong { color: var(--head); font-weight: 700; }
+      .caption strong { color: var(--head); font-weight: 650; }
 
       .stat {
         display: flex;
         flex-direction: column;
-        gap: 0.15rem;
+        gap: 0.2rem;
+        padding: 0.85rem 1rem;
       }
       .stat b {
-        color: var(--ok);
-        font-size: clamp(1.6rem, 4.4vh, 2.4rem);
+        color: var(--head);
+        font-size: clamp(1.35rem, 3.6vh, 2rem);
         letter-spacing: -0.04em;
         line-height: 1;
       }
-      .stat span { color: var(--muted); font-size: 0.88rem; }
-      .stat b.plain { color: var(--head); }
-      .stat b.risk { color: #f97066; }
+      .stat b.ok { color: var(--ok); }
+      .stat span { color: var(--muted); font-size: 0.82rem; }
 
       .phone {
-        width: min(320px, 32vw);
+        width: min(240px, 24vw);
         margin: 0 auto;
-        padding: 10px;
-        background: #1a1a1a;
-        border-radius: 28px;
-        border: 1px solid #3a3a3a;
-        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+        padding: 8px;
+        background: #17181b;
+        border-radius: 26px;
+        border: 1px solid #3a3c42;
       }
       .phone img {
         display: block;
@@ -178,25 +178,23 @@
       .cta {
         display: inline-flex;
         align-items: center;
-        gap: 0.5rem;
-        margin-top: 1.1rem;
-        padding: 0.7rem 1.1rem;
-        border-radius: 999px;
+        margin-top: 1rem;
+        padding: 0.62rem 1.05rem;
+        border-radius: 8px;
         background: var(--red);
         color: #fff;
-        font-weight: 800;
+        font-weight: 700;
         text-decoration: none;
       }
-      .cta:hover { background: var(--red-2); }
       .ghost {
         display: inline-flex;
-        margin-left: 0.6rem;
-        padding: 0.7rem 1.1rem;
-        border-radius: 999px;
+        margin-left: 0.5rem;
+        padding: 0.62rem 1.05rem;
+        border-radius: 8px;
         border: 1px solid var(--line);
         color: var(--head);
         text-decoration: none;
-        font-weight: 700;
+        font-weight: 650;
       }
 
       .hud {
@@ -208,179 +206,107 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0.55rem 1.1rem 0.7rem;
-        background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+        padding: 0.5rem 1.1rem 0.65rem;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
         color: var(--muted);
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
+        font-size: 0.78rem;
+        font-weight: 650;
         user-select: none;
       }
       .hud b { color: var(--head); }
       .hud button {
         appearance: none;
         border: 1px solid var(--line);
-        background: #1c1c1c;
+        background: #1a1b1e;
         color: var(--head);
-        border-radius: 8px;
-        width: 2.1rem;
-        height: 2.1rem;
-        font-size: 1rem;
+        border-radius: 7px;
+        width: 2rem;
+        height: 2rem;
+        font-size: 0.95rem;
         cursor: pointer;
       }
       .hud button:disabled { opacity: 0.35; cursor: default; }
-      .keys { color: #6e7480; }
+      .keys { color: #6b707a; }
 
-      .notes {
-        display: none;
-        position: fixed;
-        right: 1rem;
-        bottom: 3.4rem;
-        z-index: 30;
-        max-width: 22rem;
-        padding: 0.85rem 1rem;
-        background: #1c1c1c;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        color: var(--head);
-        font-size: 0.9rem;
+      .split-copy { display: flex; flex-direction: column; gap: 0.85rem; min-height: 0; }
+      .facts {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .facts li {
+        position: relative;
+        margin: 0;
+        padding: 0.42rem 0 0.42rem 1rem;
+        border-top: 1px solid var(--line);
+        font-size: clamp(0.88rem, 1.8vh, 1.02rem);
         line-height: 1.4;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        color: var(--text);
       }
-      .notes.is-on { display: block; }
-      .notes small { display: block; color: var(--muted); margin-bottom: 0.35rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 800; }
-
-      .hero {
-        position: relative;
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        padding: 2.2rem;
-        border-radius: 16px;
-        overflow: hidden;
-        border: 1px solid var(--line);
-      }
-      .hero img {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: top;
-        filter: brightness(0.38) saturate(0.95);
-      }
-      .hero .copy { position: relative; z-index: 1; max-width: 50rem; }
-      .hero .copy h1 { text-shadow: 0 10px 40px rgba(0, 0, 0, 0.75); }
-      .hero .copy .kicker { margin: 0 0 0.65rem; }
-      .hero .copy p { margin: 0.55rem 0 0; font-size: clamp(1rem, 2.2vh, 1.2rem); }
-      .takeaways { margin: 1.1rem 0 0; padding: 0; list-style: none; }
-      .takeaways li {
-        position: relative;
-        margin: 0.45rem 0;
-        padding-left: 1.1rem;
-        color: var(--head);
-        font-size: clamp(0.95rem, 2vh, 1.12rem);
-      }
-      .takeaways li::before {
+      .facts li:first-child { border-top: 0; }
+      .facts li::before {
         content: '';
         position: absolute;
         left: 0;
-        top: 0.55em;
-        width: 0.45rem;
-        height: 0.45rem;
+        top: 0.85em;
+        width: 0.38rem;
+        height: 0.38rem;
         border-radius: 99px;
         background: var(--red);
       }
+      .facts strong { color: var(--head); font-weight: 650; }
 
-      .cam {
+      .photo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.85rem;
+        min-height: 0;
+      }
+      .photo {
+        min-height: 0;
         display: flex;
         flex-direction: column;
-        min-height: 0;
-        background: #0a0a0a;
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        overflow: hidden;
-      }
-      .cam img {
-        display: block;
-        width: 100%;
-        flex: 1;
-        min-height: 0;
-        object-fit: cover;
-      }
-      .cam__bar {
-        padding: 0.55rem 0.85rem;
-        background: #000;
-        color: #fff;
-        font-weight: 800;
-        font-size: clamp(0.82rem, 1.8vh, 0.98rem);
-      }
-      .cam__hint {
-        padding: 0.45rem 0.85rem;
-        color: #ddd;
-        font-size: clamp(0.78rem, 1.6vh, 0.9rem);
-        background: #161616;
-      }
-      .cam__btn {
-        margin: 0.55rem 0.75rem 0.75rem;
-        padding: 0.55rem;
-        text-align: center;
-        border-radius: 10px;
-        background: var(--red);
-        color: #fff;
-        font-weight: 800;
-      }
-      .queue-pill {
-        display: inline-flex;
-        align-self: center;
-        gap: 0.45rem;
-        margin: 0.15rem auto 0;
-        padding: 0.45rem 0.95rem;
-        border-radius: 999px;
-        background: #1a1a1a;
-        border: 1px solid var(--line);
-        color: var(--head);
-        font-weight: 700;
-        font-size: clamp(0.85rem, 1.8vh, 1rem);
-      }
-      .queue-pill em { color: var(--ok); font-style: normal; }
-      .ex {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 14px;
+        border-radius: 12px;
         overflow: hidden;
       }
-      .ex img {
-        width: 100%;
+      .photo img {
         flex: 1;
         min-height: 0;
-        object-fit: contain;
-        object-position: top;
-        background: #111;
+        width: 100%;
+        object-fit: cover;
+        object-position: center 18%;
+        background: #0a0a0b;
       }
-      .ex .body { padding: 0.85rem 1rem 1rem; }
-      .ex .from {
-        color: var(--muted);
-        font-size: clamp(0.78rem, 1.6vh, 0.9rem);
+      .photo figcaption {
+        padding: 0.7rem 0.85rem 0.85rem;
+      }
+      .photo h3 {
+        margin: 0 0 0.25rem;
+        color: var(--head);
+        font-size: clamp(0.95rem, 2vh, 1.1rem);
+      }
+      .code {
         font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-      }
-      .ex .to {
-        margin-top: 0.3rem;
         color: var(--ok);
-        font-size: clamp(0.95rem, 2vh, 1.12rem);
-        font-weight: 800;
+        font-size: clamp(0.82rem, 1.7vh, 0.95rem);
+        font-weight: 700;
+      }
+      .code-from {
+        color: var(--muted);
+        font-size: clamp(0.75rem, 1.5vh, 0.86rem);
         font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
       }
-      .ex h3 { margin: 0 0 0.4rem; }
+
+      .mods { grid-template-columns: repeat(3, 1fr); flex: 0 0 auto; align-items: stretch; }
+      .mods .card { min-height: 0; }
 
       @media (max-width: 860px) {
-        .row-2, .row-3, .row-4, .row-phone { grid-template-columns: 1fr; }
-        .phone { width: min(240px, 70vw); }
+        .row-2, .row-3, .row-split, .row-copy-shot, .row-phone, .row-stats, .mods, .photo-grid {
+          grid-template-columns: 1fr;
+        }
+        .phone { width: min(220px, 68vw); }
         .slide { padding: 3vh 4vw 8.5vh; }
       }
     </style>
@@ -388,188 +314,242 @@
   <body>
     <div class="progress" id="progress"></div>
 
-    <section class="slide is-on" data-notes="Abrí con plata y velocidad. No es un sistema de oficina: es cómo el local deja de perder minutos en packing y pesos en quejas.">
-      <div class="hero">
-        <img src="01-metricas.png" alt="" />
-        <div class="copy">
-          <p class="kicker">KFC La Plata · Dirección</p>
-          <h1>Menos tiempo por pedido.<br />Más plata recuperada.</h1>
-          <p>Cada queja sin foto se pierde. Cada código tipeado a mano frena el packing. Esta app ataca las dos cosas.</p>
+    <section class="slide is-on">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <div class="row row-split grow">
+        <div class="split-copy">
+          <h1>Delivery La Plata</h1>
+          <p class="lead">Aplicación del local para registrar la evidencia de cada pedido, cruzar reclamos con fotos y controlar la operación por agregador.</p>
+          <ul class="facts">
+            <li>Captura de ticket y evidencia, con lectura automática del código.</li>
+            <li>Galería por PedidosYa, Rappi, Rappi Turbo y Mercado Pago.</li>
+            <li>Cruce de reclamos con fotos y apertura del portal de cada agregador.</li>
+            <li>Historial con estados y montos. Métricas de pedidos, quejas y AWT.</li>
+            <li>Escritorio 16:9 y teléfono. Se instala como aplicación, sin inicio de sesión.</li>
+          </ul>
+        </div>
+        <div class="shot">
+          <img src="05-pedidos.png" alt="Galería de pedidos en escritorio" />
         </div>
       </div>
-      <p class="caption"><span><strong>Delivery La Plata</strong> · ya está en el local</span><span>delivery.star-app.com.ar</span></p>
+      <p class="caption"><span><strong>delivery.star-app.com.ar</strong> · versión 1.16</span><span>En uso en el local</span></p>
     </section>
 
-    <section class="slide" data-notes="Números de esta semana en la app: 604 pedidos, 12 quejas, $9.025 en juego, $2.443 recuperado, quedan $6.582. Objetivo 2,4%; vamos 1,99%. El número que se llevan: cuánto se recupera y cuánto sigue perdido.">
-      <p class="kicker">Esta semana · en la app</p>
-      <h2>La queja se mide en pesos, no en tickets.</h2>
-      <p class="lead muted">PedidosYa, Rappi, Turbo y Mercado Pago en un tablero. Objetivo de quejas 2,4%.</p>
-      <div class="row row-4" style="flex: 0 0 auto;">
-        <article class="card stat">
-          <b class="plain">604</b>
-          <span>pedidos del período</span>
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>Seis módulos. Un solo flujo de trabajo.</h2>
+      <p class="lead muted">De la foto del ticket al tablero operativo, sin transcribir códigos ni buscar evidencias a mano.</p>
+      <div class="row mods">
+        <article class="card">
+          <span class="mod">01</span>
+          <h3>Captura</h3>
+          <p>Cámara en dos pasos: ticket y evidencia. Lectura óptica del código en segundo plano. Cola de subida para no detener el turno.</p>
         </article>
-        <article class="card stat">
-          <b>1,99%</b>
-          <span>quejas · objetivo 2,4%</span>
+        <article class="card">
+          <span class="mod">02</span>
+          <h3>Galería de pedidos</h3>
+          <p>Cada pedido queda con foto, código y agregador. Búsqueda, filtros, vista de fotos o listado, y sincronización en vivo.</p>
         </article>
-        <article class="card stat">
-          <b class="risk">$ 9.025</b>
-          <span>$ en quejas (en juego)</span>
+        <article class="card">
+          <span class="mod">03</span>
+          <h3>Reclamos</h3>
+          <p>Se importa el listado del día, se cruza con las fotos y se abre el portal del agregador con el código copiado.</p>
         </article>
-        <article class="card stat">
-          <b>$ 2.443</b>
-          <span>$ recuperado · queda $ 6.582</span>
+        <article class="card">
+          <span class="mod">04</span>
+          <h3>Historial</h3>
+          <p>Cada queja conserva monto, foto y estado: Queja, Refutado, Ref. aceptado o Ref. rechazado. Filtro por período y agregador.</p>
+        </article>
+        <article class="card">
+          <span class="mod">05</span>
+          <h3>Métricas</h3>
+          <p>Pedidos, % de quejas, % AWT y montos (en quejas, recuperado y perdido), con objetivo editable y corte por agregador.</p>
+        </article>
+        <article class="card">
+          <span class="mod">06</span>
+          <h3>Archivos</h3>
+          <p>Documentos del local —remitos, Excel, evidencias generales— en el mismo repositorio, con autor y fecha.</p>
         </article>
       </div>
-      <div class="shot-wrap grow shot-wrap--fit">
-        <img src="01-metricas.png" alt="Tablero de operación y plata por agregador" />
-      </div>
-      <p class="caption"><span>Plata perdida = quejas menos lo reconocido por el agregador</span><span>Se actualiza al marcar Ref. aceptado</span></p>
-    </section>
-
-    <section class="slide" data-notes="Tres fugas de plata: sin foto se paga; tipear el código saca menos evidencias; sin cruce no se disputa. Un flujo las cierra.">
-      <p class="kicker">Dónde se va la plata</p>
-      <h2>Tres fugas. Un solo flujo las cierra.</h2>
-      <div class="row row-3">
-        <article class="card">
-          <span class="n">1</span>
-          <h3>Sin foto, se paga</h3>
-          <p>El agregador cobra la queja. Si no hay evidencia del pedido, no hay con qué disputar. Esa plata no vuelve.</p>
-        </article>
-        <article class="card">
-          <span class="n">2</span>
-          <h3>Tipear el código cuesta turnos</h3>
-          <p>PEYA-2286878556 a mano, en hora pico, es tiempo que no se empaca. Menos fotos = más quejas sin defensa.</p>
-        </article>
-        <article class="card">
-          <span class="n">3</span>
-          <h3>Sin cruce, no hay recupero</h3>
-          <p>El Sheet llega con 20 filas. Buscar cada foto a ojo se saltea reclamos. Lo que no se marca, no se recupera.</p>
-        </article>
+      <div class="shot shot--top grow">
+        <img src="01-metricas.png" alt="Tablero de métricas" />
       </div>
     </section>
 
-    <section class="slide" data-notes="Velocidad: cámara abierta, ticket + bolsa, OCR atrás. 5 pares tomados y 3 códigos buscándose solos. Packing que no se frena.">
-      <p class="kicker">Velocidad en packing</p>
-      <h2>Cero tipear. La cámara no se cierra.</h2>
-      <p class="lead muted">Ticket y evidencia, y el siguiente. El código se lee solo, en paralelo, mientras sigue el turno.</p>
-      <div class="row row-2 grow">
-        <div class="cam">
-          <div class="cam__bar">1 · Ticket (el código)</div>
-          <img src="cam-ticket.png" alt="Ticket PedidosYa real" />
-          <div class="cam__hint">Donde dice CODIGO. Nadie lo escribe.</div>
-          <div class="cam__btn">Foto del ticket</div>
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>Captura: ticket, evidencia y código leído.</h2>
+      <div class="row row-copy-shot grow">
+        <div class="split-copy">
+          <p class="lead muted">Pensada para el celular en el mostrador. El escritorio permite cargar desde la galería del equipo.</p>
+          <ul class="facts">
+            <li><strong>Cámara rápida</strong> — primero el ticket, después la evidencia. La cámara no se cierra entre pedidos.</li>
+            <li><strong>Lectura óptica (OCR)</strong> de PedidosYa, Rappi, Rappi Turbo y Mercado Pago, en paralelo a la siguiente toma.</li>
+            <li><strong>Foto sin lectura</strong> si el ticket no se ve. La evidencia se guarda igual y el código se puede completar a mano.</li>
+            <li><strong>Cola de subida</strong>, nombre de quien tomó la foto, anotaciones y marca de refutado.</li>
+          </ul>
         </div>
-        <div class="cam">
-          <div class="cam__bar">2 · Evidencia (la defensa)</div>
-          <img src="ejemplo-bolsa.png" alt="Bolsa KFC con ticket" />
-          <div class="cam__hint">Bolsa, contenido y ticket a la vista</div>
-          <div class="cam__btn">Foto de evidencia</div>
-        </div>
+        <figure class="photo">
+          <img src="ejemplo-bolsa.jpg" alt="Evidencia: bolsa y ticket" />
+          <figcaption>
+            <h3>Paso 2 · Evidencia</h3>
+            <p class="muted" style="margin:0;font-size:0.88rem">Bolsa, contenido y ticket a la vista. Es la defensa del reclamo.</p>
+          </figcaption>
+        </figure>
       </div>
-      <p class="queue-pill">Hora pico: <em>5 pares tomados · 3 códigos leyéndose</em> · packing no espera</p>
     </section>
 
-    <section class="slide" data-notes="El OCR es el puente a la plata: sin código no hay cruce, sin cruce no hay recupero. Si el ticket sale mal, igual se guarda la evidencia.">
-      <p class="kicker">El código es el cobro</p>
-      <h2>Si no hay código, no hay recupero.</h2>
-      <p class="lead muted">El OCR nombra el pedido. Con eso se cruza el Sheet, se abre el portal y se disputa el peso.</p>
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>El código se lee del ticket. No se transcribe.</h2>
+      <p class="lead muted">El OCR busca la línea de código, corrige lecturas dudosas y nombra el archivo con el pedido. Si falla, la foto no se pierde.</p>
       <div class="row row-3 grow">
-        <article class="ex">
-          <img src="ejemplo-peya.png" alt="Ticket PedidosYa leído por OCR" />
-          <div class="body">
+        <figure class="photo">
+          <img src="ejemplo-peya.jpg" alt="Ticket PedidosYa" />
+          <figcaption>
             <h3>PedidosYa</h3>
-            <div class="from">CODIGO: PEYA-2286878556</div>
-            <div class="to">→ listo para cruzar y disputar</div>
-          </div>
-        </article>
-        <article class="ex">
-          <img src="ejemplo-rappi.png" alt="Ticket Rappi leído por OCR" />
-          <div class="body">
+            <div class="code-from">CODIGO: PEYA-2286878556</div>
+            <div class="code">Pedido #PEYA-2286878556</div>
+          </figcaption>
+        </figure>
+        <figure class="photo">
+          <img src="ejemplo-rappi.jpg" alt="Ticket Rappi" />
+          <figcaption>
             <h3>Rappi</h3>
-            <div class="from">CODIGO: RAPPI-480403041</div>
-            <div class="to">→ listo para cruzar y disputar</div>
-          </div>
-        </article>
-        <article class="ex">
-          <div class="body" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
-            <h3>Si el ticket sale mal</h3>
-            <div class="from">OCR ve: C0D1GO P3YA 99881</div>
-            <div class="to">→ igual guarda PEYA99881</div>
-            <p style="margin: 0.85rem 0 0; font-size: 0.92rem;">La evidencia no se pierde. Un pedido sin foto es un reclamo que se paga entero.</p>
-          </div>
-        </article>
+            <div class="code-from">CODIGO: RAPPI-480403041</div>
+            <div class="code">Pedido #RAPPI-480403041</div>
+          </figcaption>
+        </figure>
+        <figure class="photo">
+          <img src="03-lightbox.png" alt="Pedido identificado en la galería" />
+          <figcaption>
+            <h3>Queda nombrado en la galería</h3>
+            <div class="code-from">También Rappi Turbo (RAPPITURBO) y Mercado Pago (MP, MPD)</div>
+            <div class="code">Si el ticket no se lee, la foto se guarda igual</div>
+          </figcaption>
+        </figure>
       </div>
     </section>
 
-    <section class="slide" data-notes="Reclamos: pegás el Sheet o se lee solo después de las 13:30. Cruzar con fotos. Marcar refutado. Abrir portal. Historial con $ por queja.">
-      <p class="kicker">Recupero</p>
-      <h2>El Sheet se cruza. La queja se disputa.</h2>
-      <p class="lead muted">Después de las 13:30 el cruce es compartido entre dispositivos. Otra lista se pega en segundos.</p>
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>Galería: cada pedido queda identificado.</h2>
       <div class="row row-2 grow">
-        <div class="shot-wrap shot-wrap--fit">
-          <img src="06-reclamos.png" alt="Cruzar reclamos con fotos" />
+        <div class="shot">
+          <img src="05-pedidos.png" alt="Galería en vista de fotos" />
         </div>
-        <div class="shot-wrap shot-wrap--fit">
-          <img src="07-historial.png" alt="Historial de quejas con montos" />
+        <div class="shot">
+          <img src="05-pedidos-listado.png" alt="Galería en vista de listado" />
         </div>
       </div>
-      <p class="caption"><span>Cruzar → foto + código + $ → <strong>Refutado</strong> → portal</span><span>Historial con monto por queja</span></p>
+      <p class="caption">
+        <span>Vista <strong>Fotos</strong> y <strong>Listado</strong> · indicador En vivo · badges de agregador, reclamo y refutado</span>
+        <span>Ver, editar, descargar o borrar</span>
+      </p>
     </section>
 
-    <section class="slide" data-notes="Video 20s en silencio. Después el cierre con URL.">
-      <p class="kicker">La app</p>
-      <h2>20 segundos. Piso y plata.</h2>
-      <div class="shot-wrap shot-wrap--video grow">
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>Reclamos: el listado se cruza con las fotos.</h2>
+      <div class="row row-copy-shot grow">
+        <div class="split-copy">
+          <ul class="facts">
+            <li><strong>Importación</strong> — pegar celdas (código, hora, monto, combo, motivo) o archivo CSV.</li>
+            <li><strong>Agregador</strong> — detección por código, o asignación a PedidosYa, Rappi, Rappi Turbo o Mercado Pago si el listado viene sin prefijo.</li>
+            <li><strong>Cruce automático</strong> — enlace compartido; a las 13:30 (hora Argentina) el primer dispositivo que abre la app cruza el listado del día para todos.</li>
+            <li><strong>Resolución</strong> — Queja, Refutado, Ref. aceptado, Ref. rechazado. Copia del código y apertura de PedidosYa Portal o Rappi Partners.</li>
+            <li><strong>Evidencia</strong> — descarga de la foto, carga si faltaba, exportación CSV del cruce.</li>
+            <li><strong>Historial</strong> — filtros Hoy / Ayer / 7 días / Semana / Mes / Rango, por agregador y por estado.</li>
+          </ul>
+        </div>
+        <div class="shot">
+          <img src="03-lightbox.png" alt="Evidencia de un pedido con reclamo" />
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>Métricas: operación y montos, por agregador.</h2>
+      <div class="row row-stats">
+        <article class="card stat">
+          <b>604</b>
+          <span>pedidos · semana en curso</span>
+        </article>
+        <article class="card stat">
+          <b class="ok">1,99%</b>
+          <span>quejas · objetivo 2,40%</span>
+        </article>
+        <article class="card stat">
+          <b class="ok">6,62%</b>
+          <span>AWT · objetivo 11%</span>
+        </article>
+        <article class="card stat">
+          <b>12</b>
+          <span>quejas en el período</span>
+        </article>
+      </div>
+      <div class="shot shot--top grow">
+        <img src="01-metricas.png" alt="Tablero de métricas en escritorio" />
+      </div>
+      <p class="caption">
+        <span>Operación y montos por agregador · objetivos editables · tabla diaria · informe para exportar o imprimir</span>
+        <span>Hoy, Ayer, 7 días, Semana, Mes o rango</span>
+      </p>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>Recorrido de la aplicación</h2>
+      <p class="lead muted">Métricas, galería, evidencia, captura, reclamos e historial. 32 segundos, sin audio.</p>
+      <div class="shot grow">
         <video id="demo" src="recorrido-app.mp4" muted loop playsinline controls preload="auto" poster="01-metricas.png"></video>
       </div>
     </section>
 
-    <section class="slide" data-notes="Cerrar con lo que se llevan: no se tipean códigos, cada queja tiene foto y $, se ve recuperado vs perdido. URL. Preguntas.">
-      <p class="kicker">En el local · ahora</p>
-      <h2>Ya está corriendo el turno.</h2>
+    <section class="slide">
+      <p class="kicker">KFC La Plata · Lucas Rodriguez</p>
+      <h2>En el local, en el teléfono y en el escritorio.</h2>
       <div class="row row-phone grow">
         <div class="phone">
-          <img src="08-metricas-mobile.png" alt="La app en el celular" />
+          <img src="08-metricas-mobile.png" alt="Métricas en el teléfono" />
+        </div>
+        <div class="phone">
+          <img src="02-captura-mobile.png" alt="Captura en el teléfono" />
         </div>
         <div>
-          <p class="lead">Sin login. Se instala como app. El packing no espera a un sistema de oficina.</p>
-          <ul class="takeaways">
-            <li>Packing más rápido: 0 tipeo de código, cámara siempre abierta</li>
-            <li>Cada queja queda con foto, código y monto</li>
-            <li>Se ve $ recuperado vs $ perdido, por agregador</li>
-            <li>El Sheet se cruza solo después de las 13:30</li>
+          <p class="lead">Aplicación web progresiva. El personal la instala en el inicio del celular. En PC ocupa el 16:9 del monitor.</p>
+          <ul class="facts">
+            <li>Cámara rápida con lectura de códigos de los cuatro agregadores</li>
+            <li>Galería en vivo, con reclamo y refutado visibles sobre cada pedido</li>
+            <li>Cruce del listado de quejas con fotos, portales y estados de resolución</li>
+            <li>Tablero de pedidos, AWT y montos recuperados, con objetivo por período</li>
           </ul>
-          <p class="lead" style="margin-top: 1.2rem"><strong style="color: var(--head)">delivery.star-app.com.ar</strong></p>
-          <a class="cta" href="https://delivery.star-app.com.ar/" target="_blank" rel="noreferrer">Abrir la app</a>
+          <p class="lead" style="margin-top: 1rem"><strong style="color: var(--head)">delivery.star-app.com.ar</strong></p>
+          <a class="cta" href="https://delivery.star-app.com.ar/" target="_blank" rel="noreferrer">Abrir la aplicación</a>
           <a class="ghost" href="https://delivery.star-app.com.ar/presentacion/" target="_blank" rel="noreferrer">Esta presentación</a>
         </div>
       </div>
     </section>
 
-    <aside class="notes" id="notes"></aside>
-
     <nav class="hud">
-      <span>KFC La Plata · Dirección</span>
+      <span>KFC La Plata · Lucas Rodriguez</span>
       <span>
         <button type="button" id="prev" aria-label="Anterior">←</button>
-        <b id="pos">1 / 8</b>
+        <b id="pos">1 / 9</b>
         <button type="button" id="next" aria-label="Siguiente">→</button>
       </span>
-      <span class="keys">→ siguiente · F pantalla completa · N notas</span>
+      <span class="keys">→ siguiente · F pantalla completa</span>
     </nav>
 
     <script>
       const slides = [...document.querySelectorAll('.slide')];
-      const notesEl = document.getElementById('notes');
       const posEl = document.getElementById('pos');
       const progressEl = document.getElementById('progress');
       const prevBtn = document.getElementById('prev');
       const nextBtn = document.getElementById('next');
       const demo = document.getElementById('demo');
       let i = 0;
-      let notesOn = false;
 
       function hashIndex() {
         const n = Number((location.hash || '').replace('#', ''));
@@ -583,19 +563,11 @@
         progressEl.style.width = ((i + 1) / slides.length) * 100 + '%';
         prevBtn.disabled = i === 0;
         nextBtn.disabled = i === slides.length - 1;
-        notesEl.innerHTML = '<small>Notas</small>' + (slides[i].dataset.notes || '');
-        notesEl.classList.toggle('is-on', notesOn);
         if (pushHash !== false) history.replaceState(null, '', '#' + (i + 1));
         if (demo) {
           if (slides[i].contains(demo)) demo.play().catch(() => {});
           else demo.pause();
         }
-      }
-
-      function onNotes() {
-        notesEl.classList.toggle('is-on', notesOn);
-        const text = slides[i].dataset.notes || '';
-        notesEl.innerHTML = '<small>Notas</small>' + text;
       }
 
       prevBtn.addEventListener('click', () => show(i - 1));
@@ -615,14 +587,11 @@
         } else if (e.key === 'f' || e.key === 'F') {
           if (document.fullscreenElement) document.exitFullscreen();
           else document.documentElement.requestFullscreen().catch(() => {});
-        } else if (e.key === 'n' || e.key === 'N') {
-          notesOn = !notesOn;
-          onNotes();
         }
       });
 
       document.addEventListener('click', (e) => {
-        if (e.target.closest('a, button, video, .notes, .hud')) return;
+        if (e.target.closest('a, button, video, .hud')) return;
         const x = e.clientX / window.innerWidth;
         show(x < 0.22 ? i - 1 : i + 1);
       });
@@ -639,7 +608,6 @@
 
       window.addEventListener('hashchange', () => show(hashIndex(), false));
       show(hashIndex(), false);
-      onNotes();
     </script>
   </body>
 </html>
