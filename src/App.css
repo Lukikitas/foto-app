@@ -715,6 +715,16 @@
   border-bottom: 1px solid var(--border);
 }
 
+.uploader__fields {
+  display: none;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.uploader--has-file .uploader__fields {
+  display: flex;
+}
+
 .uploader__file-btn--secondary {
   border-style: solid;
   background: var(--surface);

@@ -6,11 +6,13 @@ import { getLastTakenBy, getTakenByHistory, saveLastTakenBy } from '../lib/stora
 import { enqueue } from '../lib/uploadQueue';
 import { isPhoneViewport } from '../lib/viewport';
 
-const EMPTY_META = {
-  notes: '',
-  taken_by: getLastTakenBy(),
-  is_refutado: false,
-};
+function getEmptyMeta() {
+  return {
+    notes: '',
+    taken_by: getLastTakenBy(),
+    is_refutado: false,
+  };
+}
 
 const UPLOAD_MODES = {
   order: 'order',
@@ -32,7 +34,7 @@ export default function PhotoUploader() {
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [orderCameraOpen, setOrderCameraOpen] = useState(() => isPhoneViewport());
   const [title, setTitle] = useState('');
-  const [meta, setMeta] = useState(EMPTY_META);
+  const [meta, setMeta] = useState(getEmptyMeta);
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [error, setError] = useState(null);
   const [queuedMessage, setQueuedMessage] = useState(null);
@@ -90,6 +92,15 @@ export default function PhotoUploader() {
     }
   }
 
+  function closeOrderCamera() {
+    setTakenByHistory(getTakenByHistory());
+    setMeta((prev) => ({
+      ...prev,
+      taken_by: getLastTakenBy() || prev.taken_by,
+    }));
+    setOrderCameraOpen(false);
+  }
+
   function openOrderCamera() {
     const name = meta.taken_by.trim();
     if (!name) {
@@ -135,10 +146,7 @@ export default function PhotoUploader() {
     setShowManualOrder(false);
     setOrderCameraOpen(false);
     setTitle('');
-    setMeta({
-      ...EMPTY_META,
-      taken_by: getLastTakenBy(),
-    });
+    setMeta(getEmptyMeta());
     setTakenByHistory(getTakenByHistory());
     clearInputs();
   }
@@ -197,13 +205,13 @@ export default function PhotoUploader() {
   const photographerReady = Boolean(meta.taken_by.trim());
 
   return (
-    <section className="uploader">
+    <section className={`uploader${file ? ' uploader--has-file' : ''}`}>
       {orderCameraOpen && (
         <OrderCamera
           takenBy={meta.taken_by}
           onTakenByChange={(name) => updateMeta('taken_by', name)}
           onCapturePair={handleOrderCapture}
-          onCancel={() => setOrderCameraOpen(false)}
+          onCancel={closeOrderCamera}
         />
       )}
       <form className="uploader__form" onSubmit={handleSubmit}>
@@ -389,6 +397,16 @@ export default function PhotoUploader() {
           </div>
         )}
 
+        <button
+          type="submit"
+          className="btn btn--primary btn--large uploader__save"
+          disabled={saving || !file || (isOrderMode && !isValidOrderDigits(orderDigits))}
+        >
+          {saving ? 'Preparando...' : 'Guardar y seguir'}
+        </button>
+        </div>
+        </div>
+
         {error && (
           <p className="message message--error" role="alert">
             {error}
@@ -399,16 +417,6 @@ export default function PhotoUploader() {
             {queuedMessage}
           </p>
         )}
-
-        <button
-          type="submit"
-          className="btn btn--primary btn--large"
-          disabled={saving || !file || (isOrderMode && !isValidOrderDigits(orderDigits))}
-        >
-          {saving ? 'Preparando...' : 'Guardar y seguir'}
-        </button>
-        </div>
-        </div>
       </form>
     </section>
   );
