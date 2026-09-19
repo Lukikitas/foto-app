@@ -11,19 +11,29 @@ import {
   PARTNER_PORTALS,
 } from '../lib/aggregators';
 import {
-  fetchComplaintSheetText,
-  parseComplaintSheet,
-} from '../lib/complaintSheet';
-import { clipboardOrderCode, complaintRowStatus, matchComplaintsToPhotos } from '../lib/complaintMatch';
-import {
   attachHistoryToRows,
+  COMPLAINT_STATUS_LABELS,
+  COMPLAINT_STATUSES,
   historyItemToRow,
   listHistoryItems,
 } from '../lib/complaintHistory';
 import {
+  fetchComplaintSheetText,
+  parseComplaintSheet,
+} from '../lib/complaintSheet';
+import {
+  clipboardOrderCode,
+  complaintPhotoStatus,
+  complaintRowStatus,
+  matchComplaintsToPhotos,
+} from '../lib/complaintMatch';
+import { formatMoney } from '../lib/metrics';
+import {
   cachedComplaintHistory,
+  deleteHistoryItemById,
   importComplaintsToHistory,
   loadComplaintHistory,
+  setHistoryPhoto,
   setHistoryResolution,
   setHistoryResolutions,
 } from '../lib/complaintHistoryStore';
@@ -39,20 +49,22 @@ import {
   loadComplaintBatch,
   replacePhotosInRows,
   saveComplaintBatch,
+  uploadComplaintPhotoFile,
 } from '../lib/complaints';
 import { downloadPhoto, isImagePhoto } from '../lib/photos';
 import { getSavedSheetUrl, saveSheetUrl } from '../lib/storage';
+import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
 
 const FILTERS = [
-  { id: 'all', label: 'Todos' },
+  { id: 'all', label: 'Todas' },
+  { id: COMPLAINT_STATUSES.queja, label: 'Queja' },
+  { id: COMPLAINT_STATUSES.refutado, label: 'Refutado' },
+  { id: COMPLAINT_STATUSES.refutado_aceptado, label: 'Ref. aceptado' },
+  { id: COMPLAINT_STATUSES.refutado_rechazado, label: 'Ref. rechazado' },
   { id: 'con_foto', label: 'Con foto' },
   { id: 'sin_foto', label: 'Sin foto' },
   { id: 'ambiguo', label: 'A revisar' },
-  { id: 'pendiente', label: 'Pendientes' },
-  { id: 'aceptado', label: 'Aceptados' },
-  { id: 'refutado', label: 'Refutados' },
-  { id: 'refutado_aceptado', label: 'Ref. aceptados' },
 ];
 
 const PORTAL_LINKS = [PARTNER_PORTALS.pedidosya, PARTNER_PORTALS.rappi];
@@ -67,36 +79,33 @@ function formatComplaintWhen(complaint) {
 }
 
 function statusLabel(status) {
-  if (status === 'refutado_aceptado') return 'Refutado aceptado';
-  if (status === 'refutado') return 'Refutado';
-  if (status === 'aceptado') return 'Aceptado';
+  if (COMPLAINT_STATUS_LABELS[status]) return COMPLAINT_STATUS_LABELS[status];
   if (status === 'con_foto') return 'Con foto';
   if (status === 'ambiguo') return 'Elegí la foto';
-  return 'Sin foto';
+  if (status === 'sin_foto') return 'Sin foto';
+  return status;
 }
 
 function statusBadgeClass(status) {
   if (status === 'refutado_aceptado') return 'badge badge--refutado-aceptado';
+  if (status === 'refutado_rechazado') return 'badge badge--aceptado';
   if (status === 'refutado') return 'badge badge--refutado';
-  if (status === 'aceptado') return 'badge badge--aceptado';
-  if (status === 'con_foto') return 'badge badge--complaint';
+  if (status === 'queja') return 'badge badge--complaint';
   if (status === 'sin_foto') return 'badge badge--file';
-  return 'badge badge--missing-code';
-}
-
-function rowAccepted(row) {
-  return Boolean(row.history?.accepted);
-}
-
-function rowRefutado(row) {
-  return Boolean(row.history?.refutado || row.photo?.is_refutado);
+  if (status === 'ambiguo') return 'badge badge--missing-code';
+  return 'badge';
 }
 
 function rowMatchesFilter(row, filter) {
-  const status = complaintRowStatus(row);
   if (filter === 'all') return true;
-  if (filter === 'pendiente') return status === 'con_foto' || status === 'sin_foto' || status === 'ambiguo';
-  return status === filter;
+  if (filter === 'con_foto' || filter === 'sin_foto' || filter === 'ambiguo') {
+    return complaintPhotoStatus(row) === filter;
+  }
+  return complaintRowStatus(row) === filter;
+}
+
+function sourceAmount(rows) {
+  return rows.reduce((sum, row) => sum + (Number(row.history?.amount ?? row.complaint?.amount) || 0), 0);
 }
 
 function readStoredBatch() {
@@ -215,25 +224,22 @@ export default function ComplaintsInbox() {
       con_foto: 0,
       sin_foto: 0,
       ambiguo: 0,
-      pendiente: 0,
-      aceptado: 0,
+      queja: 0,
       refutado: 0,
       refutado_aceptado: 0,
+      refutado_rechazado: 0,
     };
     source.forEach((row) => {
       const status = complaintRowStatus(row);
-      counts[status] += 1;
-      if (status === 'con_foto' || status === 'sin_foto' || status === 'ambiguo') counts.pendiente += 1;
+      if (counts[status] != null) counts[status] += 1;
+      const photoStatus = complaintPhotoStatus(row);
+      if (counts[photoStatus] != null) counts[photoStatus] += 1;
     });
     return counts;
   }, [inboxView, historyBaseRows, rowsWithHistory]);
 
-  const matchedUnaccepted = useMemo(
-    () => rowsWithHistory.filter((row) => row.photo?.id && !rowAccepted(row)),
-    [rowsWithHistory],
-  );
-  const matchedUnrefuted = useMemo(
-    () => rowsWithHistory.filter((row) => row.photo?.id && !rowRefutado(row)),
+  const quejasAbiertas = useMemo(
+    () => rowsWithHistory.filter((row) => complaintRowStatus(row) === COMPLAINT_STATUSES.queja),
     [rowsWithHistory],
   );
   const rowsWithPhotos = useMemo(
@@ -298,12 +304,14 @@ export default function ComplaintsInbox() {
   }
 
   function applyUpdatedPhotos(updatedList) {
-    const nextPhotos = photos.map((photo) => {
-      const next = updatedList.find((item) => item.id === photo.id);
-      return next || photo;
+    const byId = new Map(photos.map((photo) => [photo.id, photo]));
+    updatedList.forEach((photo) => {
+      if (photo?.id) byId.set(photo.id, photo);
     });
+    const nextPhotos = [...byId.values()];
     setPhotos(nextPhotos);
     setRows(replacePhotosInRows(rows, updatedList));
+    return nextPhotos;
   }
 
   function pickPhoto(complaintId, photoId) {
@@ -313,14 +321,15 @@ export default function ComplaintsInbox() {
     saveComplaintBatch(complaints, nextPicks);
   }
 
-  async function markRow(row, { accepted, refutado } = {}) {
+  async function markRow(row, { status } = {}) {
     setLoading(true);
     setError(null);
     try {
+      const disputed = status && status !== COMPLAINT_STATUSES.queja;
       const jobs = [];
-      if (row.photo?.id && (accepted || refutado)) {
+      if (row.photo?.id && disputed) {
         jobs.push(
-          applyComplaintToPhoto(row.photo, row.complaint, { refutado: Boolean(refutado) }).then((updated) => {
+          applyComplaintToPhoto(row.photo, row.complaint, { refutado: true }).then((updated) => {
             applyUpdatedPhotos([updated]);
             return updated;
           }),
@@ -328,23 +337,53 @@ export default function ComplaintsInbox() {
       } else {
         jobs.push(Promise.resolve(row.photo));
       }
-      jobs.push(
-        setHistoryResolution(row.complaint, row.photo, {
-          accepted,
-          refutado,
-        }),
-      );
+      jobs.push(setHistoryResolution(row.complaint, row.photo, { status }));
       const [, history] = await Promise.all(jobs);
       setHistoryStore(historyFromResult(history));
-      setNotice(
-        accepted && refutado
-          ? `Pedido ${row.complaint.orderCode} marcado como refutado aceptado.`
-          : accepted
-            ? `Pedido ${row.complaint.orderCode} marcado como aceptado.`
-            : `Pedido ${row.complaint.orderCode} marcado como refutado.`,
-      );
+      setNotice(`Pedido ${row.complaint.orderCode} marcado como ${statusLabel(status)}.`);
     } catch (err) {
       setError(err.message || 'No se pudo actualizar el reclamo.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function uploadRowPhoto(row, file) {
+    setLoading(true);
+    setError(null);
+    try {
+      const photo = await uploadComplaintPhotoFile(
+        file,
+        row.complaint,
+        getComplaintAggregator(row.complaint, row.photo),
+      );
+      const nextPhotos = applyUpdatedPhotos([photo]);
+      const nextPicks = row.complaint.id ? { ...pickedPhotoIds, [row.complaint.id]: photo.id } : pickedPhotoIds;
+      setPickedPhotoIds(nextPicks);
+      rematch(complaints, nextPicks, nextPhotos);
+      saveComplaintBatch(complaints, nextPicks);
+      const history = await setHistoryPhoto(row.complaint, photo);
+      setHistoryStore(historyFromResult(history));
+      setNotice(`Foto cargada en ${row.complaint.orderCode}.`);
+    } catch (err) {
+      setError(err.message || 'No se pudo subir la foto.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteRow(row) {
+    const id = row.history?.id;
+    if (!id) return;
+    if (!window.confirm(`¿Borrar la queja ${row.complaint.orderCode}?`)) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const history = await deleteHistoryItemById(id);
+      setHistoryStore(historyFromResult(history));
+      setNotice(`Se borró ${row.complaint.orderCode}.`);
+    } catch (err) {
+      setError(err.message || 'No se pudo borrar la queja.');
     } finally {
       setLoading(false);
     }
@@ -428,23 +467,20 @@ export default function ComplaintsInbox() {
     }
   }
 
-  async function markMany(targetRows, { accepted, refutado } = {}) {
+  async function markMany(targetRows, { status } = {}) {
     if (targetRows.length === 0) return;
     setLoading(true);
     setError(null);
     try {
+      const disputed = status && status !== COMPLAINT_STATUSES.queja;
       const photoRows = targetRows.filter((row) => row.photo?.id);
       const updated = photoRows.length
-        ? await applyComplaintsToPhotos(photoRows, { refutado: Boolean(refutado) })
+        ? await applyComplaintsToPhotos(photoRows, { refutado: Boolean(disputed) })
         : [];
       if (updated.length) applyUpdatedPhotos(updated);
-      const history = await setHistoryResolutions(targetRows, { accepted, refutado });
+      const history = await setHistoryResolutions(targetRows, { status });
       setHistoryStore(historyFromResult(history));
-      setNotice(
-        refutado
-          ? `${targetRows.length} pedidos marcados como refutados.`
-          : `${targetRows.length} pedidos marcados como aceptados.`,
-      );
+      setNotice(`${targetRows.length} pedidos marcados como ${statusLabel(status)}.`);
     } catch (err) {
       setError(err.message || 'No se pudieron actualizar los reclamos.');
     } finally {
@@ -500,10 +536,9 @@ export default function ComplaintsInbox() {
     <section className="complaints">
       <h2 className="gallery__title">Reclamos</h2>
       <p className="complaints__lead">
-        No podemos entrar a tu usuario de PedidosYa o Rappi: el navegador no deja manejar
-        otro sitio. Sí podemos abrir el portal, copiar el código y dejarte la foto lista
-        para adjuntar. El Google Sheet se lee de la web si está compartido con enlace.
-        Cada lista que cruzás queda en el historial: si la vuelven a subir, no se duplica.
+        Pegá el Excel del día (código, monto, combo y el resto de columnas). Cruzamos las
+        fotos, guardamos todas las quejas y después marcás Queja → Refutado → Ref. aceptado
+        o Ref. rechazado. La plata recuperada se ve en Métricas.
       </p>
 
       <div className="complaints__portals">
@@ -560,7 +595,7 @@ export default function ComplaintsInbox() {
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               rows={5}
-              placeholder="Código, hora del pedido, motivo y comentario…"
+              placeholder="Código, hora, monto, combo, motivo…"
               disabled={loading}
             />
           </label>
@@ -646,9 +681,7 @@ export default function ComplaintsInbox() {
             <p className="gallery__count">
               {stats.all} reclamo{stats.all !== 1 ? 's' : ''}
               {inboxView === 'cruzar' && skipped ? ` · ${skipped} filas sin código` : ''}
-              {` · ${stats.aceptado + stats.refutado_aceptado} aceptados`}
-              {` · ${stats.refutado + stats.refutado_aceptado} refutados`}
-              {` · ${stats.refutado_aceptado} ref. aceptados`}
+              {` · ${formatMoney(sourceAmount(inboxView === 'historial' ? historyBaseRows : rowsWithHistory))} en quejas`}
             </p>
             {inboxView === 'cruzar' && (
               <button type="button" className="btn btn--ghost btn--small" onClick={handleClear}>
@@ -672,23 +705,13 @@ export default function ComplaintsInbox() {
             ))}
           </div>
 
-          {inboxView === 'cruzar' && (matchedUnaccepted.length > 0 || matchedUnrefuted.length > 0 || rowsWithPhotos.length > 0) && (
+          {inboxView === 'cruzar' && (quejasAbiertas.length > 0 || rowsWithPhotos.length > 0) && (
             <div className="complaints__batch">
-              {matchedUnaccepted.length > 0 && (
+              {quejasAbiertas.length > 0 && (
                 <button
                   type="button"
                   className="btn btn--primary btn--small"
-                  onClick={() => markMany(matchedUnaccepted, { accepted: true })}
-                  disabled={loading}
-                >
-                  Marcar aceptados
-                </button>
-              )}
-              {matchedUnrefuted.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--small"
-                  onClick={() => markMany(matchedUnrefuted, { refutado: true })}
+                  onClick={() => markMany(quejasAbiertas, { status: COMPLAINT_STATUSES.refutado })}
                   disabled={loading}
                 >
                   Marcar refutados
@@ -758,8 +781,9 @@ export default function ComplaintsInbox() {
                 onCopyCode={copyCode}
                 onOpenPortal={openPortal}
                 portal={portalFor(row)}
-                onMarkAceptado={(item) => markRow(item, { accepted: true })}
-                onMarkRefutado={(item) => markRow(item, { refutado: true })}
+                onMarkStatus={(item, status) => markRow(item, { status })}
+                onUploadPhoto={uploadRowPhoto}
+                onDelete={deleteRow}
                 onOpenPhoto={(photo) => setLightboxPhoto(photo)}
               />
             ))}
@@ -788,15 +812,17 @@ function ComplaintCard({
   onCopyCode,
   onOpenPortal,
   portal,
-  onMarkAceptado,
-  onMarkRefutado,
+  onMarkStatus,
+  onUploadPhoto,
+  onDelete,
   onOpenPhoto,
 }) {
   const status = complaintRowStatus(row);
   const aggregator = detectAggregator(row.complaint.orderCode) || row.history?.aggregator;
   const photo = row.photo;
-  const accepted = rowAccepted(row);
-  const refutado = rowRefutado(row);
+  const amount = row.history?.amount ?? row.complaint.amount;
+  const combo = row.history?.combo || row.complaint.combo;
+  const extraFields = Object.entries(row.history?.fields || row.complaint.fields || {});
 
   return (
     <article className={`complaint-card complaint-card--${status}`}>
@@ -824,15 +850,22 @@ function ComplaintCard({
               <span className={aggregatorBadgeClass(aggregator)}>{getAggregatorLabel(aggregator)}</span>
             )}
             <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
+            {amount != null && <span className="badge badge--amount">{formatMoney(amount)}</span>}
           </div>
         </div>
       </div>
 
+      {combo && <p className="complaint-card__reason">Combo: {combo}</p>}
       {row.complaint.reason && (
         <p className="complaint-card__reason">{row.complaint.reason}</p>
       )}
       {row.complaint.comment && (
         <p className="complaint-card__comment">{row.complaint.comment}</p>
+      )}
+      {extraFields.length > 0 && (
+        <p className="complaint-card__comment">
+          {extraFields.map(([key, value]) => `${key}: ${value}`).join(' · ')}
+        </p>
       )}
       {photo && (
         <p className="complaint-card__photo-meta">
@@ -863,30 +896,43 @@ function ComplaintCard({
       )}
 
       <div className="complaint-card__actions">
-        {!accepted && (
+        {status === COMPLAINT_STATUSES.queja && (
           <button
             type="button"
-            className="btn btn--ghost btn--small"
-            onClick={() => onMarkAceptado(row)}
-            disabled={disabled}
-          >
-            Marcar aceptado
-          </button>
-        )}
-        {!refutado && (
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={() => onMarkRefutado(row)}
+            className="btn btn--primary btn--small"
+            onClick={() => onMarkStatus(row, COMPLAINT_STATUSES.refutado)}
             disabled={disabled}
           >
             Marcar refutado
           </button>
         )}
+        {status === COMPLAINT_STATUSES.refutado && (
+          <>
+            <button
+              type="button"
+              className="btn btn--primary btn--small"
+              onClick={() => onMarkStatus(row, COMPLAINT_STATUSES.refutado_aceptado)}
+              disabled={disabled}
+            >
+              Ref. aceptado
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => onMarkStatus(row, COMPLAINT_STATUSES.refutado_rechazado)}
+              disabled={disabled}
+            >
+              Ref. rechazado
+            </button>
+          </>
+        )}
+        {!photo?.public_url && (
+          <ComplaintEvidenceUpload disabled={disabled} onFile={(file) => onUploadPhoto(row, file)} />
+        )}
         {photo?.id && (
           <button
             type="button"
-            className="btn btn--primary btn--small"
+            className="btn btn--ghost btn--small"
             onClick={() => onPrepare(row)}
             disabled={disabled}
           >
@@ -930,6 +976,16 @@ function ComplaintCard({
               Copiar link
             </button>
           </>
+        )}
+        {row.history?.id && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => onDelete(row)}
+            disabled={disabled}
+          >
+            Borrar
+          </button>
         )}
       </div>
     </article>

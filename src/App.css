@@ -3016,3 +3016,99 @@ button.metrics-agg:focus-visible {
     font-size: 2.45rem;
   }
 }
+
+.metrics-money-split {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.metrics-money-split p {
+  margin: 0;
+}
+
+.metrics-money-split p + p {
+  margin-top: 0.25rem;
+}
+
+.metrics-agg.is-selected {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.metrics-table tbody tr.is-active,
+.metrics-table--rows tbody tr:hover {
+  background: var(--accent-bg);
+}
+
+.metrics-dash .metrics-table tbody tr {
+  cursor: pointer;
+}
+
+.metrics-table td small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.metrics-registry,
+.metrics-report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.metrics-report__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.metrics-report__block h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+.metrics-registry__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+
+.badge--amount {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.complaint-card--queja {
+  border-left: 3px solid var(--warning);
+}
+
+.complaint-card--refutado_rechazado {
+  border-left: 3px solid var(--danger);
+}
+
+@media print {
+  .app-nav,
+  .app__theme-toggle,
+  .metrics__views,
+  .metrics-toolbar,
+  .metrics-report__actions,
+  .complaints__batch,
+  .update-prompt,
+  .install-prompt {
+    display: none !important;
+  }
+
+  .metrics-report,
+  .metrics-report__block,
+  .metrics-table-wrap {
+    break-inside: avoid;
+  }
+}

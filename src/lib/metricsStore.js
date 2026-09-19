@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-import { emptyStore, parseStore, METRIC_AGGREGATORS, groupPhotoFlags } from './metrics.js';
+import { emptyStore, parseStore, groupPhotoFlags } from './metrics.js';
 import { fetchPhotos, PHOTO_GALLERY_KINDS } from './photos.js';
 import { loadComplaintHistory } from './complaintHistoryStore.js';
 import { groupHistoryFlags } from './complaintHistory.js';
@@ -98,7 +98,9 @@ export function getMetricsView() {
   try {
     const value = localStorage.getItem(VIEW_KEY);
     if (value === 'dashboard') return 'overview';
-    if (value === 'entry' || value === 'overview' || METRIC_AGGREGATORS.includes(value)) return value;
+    if (value === 'entry' || value === 'overview' || value === 'complaints' || value === 'report') {
+      return value;
+    }
     return 'overview';
   } catch {
     return 'overview';

@@ -20,7 +20,8 @@ export function getAggregatorShortLabel(aggregator) {
 
 export const METRIC_PAGE_TABS = [
   { id: 'overview', label: 'Resumen' },
-  ...METRIC_AGGREGATORS.map((id) => ({ id, label: AGGREGATOR_SHORT_LABELS[id] })),
+  { id: 'complaints', label: 'Quejas' },
+  { id: 'report', label: 'Informe' },
   { id: 'entry', label: 'Cargar' },
 ];
 
@@ -34,7 +35,7 @@ export const PERIOD_PRESETS = [
 ];
 
 export function emptyDayStats() {
-  return { orders: 0, complaints: 0, accepted: null, refuted: null, refutedAccepted: null, awt: 0 };
+  return { orders: 0, complaints: 0, awt: 0 };
 }
 
 export function emptyStore() {
@@ -84,9 +85,6 @@ export function normalizeDayStats(row = {}) {
   return {
     orders: toCount(row.orders),
     complaints: toCount(row.complaints),
-    accepted: toOptionalCount(row.accepted),
-    refuted: toOptionalCount(row.refuted),
-    refutedAccepted: toOptionalCount(row.refutedAccepted),
     awt: toCount(row.awt),
   };
 }
@@ -194,8 +192,9 @@ export function complaintRate(orders, complaints) {
 
 export function ratioPct(part, whole) {
   const total = Number(whole);
-  if (!Number.isFinite(total) || total <= 0) return null;
-  return (toCount(part) / total) * 100;
+  const value = Number(part);
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(value)) return null;
+  return (value / total) * 100;
 }
 
 export function isOutOfTarget(rate, target = DEFAULT_COMPLAINT_TARGET_PCT) {
@@ -213,6 +212,16 @@ export function formatPct(value, digits = 2) {
 
 export function formatNumber(value) {
   return toCount(value).toLocaleString('es-AR');
+}
+
+export function formatMoney(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  return Number(value).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 }
 
 function isOrderPhotoPath(photo) {
@@ -235,27 +244,30 @@ export function groupPhotoFlags(photos = []) {
   return map;
 }
 
+function emptyResolution() {
+  return {
+    queja: 0,
+    refutado: 0,
+    refutadoAceptado: 0,
+    refutadoRechazado: 0,
+    complaintAmount: 0,
+    recoveredAmount: 0,
+    lostAmount: 0,
+    undisputedAmount: 0,
+    inProgressAmount: 0,
+    confirmedLostAmount: 0,
+  };
+}
+
 export function resolveDayAggregator(store, photoFlags, day, aggregator, historyFlags = {}) {
   const entered = store?.days?.[day]?.[aggregator] || emptyDayStats();
-  const photos = photoFlags?.[day]?.[aggregator] || { complaintPhotos: 0, refutedPhotos: 0 };
-  const history = historyFlags?.[day]?.[aggregator] || { accepted: 0, refuted: 0, refutedAccepted: 0 };
+  const history = historyFlags?.[day]?.[aggregator] || emptyResolution();
   const orders = toCount(entered.orders);
   const complaints = toCount(entered.complaints);
-  const refuted =
-    entered.refuted == null
-      ? Math.max(toCount(photos.refutedPhotos), toCount(history.refuted))
-      : toCount(entered.refuted);
-  const refutedAccepted =
-    entered.refutedAccepted == null ? toCount(history.refutedAccepted) : toCount(entered.refutedAccepted);
-  const accepted =
-    entered.accepted == null
-      ? history.accepted > 0
-        ? toCount(history.accepted)
-        : Math.max(0, complaints - refuted)
-      : toCount(entered.accepted);
-  const pending = Math.max(0, complaints - accepted - refuted + refutedAccepted);
   const awt = toCount(entered.awt);
   const rate = complaintRate(orders, complaints);
+  const complaintAmount = Number(history.complaintAmount) || 0;
+  const recoveredAmount = Number(history.recoveredAmount) || 0;
 
   return {
     aggregator,
@@ -263,20 +275,30 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator, history
     orders,
     complaints,
     awt,
-    refuted,
-    accepted,
-    refutedAccepted,
-    pending,
-    photoRefuted: toCount(photos.refutedPhotos),
-    photoComplaints: toCount(photos.complaintPhotos),
-    usedPhotoRefuted: entered.refuted == null,
-    usedAutoAccepted: entered.accepted == null,
+    queja: toCount(history.queja),
+    refutado: toCount(history.refutado),
+    refutadoAceptado: toCount(history.refutadoAceptado),
+    refutadoRechazado: toCount(history.refutadoRechazado),
+    complaintAmount,
+    recoveredAmount,
+    lostAmount: complaintAmount - recoveredAmount,
+    undisputedAmount: Number(history.undisputedAmount) || 0,
+    inProgressAmount: Number(history.inProgressAmount) || 0,
+    confirmedLostAmount: Number(history.confirmedLostAmount) || 0,
     complaintPct: rate,
     awtPct: complaintRate(orders, awt),
-    refutedPctOfComplaints: ratioPct(refuted, complaints),
-    acceptedPctOfComplaints: ratioPct(accepted, complaints),
-    refutedAcceptedPctOfComplaints: ratioPct(refutedAccepted, complaints),
+    recoveredPctOfAmount: ratioPct(recoveredAmount, complaintAmount),
   };
+}
+
+function hasResolution(row) {
+  return (
+    row.complaintAmount > 0 ||
+    row.queja > 0 ||
+    row.refutado > 0 ||
+    row.refutadoAceptado > 0 ||
+    row.refutadoRechazado > 0
+  );
 }
 
 export function summarizeRange(store, photoFlags, from, to, historyFlags = {}) {
@@ -288,13 +310,21 @@ export function summarizeRange(store, photoFlags, from, to, historyFlags = {}) {
     return rollupRows(aggregator, rows);
   });
 
+  const extraRows = days
+    .map((day) => resolveDayAggregator(store, photoFlags, day, 'sin_agregador', historyFlags))
+    .filter(hasResolution);
   const overallRows = aggregators.flatMap((item) => item.rows);
-  const overall = rollupRows('all', overallRows);
+  const overall = rollupRows('all', [...overallRows, ...extraRows]);
   const daily = days.map((day) => {
     const rows = METRIC_AGGREGATORS.map((aggregator) =>
       resolveDayAggregator(store, photoFlags, day, aggregator, historyFlags),
     );
-    return { day, ...rollupRows(day, rows), aggregators: rows };
+    const extra = resolveDayAggregator(store, photoFlags, day, 'sin_agregador', historyFlags);
+    return {
+      day,
+      ...rollupRows(day, hasResolution(extra) ? [...rows, extra] : rows),
+      aggregators: rows,
+    };
   });
 
   return { from, to, days, overall, aggregators, daily };
@@ -314,9 +344,9 @@ export function compareSummaries(current, previous, target, awtTarget = DEFAULT_
     complaintPct: delta(current.complaintPct, previous.complaintPct),
     awt: delta(current.awt, previous.awt),
     awtPct: delta(current.awtPct, previous.awtPct),
-    refuted: delta(current.refuted, previous.refuted),
-    accepted: delta(current.accepted, previous.accepted),
-    refutedAccepted: delta(current.refutedAccepted, previous.refutedAccepted),
+    complaintAmount: delta(current.complaintAmount, previous.complaintAmount),
+    recoveredAmount: delta(current.recoveredAmount, previous.recoveredAmount),
+    lostAmount: delta(current.lostAmount, previous.lostAmount),
     outOfTarget: isOutOfTarget(current.complaintPct, target),
     outOfAwtTarget: isOutOfTarget(current.awtPct, awtTarget),
     previousOutOfTarget: isOutOfTarget(previous.complaintPct, target),
@@ -328,13 +358,7 @@ export function upsertDayStats(store, day, aggregator, stats) {
   if (!isIsoDate(day) || !METRIC_AGGREGATORS.includes(aggregator)) return next;
 
   const normalized = normalizeDayStats(stats);
-  const empty =
-    normalized.orders === 0 &&
-    normalized.complaints === 0 &&
-    normalized.awt === 0 &&
-    normalized.accepted == null &&
-    normalized.refuted == null &&
-    normalized.refutedAccepted == null;
+  const empty = normalized.orders === 0 && normalized.complaints === 0 && normalized.awt === 0;
 
   if (!next.days[day]) next.days[day] = {};
   if (empty) delete next.days[day][aggregator];
@@ -373,25 +397,34 @@ function rollupRows(id, rows) {
   const orders = rows.reduce((sum, row) => sum + toCount(row.orders), 0);
   const complaints = rows.reduce((sum, row) => sum + toCount(row.complaints), 0);
   const awt = rows.reduce((sum, row) => sum + toCount(row.awt), 0);
-  const refuted = rows.reduce((sum, row) => sum + toCount(row.refuted), 0);
-  const accepted = rows.reduce((sum, row) => sum + toCount(row.accepted), 0);
-  const refutedAccepted = rows.reduce((sum, row) => sum + toCount(row.refutedAccepted), 0);
-  const pending = rows.reduce((sum, row) => sum + toCount(row.pending), 0);
+  const queja = rows.reduce((sum, row) => sum + toCount(row.queja), 0);
+  const refutado = rows.reduce((sum, row) => sum + toCount(row.refutado), 0);
+  const refutadoAceptado = rows.reduce((sum, row) => sum + toCount(row.refutadoAceptado), 0);
+  const refutadoRechazado = rows.reduce((sum, row) => sum + toCount(row.refutadoRechazado), 0);
+  const complaintAmount = rows.reduce((sum, row) => sum + (Number(row.complaintAmount) || 0), 0);
+  const recoveredAmount = rows.reduce((sum, row) => sum + (Number(row.recoveredAmount) || 0), 0);
+  const undisputedAmount = rows.reduce((sum, row) => sum + (Number(row.undisputedAmount) || 0), 0);
+  const inProgressAmount = rows.reduce((sum, row) => sum + (Number(row.inProgressAmount) || 0), 0);
+  const confirmedLostAmount = rows.reduce((sum, row) => sum + (Number(row.confirmedLostAmount) || 0), 0);
   return {
     id,
     rows,
     orders,
     complaints,
     awt,
-    refuted,
-    accepted,
-    refutedAccepted,
-    pending,
+    queja,
+    refutado,
+    refutadoAceptado,
+    refutadoRechazado,
+    complaintAmount,
+    recoveredAmount,
+    lostAmount: complaintAmount - recoveredAmount,
+    undisputedAmount,
+    inProgressAmount,
+    confirmedLostAmount,
     complaintPct: complaintRate(orders, complaints),
     awtPct: complaintRate(orders, awt),
-    refutedPctOfComplaints: ratioPct(refuted, complaints),
-    acceptedPctOfComplaints: ratioPct(accepted, complaints),
-    refutedAcceptedPctOfComplaints: ratioPct(refutedAccepted, complaints),
+    recoveredPctOfAmount: ratioPct(recoveredAmount, complaintAmount),
   };
 }
 
@@ -404,9 +437,4 @@ function toCount(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return 0;
   return Math.round(number);
-}
-
-function toOptionalCount(value) {
-  if (value == null || value === '') return null;
-  return toCount(value);
 }

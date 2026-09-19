@@ -52,6 +52,35 @@ const COMMENT_HEADERS = [
   'descripcion',
   'descripcion_reclamo',
 ];
+const AMOUNT_HEADERS = [
+  'monto',
+  'importe',
+  'reembolso',
+  'reintegro',
+  'devolucion',
+  'valor',
+  'total',
+  'amount',
+  'refund',
+  'pesos',
+  'ars',
+  'precio',
+  'costo',
+  'monto_reembolsado',
+  'monto_devuelto',
+  'importe_reembolso',
+];
+const COMBO_HEADERS = [
+  'combo',
+  'producto',
+  'item',
+  'articulo',
+  'plato',
+  'sku',
+  'menu',
+  'producto_reclamado',
+  'combo_reclamado',
+];
 
 const DATE_DMY =
   /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[ T,]+(\d{1,2})[.:](\d{2})(?::(\d{2}))?)?(?:\s*(HS|HRS|HS\.))?$/i;
@@ -167,6 +196,65 @@ export function parseSheetDateTime(value) {
   return { orderAtIso: null, timeOfDay: null, dateAssumed: false };
 }
 
+export function parseMoneyAmount(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) return null;
+    return Math.round(value * 100) / 100;
+  }
+
+  const text = String(value).trim();
+  if (!text || /[/\-]/.test(text)) return null;
+
+  let cleaned = text.replace(/\s/g, '');
+  if (/[a-z]/i.test(cleaned) && !/(ars|usd|pesos)/i.test(cleaned)) return null;
+  cleaned = cleaned
+    .replace(/^(ars|usd|pesos)/i, '')
+    .replace(/(ars|usd|pesos)$/i, '')
+    .replace(/^[\$€]/, '')
+    .replace(/[\$€]$/, '');
+  if (!cleaned || !/^\d{1,3}([.,]\d{3})*([.,]\d{1,2})?$|^\d+([.,]\d{1,2})?$/.test(cleaned)) {
+    return null;
+  }
+
+  const hasDot = cleaned.includes('.');
+  const hasComma = cleaned.includes(',');
+  if (hasDot && hasComma) {
+    cleaned =
+      cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+        ? cleaned.replace(/\./g, '').replace(',', '.')
+        : cleaned.replace(/,/g, '');
+  } else if (hasComma) {
+    const parts = cleaned.split(',');
+    cleaned =
+      parts.length === 2 && parts[1].length <= 2
+        ? `${parts[0]}.${parts[1]}`
+        : cleaned.replace(/,/g, '');
+  } else if (hasDot) {
+    const parts = cleaned.split('.');
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      cleaned = cleaned.replace(/\./g, '');
+    }
+  }
+
+  const number = Number(cleaned);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return Math.round(number * 100) / 100;
+}
+
+function looksLikeMoneyCell(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  if (/[\$€]|ars|pesos/i.test(text)) return parseMoneyAmount(text) != null;
+  if (/[.,]\d{1,2}$/.test(text.replace(/\s/g, ''))) return parseMoneyAmount(text) != null;
+  const amount = parseMoneyAmount(text);
+  if (amount == null || amount === 0) return false;
+  const asDate = parseSheetDateTime(text);
+  if (asDate.orderAtIso) return false;
+  if (parseComplaintOrderCode(text) && !/[.,]/.test(text)) return false;
+  return true;
+}
+
 export function parseComplaintOrderCode(value) {
   const text = String(value || '').trim();
   if (!text) return '';
@@ -209,12 +297,31 @@ function looksLikeHeaderRow(cells) {
 }
 
 function classifyHeader(value) {
+  const raw = String(value || '').trim();
   const header = normalizeHeader(value);
+  if (/^\$+$/i.test(raw) || raw.toLowerCase() === 'ars') return 'amount';
   if (!header) return null;
   if (CODE_HEADERS.includes(header) || header.includes('codigo')) return 'orderCode';
   if (DATETIME_HEADERS.includes(header)) return 'datetime';
   if (DATE_HEADERS.includes(header) || header.startsWith('fecha')) return 'date';
   if (TIME_HEADERS.includes(header) || header.startsWith('hora')) return 'time';
+  if (
+    AMOUNT_HEADERS.includes(header) ||
+    header.includes('monto') ||
+    header.includes('importe') ||
+    header.includes('reembolso') ||
+    header.includes('reintegro')
+  ) {
+    return 'amount';
+  }
+  if (
+    COMBO_HEADERS.includes(header) ||
+    header.includes('combo') ||
+    header.includes('producto') ||
+    header.includes('articulo')
+  ) {
+    return 'combo';
+  }
   if (REASON_HEADERS.includes(header) || header.includes('motivo') || header.includes('queja')) {
     return 'reason';
   }
@@ -308,6 +415,7 @@ function columnScores(rows, columnCount) {
     code: 0,
     datetime: 0,
     text: 0,
+    money: 0,
   }));
 
   rows.slice(0, 20).forEach((row) => {
@@ -317,7 +425,8 @@ function columnScores(rows, columnCount) {
       if (parseComplaintOrderCode(value)) scores[index].code += 1;
       const parsed = parseSheetDateTime(value);
       if (parsed.orderAtIso || parsed.timeOfDay) scores[index].datetime += 1;
-      if (value.length >= 8 && !parseComplaintOrderCode(value) && !parsed.orderAtIso) {
+      if (looksLikeMoneyCell(value)) scores[index].money += 1;
+      if (value.length >= 8 && !parseComplaintOrderCode(value) && !parsed.orderAtIso && !looksLikeMoneyCell(value)) {
         scores[index].text += 1;
       }
     }
@@ -339,17 +448,29 @@ function pickBestIndex(scores, key, used) {
   return bestScore > 0 ? best : -1;
 }
 
+function emptyMapping() {
+  return {
+    orderCode: -1,
+    datetime: -1,
+    date: -1,
+    time: -1,
+    reason: -1,
+    comment: -1,
+    amount: -1,
+    combo: -1,
+  };
+}
+
 function inferMapping(rows, columnCount) {
   const scores = columnScores(rows, columnCount);
   const used = new Set();
-  const mapping = {
-    orderCode: pickBestIndex(scores, 'code', used),
-    datetime: pickBestIndex(scores, 'datetime', used),
-    reason: -1,
-    comment: -1,
-  };
-    if (mapping.orderCode >= 0) used.add(mapping.orderCode);
+  const mapping = emptyMapping();
+  mapping.orderCode = pickBestIndex(scores, 'code', used);
+  if (mapping.orderCode >= 0) used.add(mapping.orderCode);
+  mapping.datetime = pickBestIndex(scores, 'datetime', used);
   if (mapping.datetime >= 0) used.add(mapping.datetime);
+  mapping.amount = pickBestIndex(scores, 'money', used);
+  if (mapping.amount >= 0) used.add(mapping.amount);
 
   const leftover = [];
   for (let index = 0; index < columnCount; index += 1) {
@@ -366,14 +487,7 @@ function inferMapping(rows, columnCount) {
 }
 
 function mappingFromHeaders(headers) {
-  const mapping = {
-    orderCode: -1,
-    datetime: -1,
-    date: -1,
-    time: -1,
-    reason: -1,
-    comment: -1,
-  };
+  const mapping = emptyMapping();
 
   headers.forEach((header, index) => {
     const kind = classifyHeader(header);
@@ -406,16 +520,36 @@ function complaintId(code, when, reason, index) {
   return [code, when, reason, index].map((part) => String(part || '')).join('|');
 }
 
-function buildComplaint(row, mapping, index) {
+function mappedIndexes(mapping) {
+  return new Set(Object.values(mapping).filter((index) => Number.isInteger(index) && index >= 0));
+}
+
+function collectFields(row, headers, mapping) {
+  const used = mappedIndexes(mapping);
+  const fields = {};
+  const count = Math.max(row.length, headers.length);
+  for (let index = 0; index < count; index += 1) {
+    if (used.has(index)) continue;
+    const value = cell(row, index);
+    if (!value) continue;
+    const key = String(headers[index] || '').trim() || `Columna ${index + 1}`;
+    fields[key] = value;
+  }
+  return fields;
+}
+
+function buildComplaint(row, mapping, index, headers = []) {
   const orderCode = parseComplaintOrderCode(cell(row, mapping.orderCode));
   const reason = cell(row, mapping.reason);
   const comment = cell(row, mapping.comment);
+  const combo = cell(row, mapping.combo);
+  const amount = parseMoneyAmount(cell(row, mapping.amount));
   const when =
     mapping.datetime >= 0
       ? parseSheetDateTime(cell(row, mapping.datetime))
       : combineDateTime(cell(row, mapping.date), cell(row, mapping.time));
 
-  if (!orderCode && !reason && !comment) return null;
+  if (!orderCode && !reason && !comment && amount == null && !combo) return null;
 
   return {
     id: complaintId(orderCode, when.orderAtIso || when.timeOfDay, reason, index),
@@ -425,6 +559,9 @@ function buildComplaint(row, mapping, index) {
     dateAssumed: Boolean(when.dateAssumed && !when.orderAtIso),
     reason,
     comment,
+    combo,
+    amount,
+    fields: collectFields(row, headers, mapping),
   };
 }
 
@@ -437,24 +574,26 @@ export function parseComplaintSheet(text) {
   const headerRow = rows[0];
   const hasHeaders = looksLikeHeaderRow(headerRow);
   const dataRows = hasHeaders ? rows.slice(1) : rows;
+  const headers = hasHeaders ? headerRow : [];
   const columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
   const mapping = hasHeaders ? mappingFromHeaders(headerRow) : inferMapping(dataRows, columnCount);
 
-  if (mapping.orderCode < 0) {
+  if (mapping.orderCode < 0 || mapping.amount < 0) {
     const inferred = inferMapping(dataRows, columnCount);
-    mapping.orderCode = inferred.orderCode;
+    if (mapping.orderCode < 0) mapping.orderCode = inferred.orderCode;
     if (mapping.datetime < 0 && mapping.date < 0 && mapping.time < 0) {
       mapping.datetime = inferred.datetime;
     }
     if (mapping.reason < 0) mapping.reason = inferred.reason;
     if (mapping.comment < 0) mapping.comment = inferred.comment;
+    if (mapping.amount < 0) mapping.amount = inferred.amount;
   }
 
   const complaints = [];
   let skipped = 0;
 
   dataRows.forEach((row, index) => {
-    const complaint = buildComplaint(row, mapping, index);
+    const complaint = buildComplaint(row, mapping, index, headers);
     if (!complaint) {
       skipped += 1;
       return;

@@ -90,7 +90,7 @@ test('stores keep valid day rows and drop empty aggregator slots', () => {
   assert.equal(parsed.days['2026-09-17'].pedidosya.orders, 10);
 });
 
-test('auto-fills refuted from photos and accepted from leftover complaints', () => {
+test('resolution and money come from the complaints history, not typed metrics', () => {
   const photos = groupPhotoFlags([
     {
       file_path: 'orders/pedidosya/1.jpg',
@@ -98,53 +98,62 @@ test('auto-fills refuted from photos and accepted from leftover complaints', () 
       has_complaint: true,
       is_refutado: true,
     },
-    {
-      file_path: 'orders/pedidosya/2.jpg',
-      created_at: '2026-09-17T19:00:00.000-03:00',
-      has_complaint: true,
-      is_refutado: false,
-    },
   ]);
   const store = upsertDayStats(emptyStore(), '2026-09-17', 'pedidosya', {
     orders: 100,
     complaints: 3,
   });
-  const row = resolveDayAggregator(store, photos, '2026-09-17', 'pedidosya');
-  assert.equal(row.refuted, 1);
-  assert.equal(row.accepted, 2);
+  const historyFlags = {
+    '2026-09-17': {
+      pedidosya: {
+        queja: 1,
+        refutado: 1,
+        refutadoAceptado: 1,
+        refutadoRechazado: 0,
+        complaintAmount: 9000,
+        recoveredAmount: 4000,
+        lostAmount: 5000,
+        undisputedAmount: 2000,
+        inProgressAmount: 3000,
+        confirmedLostAmount: 0,
+      },
+    },
+  };
+  const row = resolveDayAggregator(store, photos, '2026-09-17', 'pedidosya', historyFlags);
   assert.equal(row.complaintPct, 3);
-  assert.equal(row.usedPhotoRefuted, true);
+  assert.equal(row.queja, 1);
+  assert.equal(row.refutado, 1);
+  assert.equal(row.refutadoAceptado, 1);
+  assert.equal(row.complaintAmount, 9000);
+  assert.equal(row.recoveredAmount, 4000);
+  assert.equal(row.lostAmount, 5000);
 });
 
-test('counts refuted-accepted separately and still shows accepted over all complaints', () => {
+test('period totals include complaint money even without an aggregator prefix', () => {
   const store = upsertDayStats(emptyStore(), '2026-09-17', 'pedidosya', {
-    orders: 100,
-    complaints: 10,
+    orders: 50,
+    complaints: 1,
   });
   const historyFlags = {
     '2026-09-17': {
-      pedidosya: { accepted: 4, refuted: 3, refutedAccepted: 2 },
+      sin_agregador: {
+        queja: 1,
+        refutado: 0,
+        refutadoAceptado: 0,
+        refutadoRechazado: 0,
+        complaintAmount: 1500.5,
+        recoveredAmount: 0,
+        lostAmount: 1500.5,
+        undisputedAmount: 1500.5,
+        inProgressAmount: 0,
+        confirmedLostAmount: 0,
+      },
     },
   };
-  const row = resolveDayAggregator(store, {}, '2026-09-17', 'pedidosya', historyFlags);
-  assert.equal(row.accepted, 4);
-  assert.equal(row.refuted, 3);
-  assert.equal(row.refutedAccepted, 2);
-  assert.equal(row.pending, 5);
-  assert.equal(row.acceptedPctOfComplaints, 40);
-  assert.equal(row.refutedAcceptedPctOfComplaints, 20);
-
-  const overridden = upsertDayStats(store, '2026-09-17', 'pedidosya', {
-    orders: 100,
-    complaints: 10,
-    accepted: 6,
-    refuted: 4,
-    refutedAccepted: 1,
-  });
-  const manual = resolveDayAggregator(overridden, {}, '2026-09-17', 'pedidosya', historyFlags);
-  assert.equal(manual.accepted, 6);
-  assert.equal(manual.refutedAccepted, 1);
-  assert.equal(manual.acceptedPctOfComplaints, 60);
+  const summary = summarizeRange(store, {}, '2026-09-17', '2026-09-17', historyFlags);
+  assert.equal(summary.overall.complaintAmount, 1500.5);
+  assert.equal(summary.overall.lostAmount, 1500.5);
+  assert.equal(summary.daily[0].complaintAmount, 1500.5);
 });
 
 test('dashboard rolls up a range and flags the target', () => {

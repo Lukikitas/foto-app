@@ -2,11 +2,42 @@ import { detectAggregator, getPhotoAggregator } from './aggregators.js';
 import { compactCode } from './complaintMatch.js';
 import { toArgentinaDate } from './metrics.js';
 
+export const COMPLAINT_STATUSES = {
+  queja: 'queja',
+  refutado: 'refutado',
+  refutado_aceptado: 'refutado_aceptado',
+  refutado_rechazado: 'refutado_rechazado',
+};
+
+export const COMPLAINT_STATUS_LABELS = {
+  queja: 'Queja',
+  refutado: 'Refutado',
+  refutado_aceptado: 'Ref. aceptado',
+  refutado_rechazado: 'Ref. rechazado',
+};
+
+export const EMPTY_COMBO_LABEL = 'Sin combo';
+
 export function emptyHistory() {
   return {
-    version: 1,
+    version: 2,
     updatedAt: null,
     items: {},
+  };
+}
+
+export function emptyHistoryFlags() {
+  return {
+    queja: 0,
+    refutado: 0,
+    refutadoAceptado: 0,
+    refutadoRechazado: 0,
+    complaintAmount: 0,
+    recoveredAmount: 0,
+    lostAmount: 0,
+    undisputedAmount: 0,
+    inProgressAmount: 0,
+    confirmedLostAmount: 0,
   };
 }
 
@@ -25,6 +56,45 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+export function migrateComplaintStatus(raw = {}) {
+  const direct = String(raw.status || '').trim();
+  if (COMPLAINT_STATUSES[direct]) return direct;
+  if (raw.accepted && raw.refutado) return COMPLAINT_STATUSES.refutado_aceptado;
+  if (raw.refutado) return COMPLAINT_STATUSES.refutado;
+  if (raw.accepted) return COMPLAINT_STATUSES.refutado_rechazado;
+  return COMPLAINT_STATUSES.queja;
+}
+
+export function statusIsDisputed(status) {
+  return (
+    status === COMPLAINT_STATUSES.refutado ||
+    status === COMPLAINT_STATUSES.refutado_aceptado ||
+    status === COMPLAINT_STATUSES.refutado_rechazado
+  );
+}
+
+function toAmount(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return Math.round(number * 100) / 100;
+}
+
+function normalizeFields(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const fields = {};
+  for (const [key, item] of Object.entries(value)) {
+    const label = String(key || '').trim();
+    const text = String(item ?? '').trim();
+    if (!label || !text) continue;
+    fields[label] = text;
+  }
+  return fields;
+}
+
+function mergeFields(current, incoming) {
+  return { ...normalizeFields(current), ...normalizeFields(incoming) };
+}
+
 export function normalizeHistoryItem(raw, fallback = {}) {
   const orderCode = String(raw?.orderCode || fallback.orderCode || '').trim();
   const compact = compactCode(orderCode);
@@ -39,6 +109,13 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     fallback.aggregator ||
     detectAggregator(orderCode) ||
     null;
+  const status = migrateComplaintStatus({
+    status: raw?.status ?? fallback.status,
+    accepted: raw?.accepted ?? fallback.accepted,
+    refutado: raw?.refutado ?? fallback.refutado,
+  });
+  const amount = toAmount(raw?.amount ?? fallback.amount);
+  const combo = String(raw?.combo || fallback.combo || '').trim();
 
   return {
     id: raw?.id || complaintHistoryId({ orderCode, orderAtIso }),
@@ -51,8 +128,10 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     day,
     reason: String(raw?.reason || fallback.reason || '').trim(),
     comment: String(raw?.comment || fallback.comment || '').trim(),
-    accepted: Boolean(raw?.accepted ?? fallback.accepted),
-    refutado: Boolean(raw?.refutado ?? fallback.refutado),
+    combo,
+    amount,
+    fields: mergeFields(fallback.fields, raw?.fields),
+    status,
     photoId: raw?.photoId || fallback.photoId || null,
     photoName: raw?.photoName || fallback.photoName || null,
     photoUrl: raw?.photoUrl || fallback.photoUrl || null,
@@ -97,10 +176,10 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
         id,
         importedAt: existing?.importedAt || stamp,
         updatedAt: stamp,
-        accepted: existing?.accepted,
-        refutado: existing?.refutado,
+        status: existing?.status,
         photoId: existing?.photoId,
         photoName: existing?.photoName,
+        photoUrl: existing?.photoUrl,
       },
       existing,
     );
@@ -109,8 +188,10 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
     if (existing) {
       incoming.reason = mergeText(existing.reason, complaint.reason);
       incoming.comment = mergeText(existing.comment, complaint.comment);
-      incoming.accepted = Boolean(existing.accepted);
-      incoming.refutado = Boolean(existing.refutado);
+      incoming.combo = String(complaint.combo || existing.combo || '').trim();
+      incoming.amount = toAmount(complaint.amount ?? existing.amount);
+      incoming.fields = mergeFields(existing.fields, complaint.fields);
+      incoming.status = existing.status;
       incoming.photoId = existing.photoId || incoming.photoId;
       incoming.photoName = existing.photoName || incoming.photoName;
       incoming.photoUrl = existing.photoUrl || incoming.photoUrl;
@@ -120,6 +201,7 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
       updated += 1;
     } else {
       incoming.importedAt = stamp;
+      incoming.status = COMPLAINT_STATUSES.queja;
       next.items[id] = incoming;
       added += 1;
     }
@@ -146,6 +228,20 @@ export function patchHistoryItem(store, id, patch) {
   return next;
 }
 
+export function deleteHistoryItem(store, id) {
+  const next = parseHistory(store);
+  if (!next.items[id]) return next;
+  delete next.items[id];
+  next.updatedAt = nowIso();
+  return next;
+}
+
+export function clearHistoryItems(store) {
+  const next = emptyHistory();
+  next.updatedAt = store?.updatedAt ? nowIso() : nowIso();
+  return next;
+}
+
 export function attachPhotosToHistory(store, rows) {
   const next = parseHistory(store);
   let changed = false;
@@ -160,13 +256,16 @@ export function attachPhotosToHistory(store, rows) {
     const photoUrl = row.photo?.public_url || current.photoUrl || null;
     const aggregator =
       current.aggregator || getPhotoAggregator(row.photo) || detectAggregator(row.complaint.orderCode) || null;
-    const refutado = current.refutado || Boolean(row.photo?.is_refutado);
+    const status =
+      current.status === COMPLAINT_STATUSES.queja && row.photo?.is_refutado
+        ? COMPLAINT_STATUSES.refutado
+        : current.status;
     if (
       current.photoId === photoId &&
       current.photoName === photoName &&
       current.photoUrl === photoUrl &&
       current.aggregator === aggregator &&
-      current.refutado === refutado
+      current.status === status
     ) {
       return;
     }
@@ -176,7 +275,7 @@ export function attachPhotosToHistory(store, rows) {
       photoName,
       photoUrl,
       aggregator,
-      refutado,
+      status,
       updatedAt: stamp,
     };
     changed = true;
@@ -187,44 +286,68 @@ export function attachPhotosToHistory(store, rows) {
 }
 
 export function historyResolution(item) {
-  if (item?.accepted && item?.refutado) return 'refutado_aceptado';
-  if (item?.refutado) return 'refutado';
-  if (item?.accepted) return 'aceptado';
-  return 'pendiente';
+  return migrateComplaintStatus(item);
 }
 
-export function listHistoryItems(store, { aggregator = 'all', search = '' } = {}) {
+export function listHistoryItems(
+  store,
+  { aggregator = 'all', search = '', status = 'all', from = '', to = '' } = {},
+) {
   const items = Object.values(parseHistory(store).items);
   const raw = String(search || '').trim().toLowerCase();
   const needle = compactCode(search);
   return items
     .filter((item) => {
       if (aggregator && aggregator !== 'all' && item.aggregator !== aggregator) return false;
+      if (status && status !== 'all' && item.status !== status) return false;
+      if (from && item.day && item.day < from) return false;
+      if (to && item.day && item.day > to) return false;
+      if (from && !item.day) return false;
       if (!raw) return true;
       if (needle && item.compact.includes(needle)) return true;
       if (item.orderCode.toLowerCase().includes(raw)) return true;
       if (item.reason.toLowerCase().includes(raw)) return true;
       if (item.comment.toLowerCase().includes(raw)) return true;
-      return false;
+      if (item.combo.toLowerCase().includes(raw)) return true;
+      return Object.values(item.fields || {}).some((value) => String(value).toLowerCase().includes(raw));
     })
     .sort((left, right) =>
       String(right.orderAtIso || right.updatedAt).localeCompare(String(left.orderAtIso || left.updatedAt)),
     );
 }
 
+export function moneyForStatus(item) {
+  const amount = Number(item?.amount);
+  if (!Number.isFinite(amount) || amount < 0) return 0;
+  return amount;
+}
+
+export function addMoneyToFlags(flags, item) {
+  const amount = moneyForStatus(item);
+  flags.complaintAmount += amount;
+  if (item.status === COMPLAINT_STATUSES.refutado_aceptado) flags.recoveredAmount += amount;
+  else if (item.status === COMPLAINT_STATUSES.refutado) flags.inProgressAmount += amount;
+  else if (item.status === COMPLAINT_STATUSES.refutado_rechazado) flags.confirmedLostAmount += amount;
+  else flags.undisputedAmount += amount;
+  flags.lostAmount = flags.complaintAmount - flags.recoveredAmount;
+  return flags;
+}
+
 export function groupHistoryFlags(store, from, to) {
   const map = {};
   Object.values(parseHistory(store).items).forEach((item) => {
     if (!item.day || (from && item.day < from) || (to && item.day > to)) return;
-    if (!item.aggregator) return;
+    const aggregator = item.aggregator || 'sin_agregador';
     if (!map[item.day]) map[item.day] = {};
-    if (!map[item.day][item.aggregator]) {
-      map[item.day][item.aggregator] = { accepted: 0, refuted: 0, refutedAccepted: 0 };
+    if (!map[item.day][aggregator]) {
+      map[item.day][aggregator] = emptyHistoryFlags();
     }
-    const bucket = map[item.day][item.aggregator];
-    if (item.accepted) bucket.accepted += 1;
-    if (item.refutado) bucket.refuted += 1;
-    if (item.accepted && item.refutado) bucket.refutedAccepted += 1;
+    const bucket = map[item.day][aggregator];
+    if (item.status === COMPLAINT_STATUSES.refutado_aceptado) bucket.refutadoAceptado += 1;
+    else if (item.status === COMPLAINT_STATUSES.refutado_rechazado) bucket.refutadoRechazado += 1;
+    else if (item.status === COMPLAINT_STATUSES.refutado) bucket.refutado += 1;
+    else bucket.queja += 1;
+    addMoneyToFlags(bucket, item);
   });
   return map;
 }
@@ -264,7 +387,7 @@ export function historyItemToRow(item, photos = []) {
           name: item.photoName || item.orderCode,
           public_url: item.photoUrl,
           created_at: item.orderAtIso,
-          is_refutado: item.refutado,
+          is_refutado: statusIsDisputed(item.status),
           has_complaint: true,
         }
       : null);
@@ -278,6 +401,9 @@ export function historyItemToRow(item, photos = []) {
       dateAssumed: item.dateAssumed,
       reason: item.reason,
       comment: item.comment,
+      combo: item.combo,
+      amount: item.amount,
+      fields: item.fields,
     },
     photo,
     history: item,

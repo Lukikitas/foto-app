@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   attachPhotosToHistory,
+  clearHistoryItems,
   complaintHistoryId,
+  COMPLAINT_STATUSES,
+  deleteHistoryItem,
   emptyHistory,
   groupHistoryFlags,
   historyItemToRow,
@@ -21,6 +24,9 @@ function complaint(overrides = {}) {
     dateAssumed: false,
     reason: 'Faltó producto',
     comment: 'Sin papas',
+    combo: 'Combo Crispy',
+    amount: 8990,
+    fields: { Local: 'La Plata' },
     ...overrides,
   };
 }
@@ -44,7 +50,7 @@ test('re-uploading a sheet updates the same row instead of copying it', () => {
   assert.equal(Object.keys(first.store.items).length, 1);
 
   const second = upsertHistoryItems(first.store, [
-    complaint({ reason: 'Faltó producto', comment: 'Confirmado por el local' }),
+    complaint({ reason: 'Faltó producto', comment: 'Confirmado por el local', amount: 9100 }),
   ]);
   assert.equal(second.added, 0);
   assert.equal(second.updated, 1);
@@ -52,29 +58,46 @@ test('re-uploading a sheet updates the same row instead of copying it', () => {
   const item = Object.values(second.store.items)[0];
   assert.match(item.comment, /Sin papas/);
   assert.match(item.comment, /Confirmado por el local/);
-  assert.equal(item.accepted, false);
-  assert.equal(item.refutado, false);
+  assert.equal(item.status, COMPLAINT_STATUSES.queja);
+  assert.equal(item.amount, 9100);
+  assert.equal(item.fields.Local, 'La Plata');
 });
 
-test('keeps accepted and refutado flags when the same complaint is imported again', () => {
+test('keeps resolution status when the same complaint is imported again', () => {
   const seeded = upsertHistoryItems(emptyHistory(), [complaint()]);
   const id = Object.keys(seeded.store.items)[0];
-  const marked = patchHistoryItem(seeded.store, id, { accepted: true, refutado: true });
+  const marked = patchHistoryItem(seeded.store, id, { status: COMPLAINT_STATUSES.refutado_aceptado });
   const again = upsertHistoryItems(marked, [complaint({ comment: 'Sheet de nuevo' })]);
   const item = Object.values(again.store.items)[0];
-  assert.equal(item.accepted, true);
-  assert.equal(item.refutado, true);
+  assert.equal(item.status, COMPLAINT_STATUSES.refutado_aceptado);
   assert.equal(historyResolution(item), 'refutado_aceptado');
 });
 
+test('migrates old accepted and refutado flags into a single status', () => {
+  const parsed = parseHistory({
+    items: {
+      a: { orderCode: 'PEYA-1', orderAtIso: '2026-09-17T12:00:00.000-03:00', accepted: true, refutado: true },
+      b: { orderCode: 'PEYA-2', orderAtIso: '2026-09-17T12:00:00.000-03:00', refutado: true },
+      c: { orderCode: 'PEYA-3', orderAtIso: '2026-09-17T12:00:00.000-03:00', accepted: true },
+    },
+  });
+  const statuses = Object.values(parsed.items).map((item) => item.status).sort();
+  assert.deepEqual(statuses, [
+    COMPLAINT_STATUSES.refutado,
+    COMPLAINT_STATUSES.refutado_aceptado,
+    COMPLAINT_STATUSES.refutado_rechazado,
+  ]);
+});
+
 test('history can be filtered by aggregator and lists every sheet field', () => {
-  let store = upsertHistoryItems(emptyHistory(), [
+  const store = upsertHistoryItems(emptyHistory(), [
     complaint(),
     complaint({
       orderCode: 'RAPPI-480403041',
       orderAtIso: '2026-09-17T18:00:00.000-03:00',
       reason: 'Frío',
       comment: '',
+      combo: 'Twister',
     }),
   ]).store;
   const rappi = listHistoryItems(store, { aggregator: 'rappi' });
@@ -83,22 +106,36 @@ test('history can be filtered by aggregator and lists every sheet field', () => 
   assert.equal(rappi[0].reason, 'Frío');
   assert.equal(listHistoryItems(store, { search: '2286878556' }).length, 1);
   assert.equal(listHistoryItems(store, { search: 'faltó' }).length, 1);
+  assert.equal(listHistoryItems(store, { search: 'crispy' }).length, 1);
 });
 
-test('groups accepted, refuted and refuted-accepted counts by day and aggregator', () => {
+test('groups statuses and recovered money by day and aggregator', () => {
   let store = upsertHistoryItems(emptyHistory(), [
     complaint(),
-    complaint({ orderCode: 'PEYA-1', orderAtIso: '2026-09-17T12:00:00.000-03:00' }),
-    complaint({ orderCode: 'PEYA-2', orderAtIso: '2026-09-17T13:00:00.000-03:00' }),
+    complaint({ orderCode: 'PEYA-1', orderAtIso: '2026-09-17T12:00:00.000-03:00', amount: 1000 }),
+    complaint({ orderCode: 'PEYA-2', orderAtIso: '2026-09-17T13:00:00.000-03:00', amount: 2000 }),
   ]).store;
   const ids = Object.keys(store.items);
-  store = patchHistoryItem(store, ids[0], { accepted: true });
-  store = patchHistoryItem(store, ids[1], { refutado: true });
-  store = patchHistoryItem(store, ids[2], { accepted: true, refutado: true });
+  store = patchHistoryItem(store, ids[0], { status: COMPLAINT_STATUSES.refutado_rechazado });
+  store = patchHistoryItem(store, ids[1], { status: COMPLAINT_STATUSES.refutado });
+  store = patchHistoryItem(store, ids[2], { status: COMPLAINT_STATUSES.refutado_aceptado });
   const flags = groupHistoryFlags(store, '2026-09-17', '2026-09-17');
-  assert.equal(flags['2026-09-17'].pedidosya.accepted, 2);
-  assert.equal(flags['2026-09-17'].pedidosya.refuted, 2);
-  assert.equal(flags['2026-09-17'].pedidosya.refutedAccepted, 1);
+  const peya = flags['2026-09-17'].pedidosya;
+  assert.equal(peya.refutadoRechazado, 1);
+  assert.equal(peya.refutado, 1);
+  assert.equal(peya.refutadoAceptado, 1);
+  assert.equal(peya.complaintAmount, 11990);
+  assert.equal(peya.recoveredAmount, 2000);
+  assert.equal(peya.lostAmount, 9990);
+});
+
+test('groups money from complaints without a known aggregator', () => {
+  const store = upsertHistoryItems(emptyHistory(), [
+    complaint({ orderCode: '4696', amount: 3500 }),
+  ]).store;
+  const flags = groupHistoryFlags(store, '2026-09-17', '2026-09-17');
+  assert.equal(flags['2026-09-17'].sin_agregador.complaintAmount, 3500);
+  assert.equal(flags['2026-09-17'].sin_agregador.queja, 1);
 });
 
 test('attaches a matched photo without duplicating the history row', () => {
@@ -117,11 +154,23 @@ test('attaches a matched photo without duplicating the history row', () => {
   const item = Object.values(next.items)[0];
   assert.equal(item.photoId, 'photo-1');
   assert.equal(item.photoUrl, 'https://example.com/1.jpg');
-  assert.equal(item.refutado, true);
+  assert.equal(item.status, COMPLAINT_STATUSES.refutado);
   assert.equal(item.aggregator, 'pedidosya');
   const view = historyItemToRow(item);
   assert.equal(view.photo.public_url, 'https://example.com/1.jpg');
-  assert.equal(view.history.accepted, false);
+  assert.equal(view.complaint.amount, 8990);
+});
+
+test('deletes one complaint or the whole history', () => {
+  let store = upsertHistoryItems(emptyHistory(), [
+    complaint(),
+    complaint({ orderCode: 'PEYA-1', orderAtIso: '2026-09-17T12:00:00.000-03:00' }),
+  ]).store;
+  const id = Object.keys(store.items)[0];
+  store = deleteHistoryItem(store, id);
+  assert.equal(Object.keys(store.items).length, 1);
+  store = clearHistoryItems(store);
+  assert.equal(Object.keys(store.items).length, 0);
 });
 
 test('parseHistory drops broken records and keeps a valid map', () => {
@@ -132,5 +181,5 @@ test('parseHistory drops broken records and keeps a valid map', () => {
     },
   });
   assert.equal(Object.keys(parsed.items).length, 1);
-  assert.equal(Object.values(parsed.items)[0].accepted, true);
+  assert.equal(Object.values(parsed.items)[0].status, COMPLAINT_STATUSES.refutado_rechazado);
 });

@@ -1,7 +1,10 @@
 import { supabase } from './supabase.js';
 import {
   attachPhotosToHistory,
+  clearHistoryItems,
   complaintHistoryId,
+  COMPLAINT_STATUSES,
+  deleteHistoryItem,
   emptyHistory,
   parseHistory,
   patchHistoryItem,
@@ -80,7 +83,7 @@ export async function loadComplaintHistory({ force = false } = {}) {
 export async function saveComplaintHistory(store) {
   const next = {
     ...parseHistory(store),
-    version: 1,
+    version: 2,
     updatedAt: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(next)], { type: 'application/json' });
@@ -110,10 +113,17 @@ export function mutateComplaintHistory(mutator) {
   return run;
 }
 
-function resolutionPatch(current, photo, { accepted, refutado } = {}) {
+function nextStatus(current, { status, accepted, refutado } = {}) {
+  if (status && COMPLAINT_STATUSES[status]) return status;
+  if (accepted && refutado) return COMPLAINT_STATUSES.refutado_aceptado;
+  if (refutado) return COMPLAINT_STATUSES.refutado;
+  if (accepted) return COMPLAINT_STATUSES.refutado_rechazado;
+  return current.status || COMPLAINT_STATUSES.queja;
+}
+
+function resolutionPatch(current, photo, { status, accepted, refutado } = {}) {
   return {
-    accepted: accepted == null ? current.accepted : Boolean(accepted),
-    refutado: refutado == null ? current.refutado : Boolean(refutado),
+    status: nextStatus(current, { status, accepted, refutado }),
     photoId: photo?.id || current.photoId,
     photoName: photo?.name || current.photoName,
     photoUrl: photo?.public_url || current.photoUrl,
@@ -131,7 +141,7 @@ export function importComplaintsToHistory(complaints, rows = []) {
   });
 }
 
-export function setHistoryResolutions(rows, { accepted, refutado } = {}) {
+export function setHistoryResolutions(rows, { status, accepted, refutado } = {}) {
   return mutateComplaintHistory((store) => {
     let next = store;
     rows.forEach(({ complaint, photo }) => {
@@ -142,17 +152,42 @@ export function setHistoryResolutions(rows, { accepted, refutado } = {}) {
       }
       const current = next.items[id];
       if (!current) return;
-      next = patchHistoryItem(next, id, resolutionPatch(current, photo, { accepted, refutado }));
+      next = patchHistoryItem(next, id, resolutionPatch(current, photo, { status, accepted, refutado }));
     });
     return next;
   });
 }
 
-export function setHistoryResolution(complaint, photo, { accepted, refutado } = {}) {
-  return setHistoryResolutions([{ complaint, photo }], { accepted, refutado });
+export function setHistoryResolution(complaint, photo, { status, accepted, refutado } = {}) {
+  return setHistoryResolutions([{ complaint, photo }], { status, accepted, refutado });
 }
 
-export function setHistoryResolutionForPhoto(photo, { accepted, refutado } = {}) {
+export function setHistoryPhoto(complaint, photo) {
+  return mutateComplaintHistory((store) => {
+    let next = store;
+    const id = complaintHistoryId(complaint);
+    if (!next.items[id]) {
+      next = upsertHistoryItems(next, [complaint]).store;
+    }
+    const current = next.items[id];
+    if (!current || !photo) return next;
+    return patchHistoryItem(next, id, {
+      photoId: photo.id,
+      photoName: photo.name,
+      photoUrl: photo.public_url,
+    });
+  });
+}
+
+export function deleteHistoryItemById(id) {
+  return mutateComplaintHistory((store) => deleteHistoryItem(store, id));
+}
+
+export function clearComplaintHistory() {
+  return mutateComplaintHistory((store) => clearHistoryItems(store));
+}
+
+export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado } = {}) {
   return setHistoryResolution(
     {
       orderCode: photo.name,
@@ -161,6 +196,6 @@ export function setHistoryResolutionForPhoto(photo, { accepted, refutado } = {})
       comment: '',
     },
     photo,
-    { accepted, refutado },
+    { status, accepted, refutado },
   );
 }

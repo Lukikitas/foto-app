@@ -85,8 +85,6 @@ export function applyMetricList(store, aggregator, rows) {
       orders: row.orders,
       complaints: row.complaints,
       awt: aggregator === AWT_AGGREGATOR ? row.awt : existing.awt,
-      accepted: existing.accepted,
-      refuted: existing.refuted,
     });
   }
 

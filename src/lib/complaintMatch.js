@@ -237,15 +237,32 @@ export function matchComplaintsToPhotos(complaints, photos, pickedPhotoIds = {})
   });
 }
 
-export function complaintRowStatus(row) {
-  const accepted = Boolean(row.history?.accepted);
-  const refutado = Boolean(row.history?.refutado || row.photo?.is_refutado);
+export function complaintResolutionStatus(row) {
+  const status = row?.history?.status;
+  if (
+    status === 'queja' ||
+    status === 'refutado' ||
+    status === 'refutado_aceptado' ||
+    status === 'refutado_rechazado'
+  ) {
+    return status;
+  }
+  const accepted = Boolean(row?.history?.accepted);
+  const refutado = Boolean(row?.history?.refutado || row?.photo?.is_refutado);
   if (accepted && refutado) return 'refutado_aceptado';
   if (refutado) return 'refutado';
-  if (accepted) return 'aceptado';
-  if (row.status === 'matched') return 'con_foto';
-  if (row.status === 'ambiguous') return 'ambiguo';
+  if (accepted) return 'refutado_rechazado';
+  return 'queja';
+}
+
+export function complaintPhotoStatus(row) {
+  if (row?.status === 'matched' || row?.photo) return 'con_foto';
+  if (row?.status === 'ambiguous') return 'ambiguo';
   return 'sin_foto';
+}
+
+export function complaintRowStatus(row) {
+  return complaintResolutionStatus(row);
 }
 
 export function mergeComplaintNotes(existing, complaint) {

@@ -6,6 +6,7 @@ import {
   parseComplaintSheet,
   parseDelimitedText,
   parseGoogleSheetRef,
+  parseMoneyAmount,
   parseSheetDateTime,
   toGoogleCsvUrl,
   toGoogleGvizUrl,
@@ -120,6 +121,33 @@ test('turns a Google Visualization table into TSV for the sheet parser', () => {
   assert.equal(complaints[0].orderCode, 'PEYA12345');
   assert.equal(complaints[0].reason, 'Faltan productos');
   assert.equal(complaints[0].timeOfDay, '21:30');
+});
+
+test('parses Argentine and US money amounts', () => {
+  assert.equal(parseMoneyAmount('$1.234,56'), 1234.56);
+  assert.equal(parseMoneyAmount('1.250'), 1250);
+  assert.equal(parseMoneyAmount('1250,5'), 1250.5);
+  assert.equal(parseMoneyAmount('1,234.50'), 1234.5);
+  assert.equal(parseMoneyAmount('ARS 8990'), 8990);
+  assert.equal(parseMoneyAmount('PEYA12345'), null);
+  assert.equal(parseMoneyAmount('16/09/2026'), null);
+  assert.equal(parseMoneyAmount(''), null);
+});
+
+test('reads amount, combo and leftover columns from a daily sheet', () => {
+  const text = [
+    'Código\tHora del pedido\tMotivo\tCombo\tMonto\tLocal\tRider',
+    'PEYA12345\t16/09/2026 21:30\tFaltan productos\tCombo Crispy\t$8.990\tLa Plata\tJuan',
+    'RAPPI998877\t16/09/2026 22:05\tLlegó frío\tTwister\t1250,50\tLa Plata\t',
+  ].join('\n');
+  const { complaints } = parseComplaintSheet(text);
+  assert.equal(complaints[0].combo, 'Combo Crispy');
+  assert.equal(complaints[0].amount, 8990);
+  assert.equal(complaints[0].fields.Local, 'La Plata');
+  assert.equal(complaints[0].fields.Rider, 'Juan');
+  assert.equal(complaints[1].amount, 1250.5);
+  assert.equal(complaints[1].combo, 'Twister');
+  assert.equal(complaints[1].fields.Rider, undefined);
 });
 
 test('opens PedidosYa and Rappi partner portals', () => {

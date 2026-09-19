@@ -124,12 +124,12 @@ test('keeps unmatched complaints when there is no photo', () => {
   assert.equal(rows[0].photo, null);
 });
 
-test('complaint status can be accepted even when the photo is already refuted', () => {
+test('complaint status follows Queja → Refutado → Ref. aceptado or rechazado', () => {
   assert.equal(
     complaintRowStatus({
       status: 'matched',
       photo: photo({ is_refutado: true, has_complaint: true }),
-      history: { accepted: true, refutado: true },
+      history: { status: 'refutado_aceptado' },
     }),
     'refutado_aceptado',
   );
@@ -137,7 +137,7 @@ test('complaint status can be accepted even when the photo is already refuted', 
     complaintRowStatus({
       status: 'matched',
       photo: photo({ is_refutado: true, has_complaint: true }),
-      history: { accepted: false, refutado: true },
+      history: { status: 'refutado' },
     }),
     'refutado',
   );
@@ -147,7 +147,7 @@ test('complaint status can be accepted even when the photo is already refuted', 
       photo: photo({ is_refutado: false, has_complaint: true }),
       history: { accepted: true, refutado: false },
     }),
-    'aceptado',
+    'refutado_rechazado',
   );
 });
 

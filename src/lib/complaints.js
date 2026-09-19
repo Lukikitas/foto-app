@@ -5,7 +5,10 @@ import {
   complaintRowStatus,
   mergeComplaintNotes,
 } from './complaintMatch.js';
-import { fetchOrderPhotosMatchingNames, fetchPhotos, PHOTO_COLUMNS, PHOTO_GALLERY_KINDS, updatePhoto } from './photos.js';
+import { detectAggregator } from './aggregators.js';
+import { compressImage } from './compressImage.js';
+import { fetchOrderPhotosMatchingNames, fetchPhotos, isValidOrderDigits, PHOTO_COLUMNS, PHOTO_GALLERY_KINDS, updatePhoto, uploadPhoto } from './photos.js';
+import { COMPLAINT_STATUS_LABELS } from './complaintHistory.js';
 import { toDateInputValue } from './date.js';
 
 const STORAGE_KEY = 'foto-app-complaints-batch';
@@ -171,8 +174,10 @@ export function buildComplaintExport(rows) {
   const header = [
     'codigo',
     'hora_pedido',
+    'combo',
     'motivo',
     'comentario',
+    'monto',
     'estado',
     'foto_url',
     'foto_hora',
@@ -181,13 +186,16 @@ export function buildComplaintExport(rows) {
   const lines = [header.join(',')];
 
   rows.forEach((row) => {
+    const status = complaintRowStatus(row);
     lines.push(
       [
         row.complaint.orderCode,
         row.complaint.orderAtIso || row.complaint.timeOfDay || '',
+        row.complaint.combo || row.history?.combo || '',
         row.complaint.reason,
         row.complaint.comment,
-        complaintRowStatus(row),
+        row.complaint.amount ?? row.history?.amount ?? '',
+        COMPLAINT_STATUS_LABELS[status] || status,
         row.photo?.public_url || '',
         row.photo?.created_at || '',
         row.photo?.name || '',
@@ -198,6 +206,30 @@ export function buildComplaintExport(rows) {
   });
 
   return `${lines.join('\n')}\n`;
+}
+
+export async function uploadComplaintPhotoFile(file, complaint, aggregator) {
+  if (!file) throw new Error('Elegí una foto.');
+  const raw = String(complaint?.orderCode || '').trim();
+  const compact = compactCode(raw);
+  const digits = compact.replace(/\D/g, '');
+  const code = [raw, compact, digits.length >= 4 ? digits.slice(-4) : ''].find(
+    (value) => value && isValidOrderDigits(value),
+  );
+  if (!code) {
+    throw new Error('Este código no se puede usar para nombrar la foto.');
+  }
+  const compressed = file.type?.startsWith('image/') ? await compressImage(file) : file;
+  const partner = aggregator || detectAggregator(code) || detectAggregator(raw) || 'sin_agregador';
+  return uploadPhoto(
+    compressed,
+    code,
+    {
+      has_complaint: true,
+      notes: complaint.reason ? `Reclamo: ${complaint.reason}` : '',
+    },
+    partner,
+  );
 }
 
 export function downloadTextFile(filename, contents, mime = 'text/csv;charset=utf-8') {

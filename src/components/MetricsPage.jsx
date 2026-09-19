@@ -1,21 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
+import { emptyHistory } from '../lib/complaintHistory';
+import {
+  clearComplaintHistory,
+  deleteHistoryItemById,
+  loadComplaintHistory,
+  setHistoryPhoto,
+} from '../lib/complaintHistoryStore';
 import { emptyStore, METRIC_PAGE_TABS } from '../lib/metrics';
 import {
-  getMetricsView,
   loadMetricsStore,
   saveMetricsStore,
   saveMetricsView,
+  getMetricsView,
 } from '../lib/metricsStore';
-import MetricsDashboard from './MetricsDashboard';
+import MetricsComplaintsList from './MetricsComplaintsList';
+import MetricsDashboard, { MetricsPeriodBar, useMetricsPeriod } from './MetricsDashboard';
 import MetricsEntry from './MetricsEntry';
+import MetricsReport from './MetricsReport';
 
 export default function MetricsPage() {
   const [view, setView] = useState(getMetricsView);
   const [store, setStore] = useState(emptyStore);
+  const [history, setHistory] = useState(emptyHistory);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [focusDay, setFocusDay] = useState('');
+  const [aggregator, setAggregator] = useState('all');
+  const periodState = useMetricsPeriod();
+  const range = focusDay ? { from: focusDay, to: focusDay } : periodState.period;
+  const hasData = useMemo(() => Object.keys(store.days || {}).length > 0, [store]);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,8 +38,11 @@ export default function MetricsPage() {
       setLoading(true);
       setError(null);
       try {
-        const next = await loadMetricsStore();
-        if (!cancelled) setStore(next);
+        const [nextStore, nextHistory] = await Promise.all([loadMetricsStore(), loadComplaintHistory()]);
+        if (!cancelled) {
+          setStore(nextStore);
+          setHistory(nextHistory);
+        }
       } catch (err) {
         if (!cancelled) setError(err.message || 'No se pudieron leer las métricas.');
       } finally {
@@ -36,8 +54,6 @@ export default function MetricsPage() {
       cancelled = true;
     };
   }, []);
-
-  const hasData = useMemo(() => Object.keys(store.days || {}).length > 0, [store]);
 
   function changeView(next) {
     setView(next);
@@ -59,17 +75,32 @@ export default function MetricsPage() {
     }
   }
 
+  async function persistHistory(job, message) {
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await job();
+      const next = saved?.store || saved;
+      setHistory(next);
+      if (message) setNotice(message);
+    } catch (err) {
+      setError(err.message || 'No se pudo actualizar el historial de quejas.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="metrics">
       <header className="metrics__header">
         <div>
           <h2 className="gallery__title">Métricas</h2>
           <p className="metrics__lead">
-            Cada agregador se mide solo, sobre sus propios pedidos. PedidosYa también muestra AWT
-            (demorados).
+            Pedidos y AWT se cargan por día. La plata perdida y recuperada sale de cada queja del
+            Excel.
           </p>
         </div>
-        <div className="metrics__views metrics__views--tabs" role="tablist" aria-label="Agregadores">
+        <div className="metrics__views metrics__views--tabs" role="tablist" aria-label="Métricas">
           {METRIC_PAGE_TABS.map((tab) => (
             <button
               key={tab.id}
@@ -101,17 +132,59 @@ export default function MetricsPage() {
           <div className="spinner" aria-hidden="true" />
           <p>Cargando métricas…</p>
         </div>
-      ) : view === 'entry' ? (
-        <MetricsEntry store={store} saving={saving} onSave={persist} />
       ) : (
-        <MetricsDashboard
-          store={store}
-          hasData={hasData}
-          saving={saving}
-          view={view}
-          onSave={persist}
-          onChangeView={changeView}
-        />
+        <>
+          {view !== 'entry' && (
+            <MetricsPeriodBar
+              store={store}
+              saving={saving}
+              preset={periodState.preset}
+              customFrom={periodState.customFrom}
+              customTo={periodState.customTo}
+              period={periodState.period}
+              focusDay={focusDay}
+              aggregator={aggregator}
+              onPreset={(id) => {
+                periodState.applyPreset(id);
+                setFocusDay('');
+              }}
+              onCustomFrom={periodState.changeCustomFrom}
+              onCustomTo={periodState.changeCustomTo}
+              onAggregator={setAggregator}
+              onClearDay={() => setFocusDay('')}
+              onSave={persist}
+            />
+          )}
+          {view === 'entry' ? (
+            <MetricsEntry store={store} saving={saving} onSave={persist} />
+          ) : view === 'complaints' ? (
+            <MetricsComplaintsList
+              history={history}
+              range={range}
+              aggregator={aggregator}
+              busy={saving}
+              onDelete={(id) => persistHistory(() => deleteHistoryItemById(id), 'Queja borrada.')}
+              onClear={() => persistHistory(() => clearComplaintHistory(), 'Historial de quejas vacío.')}
+              onPhoto={(item, photo) => persistHistory(() => setHistoryPhoto(item, photo))}
+              onError={setError}
+              onNotice={setNotice}
+            />
+          ) : view === 'report' ? (
+            <MetricsReport history={history} range={range} aggregator={aggregator} />
+          ) : (
+            <MetricsDashboard
+              store={store}
+              history={history}
+              hasData={hasData}
+              period={periodState.period}
+              focusDay={focusDay}
+              aggregator={aggregator}
+              onChangeView={changeView}
+              onFocusDay={setFocusDay}
+              onAggregator={setAggregator}
+            />
+          )}
+        </>
       )}
     </section>
   );
