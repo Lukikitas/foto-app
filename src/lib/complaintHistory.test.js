@@ -173,6 +173,18 @@ test('deletes one complaint or the whole history', () => {
   assert.equal(Object.keys(store.items).length, 0);
 });
 
+test('a chosen import aggregator classifies codes without a prefix', () => {
+  const store = upsertHistoryItems(emptyHistory(), [
+    complaint({ orderCode: '2093192289', aggregator: 'rappi' }),
+  ]).store;
+  assert.equal(Object.values(store.items)[0].aggregator, 'rappi');
+});
+
+test('without an import aggregator the code prefix still decides', () => {
+  const store = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  assert.equal(Object.values(store.items)[0].aggregator, 'pedidosya');
+});
+
 test('history can be filtered by a single day or a period', () => {
   const store = upsertHistoryItems(emptyHistory(), [
     complaint(),

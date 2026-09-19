@@ -3,7 +3,7 @@ import { formatDateTime } from '../lib/date';
 import {
   AGGREGATOR_OPTIONS,
   aggregatorBadgeClass,
-  detectAggregator,
+  assignComplaintsAggregator,
   getAggregatorLabel,
   getComplaintAggregator,
   getPartnerPortal,
@@ -61,7 +61,7 @@ import {
   saveSharedSheetUrl,
 } from '../lib/complaintSyncStore';
 import { downloadPhoto, isImagePhoto } from '../lib/photos';
-import { getSavedSheetUrl } from '../lib/storage';
+import { getImportAggregator, getSavedSheetUrl, saveImportAggregator } from '../lib/storage';
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
 
@@ -78,6 +78,7 @@ const FILTERS = [
 
 const PORTAL_LINKS = [PARTNER_PORTALS.pedidosya, PARTNER_PORTALS.rappi];
 const HISTORY_AGGREGATORS = [{ id: 'all', label: 'Todos' }, ...AGGREGATOR_OPTIONS];
+const IMPORT_AGGREGATORS = [{ id: '', label: 'Por código' }, ...AGGREGATOR_OPTIONS];
 
 function formatComplaintWhen(complaint) {
   if (complaint.orderAtIso) return formatDateTime(complaint.orderAtIso);
@@ -148,7 +149,10 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
-  const [importOpen, setImportOpen] = useState(storedBatch.complaints.length === 0);
+  const [importAggregator, setImportAggregator] = useState(() => {
+    const saved = getImportAggregator();
+    return AGGREGATOR_OPTIONS.some((item) => item.id === saved) ? saved : '';
+  });
 
   const rematch = useCallback((nextComplaints, nextPicks, nextPhotos) => {
     const matched = matchComplaintsToPhotos(nextComplaints, nextPhotos, nextPicks);
@@ -214,7 +218,6 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
           setFilter('all');
           saveComplaintBatch(result.complaints, {});
           loadAndMatch(result.complaints, {}).catch(() => {});
-          setImportOpen(false);
           setNotice(
             `Cruce automático: ${result.complaints.length} reclamos · ${result.added} nuevos · ${result.updated} ya estaban.`,
           );
@@ -317,27 +320,33 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     [rowsWithHistory],
   );
 
+  function changeImportAggregator(id) {
+    setImportAggregator(id);
+    saveImportAggregator(id);
+  }
+
   async function importText(text, { fromSheetUrl = false } = {}) {
     const parsed = parseComplaintSheet(text);
     if (parsed.complaints.length === 0) {
       throw new Error('No encontré códigos de pedido. Copiá las columnas de código, hora y motivo.');
     }
-    setComplaints(parsed.complaints);
+    const nextComplaints = assignComplaintsAggregator(parsed.complaints, importAggregator);
+    setComplaints(nextComplaints);
     setPickedPhotoIds({});
     setSkipped(parsed.skipped);
     setFilter('all');
-    const matched = await loadAndMatch(parsed.complaints, {});
-    saveComplaintBatch(parsed.complaints, {});
-    const result = await importComplaintsToHistory(parsed.complaints, matched);
+    const matched = await loadAndMatch(nextComplaints, {});
+    saveComplaintBatch(nextComplaints, {});
+    const result = await importComplaintsToHistory(nextComplaints, matched);
     setHistoryStore(historyFromResult(result));
     if (fromSheetUrl && sheetUrl.trim()) {
       setSync(await recordManualCruzar(sheetUrl));
     } else if (sheetUrl.trim()) {
       setSync(await saveSharedSheetUrl(sheetUrl));
     }
-    setImportOpen(false);
+    setPasteText('');
     setNotice(
-      `${parsed.complaints.length} reclamos cruzados · ${result.added} nuevos en historial · ${result.updated} ya estaban (sin duplicar).`,
+      `${nextComplaints.length} reclamos cruzados · ${result.added} nuevos en historial · ${result.updated} ya estaban (sin duplicar).`,
     );
   }
 
@@ -627,7 +636,6 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setSkipped(0);
     setNotice(null);
     setError(null);
-    setImportOpen(true);
   }
 
   const historyCount = Object.keys(historyStore.items || {}).length;
@@ -636,121 +644,107 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
 
   return (
     <section className={`complaints complaints--${inboxView}`}>
-      <h2 className="gallery__title">{inboxView === 'historial' ? 'Historial' : 'Reclamos'}</h2>
-      <p className="complaints__lead">
-        {inboxView === 'historial'
-          ? 'Quejas ya cruzadas. Filtrá por día o período y marcá el estado.'
-          : 'Pegá el Excel del día o guardá el link del Sheet. Después de las 13:30 se cruza solo. Marcás Queja → Refutado → Ref. aceptado o Ref. rechazado.'}
-      </p>
-
-      <div className="complaints__portals">
-        {PORTAL_LINKS.map((portal) => (
-          <a
-            key={portal.url}
-            className="btn btn--ghost btn--small"
-            href={portal.url}
-            target="_blank"
-            rel="noopener noreferrer"
+      <header className="complaints__toolbar">
+        <div className="tab-bar complaints__views" role="tablist" aria-label="Vista de reclamos">
+          <button
+            type="button"
+            className={`tab-bar__btn${inboxView === 'cruzar' ? ' tab-bar__btn--active' : ''}`}
+            onClick={openCruzar}
+            role="tab"
+            aria-selected={inboxView === 'cruzar'}
           >
-            Abrir {portal.label}
-          </a>
-        ))}
-      </div>
-
-      <div className="tab-bar complaints__views" role="tablist" aria-label="Vista de reclamos">
-        <button
-          type="button"
-          className={`tab-bar__btn${inboxView === 'cruzar' ? ' tab-bar__btn--active' : ''}`}
-          onClick={openCruzar}
-          role="tab"
-          aria-selected={inboxView === 'cruzar'}
-        >
-          Cruzar
-        </button>
-        <button
-          type="button"
-          className={`tab-bar__btn${inboxView === 'historial' ? ' tab-bar__btn--active' : ''}`}
-          onClick={openHistorial}
-          role="tab"
-          aria-selected={inboxView === 'historial'}
-        >
-          Historial{historyCount ? ` ${historyCount}` : ''}
-        </button>
-      </div>
+            Cruzar
+          </button>
+          <button
+            type="button"
+            className={`tab-bar__btn${inboxView === 'historial' ? ' tab-bar__btn--active' : ''}`}
+            onClick={openHistorial}
+            role="tab"
+            aria-selected={inboxView === 'historial'}
+          >
+            Historial{historyCount ? ` ${historyCount}` : ''}
+          </button>
+        </div>
+        <div className="complaints__portals">
+          {PORTAL_LINKS.map((portal) => (
+            <a
+              key={portal.url}
+              className="btn btn--ghost btn--small"
+              href={portal.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {portal.label.replace(' Portal', '').replace(' Partners', '')}
+            </a>
+          ))}
+        </div>
+      </header>
 
       {inboxView === 'cruzar' && (
-        <div className="complaints__cruzar-source">
-          <p className="complaints__hint">{dailyImportStatusMessage(sync)}</p>
-
-          {rowsWithHistory.length > 0 && (
-            <button
-              type="button"
-              className={`gallery__filters-toggle${importOpen ? ' gallery__filters-toggle--open' : ''}`}
-              onClick={() => setImportOpen((open) => !open)}
-              aria-expanded={importOpen}
-            >
-              {importOpen ? 'Cerrar carga' : 'Cargar otro Sheet'}
-            </button>
-          )}
-
-          {importOpen && (
-            <form className="complaints__import" onSubmit={handleSubmit}>
-              <label className="complaints__field">
-                <span>Pegar celdas del Google Sheet</span>
-                <textarea
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  rows={5}
-                  placeholder="Código, hora, monto, combo, motivo…"
-                  disabled={loading}
-                />
-              </label>
-
-              <div className="complaints__import-actions">
+        <form className="complaints__import" onSubmit={handleSubmit}>
+          <div className="complaints__import-meta">
+            <div className="filter-row" role="group" aria-label="Agregador de esta lista">
+              {IMPORT_AGGREGATORS.map((item) => (
                 <button
-                  type="submit"
-                  className="btn btn--primary"
-                  disabled={loading || (!pasteText.trim() && !sheetUrl.trim())}
+                  key={item.id || 'auto'}
+                  type="button"
+                  className={`filter-row__btn${importAggregator === item.id ? ' filter-row__btn--active' : ''}`}
+                  onClick={() => changeImportAggregator(item.id)}
+                  aria-pressed={importAggregator === item.id}
                 >
-                  {loading ? 'Cruzando…' : 'Cruzar con fotos'}
+                  {item.label}
                 </button>
-                <label className="btn btn--ghost complaints__file-btn">
-                  Subir CSV
-                  <input type="file" accept=".csv,text/csv,text/tab-separated-values,.tsv,text/plain" onChange={handleFile} hidden />
-                </label>
-              </div>
-
-              <label className="complaints__field">
-                <span>O link del Google Sheet (compartido con enlace)</span>
-                <div className="complaints__url-row">
-                  <input
-                    type="url"
-                    value={sheetUrl}
-                    onChange={(e) => setSheetUrl(e.target.value)}
-                    placeholder="https://docs.google.com/spreadsheets/…"
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    onClick={handleSaveUrl}
-                    disabled={loading}
-                  >
-                    Guardar link
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    onClick={handleUrl}
-                    disabled={loading || !sheetUrl.trim()}
-                  >
-                    Leer link
-                  </button>
-                </div>
+              ))}
+            </div>
+            <p className="complaints__hint">{dailyImportStatusMessage(sync)}</p>
+          </div>
+          <label className="complaints__field">
+            <span className="visually-hidden">Pegar celdas del Excel</span>
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              rows={2}
+              placeholder="Pegá las celdas: código, hora, monto, combo, motivo…"
+              disabled={loading}
+            />
+          </label>
+          <div className="complaints__import-bottom">
+            <div className="complaints__import-actions">
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={loading || (!pasteText.trim() && !sheetUrl.trim())}
+              >
+                {loading ? 'Cruzando…' : 'Cruzar con fotos'}
+              </button>
+              <label className="btn btn--ghost complaints__file-btn">
+                CSV
+                <input type="file" accept=".csv,text/csv,text/tab-separated-values,.tsv,text/plain" onChange={handleFile} hidden />
               </label>
-            </form>
-          )}
-        </div>
+            </div>
+            <div className="complaints__url-row">
+              <input
+                type="url"
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                placeholder="Link del Sheet"
+                disabled={loading}
+                aria-label="Link del Sheet"
+              />
+              <button type="button" className="btn btn--ghost" onClick={handleSaveUrl} disabled={loading}>
+                Guardar
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={handleUrl}
+                disabled={loading || !sheetUrl.trim()}
+              >
+                Leer
+              </button>
+            </div>
+          </div>
+        </form>
       )}
 
       {error && (
@@ -764,99 +758,103 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         </p>
       )}
 
+      {inboxView === 'cruzar' && !showCruzarList && !loading && (
+        <div className="gallery__state gallery__state--empty complaints__empty">
+          <p>Pegá las celdas o leé el Sheet. Si la lista no trae el prefijo en el código, elegí el agregador arriba.</p>
+        </div>
+      )}
+
       {showHistoryList && (
         <div className="complaints__history-tools">
-          <div className="filter-row" role="group" aria-label="Período">
-            {PERIOD_PRESETS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`filter-row__btn${historyPreset === item.id ? ' filter-row__btn--active' : ''}`}
-                onClick={() => setHistoryPreset(item.id)}
-                aria-pressed={historyPreset === item.id}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          {historyPreset === 'custom' && (
-            <div className="metrics-range">
-              <label>
-                Desde
-                <input
-                  type="date"
-                  value={historyCustomFrom || historyPeriod.from}
-                  onChange={(e) => setHistoryCustomFrom(e.target.value)}
-                />
-              </label>
-              <label>
-                Hasta
-                <input
-                  type="date"
-                  value={historyCustomTo || historyPeriod.to}
-                  onChange={(e) => setHistoryCustomTo(e.target.value)}
-                />
-              </label>
+          <div className="complaints__history-row">
+            <div className="filter-row" role="group" aria-label="Período">
+              {PERIOD_PRESETS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`filter-row__btn${historyPreset === item.id ? ' filter-row__btn--active' : ''}`}
+                  onClick={() => setHistoryPreset(item.id)}
+                  aria-pressed={historyPreset === item.id}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-          )}
-          <div className="filter-row" role="group" aria-label="Agregador">
-            {HISTORY_AGGREGATORS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`filter-row__btn${historyAggregator === item.id ? ' filter-row__btn--active' : ''}`}
-                onClick={() => setHistoryAggregator(item.id)}
-                aria-pressed={historyAggregator === item.id}
-              >
-                {item.label}
-              </button>
-            ))}
+            {historyPreset === 'custom' && (
+              <div className="metrics-range complaints__range">
+                <label>
+                  Desde
+                  <input
+                    type="date"
+                    value={historyCustomFrom || historyPeriod.from}
+                    onChange={(e) => setHistoryCustomFrom(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Hasta
+                  <input
+                    type="date"
+                    value={historyCustomTo || historyPeriod.to}
+                    onChange={(e) => setHistoryCustomTo(e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+            <div className="filter-row" role="group" aria-label="Agregador">
+              {HISTORY_AGGREGATORS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`filter-row__btn${historyAggregator === item.id ? ' filter-row__btn--active' : ''}`}
+                  onClick={() => setHistoryAggregator(item.id)}
+                  aria-pressed={historyAggregator === item.id}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <label className="complaints__field complaints__search">
+              <span className="visually-hidden">Buscar en el historial</span>
+              <input
+                type="search"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Código, motivo o comentario"
+              />
+            </label>
           </div>
-          <label className="complaints__field complaints__search">
-            <span>Buscar en el historial</span>
-            <input
-              type="search"
-              value={historySearch}
-              onChange={(e) => setHistorySearch(e.target.value)}
-              placeholder="Código, motivo o comentario"
-            />
-          </label>
         </div>
       )}
 
       {(showCruzarList || showHistoryList) && (
         <div className={inboxView === 'cruzar' ? 'complaints__cruzar-result' : 'complaints__history-result'}>
-          <div className="complaints__summary">
+          <div className="complaints__list-bar">
             <p className="gallery__count">
               {stats.all} reclamo{stats.all !== 1 ? 's' : ''}
-              {inboxView === 'cruzar' && skipped ? ` · ${skipped} filas sin código` : ''}
-              {` · ${formatMoney(sourceAmount(inboxView === 'historial' ? historyBaseRows : rowsWithHistory))} en quejas`}
+              {inboxView === 'cruzar' && skipped ? ` · ${skipped} sin código` : ''}
+              {` · ${formatMoney(sourceAmount(inboxView === 'historial' ? historyBaseRows : rowsWithHistory))}`}
             </p>
-            {inboxView === 'cruzar' && (
-              <button type="button" className="btn btn--ghost btn--small" onClick={handleClear}>
-                Limpiar
-              </button>
-            )}
-          </div>
-
-          <div className="filter-row complaints__filters" role="group" aria-label="Filtrar reclamos">
-            {FILTERS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`filter-row__btn${filter === item.id ? ' filter-row__btn--active' : ''}`}
-                onClick={() => setFilter(item.id)}
-                aria-pressed={filter === item.id}
-              >
-                {item.label}
-                {stats[item.id] ? ` ${stats[item.id]}` : ''}
-              </button>
-            ))}
-          </div>
-
-          {inboxView === 'cruzar' && (quejasAbiertas.length > 0 || rowsWithPhotos.length > 0) && (
+            <div className="filter-row complaints__filters" role="group" aria-label="Filtrar reclamos">
+              {FILTERS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`filter-row__btn${filter === item.id ? ' filter-row__btn--active' : ''}`}
+                  onClick={() => setFilter(item.id)}
+                  aria-pressed={filter === item.id}
+                >
+                  {item.label}
+                  {stats[item.id] ? ` ${stats[item.id]}` : ''}
+                </button>
+              ))}
+            </div>
             <div className="complaints__batch">
-              {quejasAbiertas.length > 0 && (
+              {inboxView === 'cruzar' && (
+                <button type="button" className="btn btn--ghost btn--small" onClick={handleClear}>
+                  Limpiar
+                </button>
+              )}
+              {inboxView === 'cruzar' && quejasAbiertas.length > 0 && (
                 <button
                   type="button"
                   className="btn btn--primary btn--small"
@@ -866,7 +864,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                   Marcar refutados
                 </button>
               )}
-              {rowsWithPhotos.length > 0 && (
+              {inboxView === 'cruzar' && rowsWithPhotos.length > 0 && (
                 <button
                   type="button"
                   className="btn btn--ghost btn--small"
@@ -876,29 +874,18 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                   Descargar evidencias
                 </button>
               )}
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={exportSheet}
-                disabled={loading}
-              >
-                Exportar CSV
-              </button>
+              {(inboxView === 'cruzar' || activeRows.length > 0) && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  onClick={exportSheet}
+                  disabled={loading}
+                >
+                  CSV
+                </button>
+              )}
             </div>
-          )}
-
-          {inboxView === 'historial' && activeRows.length > 0 && (
-            <div className="complaints__batch">
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={exportSheet}
-                disabled={loading}
-              >
-                Exportar CSV
-              </button>
-            </div>
-          )}
+          </div>
 
           {((loading && inboxView === 'cruzar') || (historyLoading && inboxView === 'historial')) && activeRows.length === 0 && (
             <div className="gallery__state">
@@ -970,10 +957,7 @@ function ComplaintCard({
 }) {
   const status = complaintRowStatus(row);
   const photo = row.photo;
-  const aggregator =
-    detectAggregator(row.complaint.orderCode) ||
-    row.history?.aggregator ||
-    getComplaintAggregator(row.complaint, photo);
+  const aggregator = getComplaintAggregator(row.complaint, photo) || row.history?.aggregator;
   const amount = row.history?.amount ?? row.complaint.amount;
   const combo = row.history?.combo || row.complaint.combo;
   const extraFields = Object.entries(row.history?.fields || row.complaint.fields || {});

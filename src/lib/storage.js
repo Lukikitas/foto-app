@@ -69,6 +69,26 @@ export function saveNavCollapsed(collapsed) {
   }
 }
 
+const IMPORT_AGGREGATOR_KEY = 'foto-app-import-aggregator';
+
+export function getImportAggregator() {
+  try {
+    return localStorage.getItem(IMPORT_AGGREGATOR_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveImportAggregator(aggregator) {
+  try {
+    const value = String(aggregator || '').trim();
+    if (value) localStorage.setItem(IMPORT_AGGREGATOR_KEY, value);
+    else localStorage.removeItem(IMPORT_AGGREGATOR_KEY);
+  } catch {
+    // localStorage no disponible
+  }
+}
+
 const SHEET_URL_KEY = 'foto-app-complaints-sheet-url';
 
 export function getSavedSheetUrl() {

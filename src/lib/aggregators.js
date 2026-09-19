@@ -59,7 +59,14 @@ export function getPartnerPortal(aggregator) {
 }
 
 export function getComplaintAggregator(complaint, photo) {
-  return detectAggregator(complaint?.orderCode) || getPhotoAggregator(photo);
+  if (complaint?.aggregator && AGGREGATORS[complaint.aggregator]) return complaint.aggregator;
+  return detectAggregator(complaint?.orderCode) || getPhotoAggregator(photo) || null;
+}
+
+export function assignComplaintsAggregator(complaints, aggregator) {
+  const list = Array.isArray(complaints) ? complaints : [];
+  if (!aggregator || !AGGREGATORS[aggregator]) return list;
+  return list.map((complaint) => ({ ...complaint, aggregator }));
 }
 
 export function openPartnerPortal(aggregator) {

@@ -136,7 +136,7 @@ export default function App() {
               searchPlaceholder="PEYA12345 o 4696"
             />
           )}
-          <div hidden={!complaintsOpen}>
+          <div hidden={!complaintsOpen} className="app__panel">
             <ComplaintsInbox
               view={tab === TABS.history ? 'historial' : 'cruzar'}
               onRequestCruzar={() => setTab(TABS.complaints)}

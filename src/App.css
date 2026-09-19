@@ -20,6 +20,13 @@
   display: none !important;
 }
 
+.app__panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app__shell {
   display: flex;
   flex-direction: column;
@@ -493,8 +500,7 @@
 }
 
 .uploader__textarea,
-.photo-card__edit-form textarea,
-.complaints__field textarea {
+.photo-card__edit-form textarea {
   padding: 0.7rem 0.85rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -1816,73 +1822,112 @@
   pointer-events: none;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Complaints inbox */
 
 .complaints {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding-bottom: 0.5rem;
+  gap: 0.35rem;
+  flex: 1;
+  min-height: 0;
 }
 
-.complaints__lead {
-  margin: 0;
-  color: var(--text);
-  font-size: 0.88rem;
-  line-height: 1.45;
+.complaints__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.55rem;
+  flex-shrink: 0;
+}
+
+.complaints__toolbar .tab-bar {
+  border-bottom: 0;
+}
+
+.complaints__toolbar .tab-bar__btn {
+  min-height: 1.85rem;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.82rem;
 }
 
 .complaints__hint {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 500;
-  line-height: 1.4;
+  font-size: 0.74rem;
+  line-height: 1.25;
 }
 
 .complaints__portals {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.3rem;
+  margin-left: auto;
 }
 
 .complaints__import {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.85rem;
+  gap: 0.3rem;
+  padding: 0.4rem 0.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+
+.complaints__import-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.7rem;
+}
+
+.complaints__import-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
 }
 
 .complaints__field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.15rem;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-h);
 }
 
-.complaints__field span {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-muted);
+.complaints__field textarea {
+  min-height: 3rem;
+  max-height: 8rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  resize: vertical;
 }
 
 .complaints__import-actions,
-.complaints__batch,
-.complaints__summary {
+.complaints__batch {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.3rem;
   align-items: center;
-}
-
-.complaints__summary {
-  justify-content: space-between;
 }
 
 .complaints__file-btn {
@@ -1891,13 +1936,15 @@
 
 .complaints__url-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 0.4rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 14rem;
 }
 
 .complaints__url-row input {
   min-width: 0;
-  padding: 0.65rem 0.8rem;
+  padding: 0.32rem 0.5rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg);
@@ -1906,23 +1953,53 @@
 }
 
 .complaints__filters {
-  flex-wrap: wrap;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
 .complaints__views {
-  align-self: flex-start;
+  align-self: center;
 }
 
 .complaints__history-tools {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.complaints__history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+}
+
+.complaints__range {
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.complaints__range label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+}
+
+.complaints__range input {
+  padding: 0.22rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.complaints__search {
+  flex: 1;
+  min-width: 10rem;
 }
 
 .complaints__search input {
   min-width: 0;
-  padding: 0.65rem 0.8rem;
+  padding: 0.32rem 0.5rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg);
@@ -1930,26 +2007,61 @@
   font: inherit;
 }
 
-.complaints__cruzar-source,
+.complaints__list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.55rem;
+  flex-shrink: 0;
+}
+
+.complaints__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .complaints__cruzar-result,
 .complaints__history-result {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.3rem;
   min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.complaints__empty {
+  padding: 0.45rem 0.55rem;
+  align-items: flex-start;
+  text-align: left;
+  gap: 0;
+}
+
+.complaints .gallery__state {
+  padding: 0.7rem 0.6rem;
+  gap: 0.4rem;
+}
+
+.complaints .message {
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
 }
 
 .complaints__list {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.4rem;
 }
 
 .complaint-card {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.85rem;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -3447,6 +3559,19 @@ button.metrics-agg:focus-visible {
     width: 100%;
     padding: 1.15rem 1.5rem 1.5rem;
     gap: 1rem;
+    min-height: 0;
+  }
+
+  .app__main:has(.app__panel:not([hidden])) {
+    padding: 0.7rem 1.15rem 0.7rem;
+    gap: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app__panel {
+    min-height: calc(100svh - 1.4rem);
+    max-height: calc(100svh - 1.4rem);
   }
 
   .bulk-bar {
@@ -3481,18 +3606,6 @@ button.metrics-agg:focus-visible {
 
   .metrics-aggs--hero > .metrics-agg--wide {
     grid-column: span 2;
-  }
-
-  .complaints--cruzar:not(:has(.complaints__cruzar-result)) {
-    grid-template-areas:
-      'title portals'
-      'lead portals'
-      'tabs tabs'
-      'source source';
-  }
-
-  .complaints--cruzar:not(:has(.complaints__cruzar-result)) > .complaints__cruzar-source {
-    max-width: 42rem;
   }
 
   .uploader {
@@ -3537,64 +3650,36 @@ button.metrics-agg:focus-visible {
   }
 
   .complaints {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
+    gap: 0.3rem;
+    height: 100%;
   }
 
-  .complaints--cruzar {
-    display: grid;
-    grid-template-columns: minmax(20rem, 26rem) minmax(0, 1fr);
-    grid-template-areas:
-      'title portals'
-      'lead portals'
-      'tabs tabs'
-      'source result';
-    column-gap: 1.1rem;
-    row-gap: 0.7rem;
-    align-items: start;
+  .complaints__import-bottom {
+    flex-wrap: nowrap;
   }
 
-  .complaints--cruzar > .gallery__title {
-    grid-area: title;
+  .complaints__list-bar {
+    flex-wrap: nowrap;
   }
 
-  .complaints--cruzar > .complaints__lead {
-    grid-area: lead;
-  }
-
-  .complaints--cruzar > .complaints__portals {
-    grid-area: portals;
-    justify-content: flex-end;
-  }
-
-  .complaints--cruzar > .complaints__views {
-    grid-area: tabs;
-  }
-
-  .complaints--cruzar > .complaints__cruzar-source {
-    grid-area: source;
-  }
-
-  .complaints--cruzar > .complaints__cruzar-result {
-    grid-area: result;
-  }
-
-  .complaints--cruzar > .message {
-    grid-column: 1 / -1;
+  .complaints__filters {
+    flex-wrap: wrap;
   }
 
   .complaints__list {
     display: flex;
     flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.4rem;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
   }
 
   .complaints--historial .complaint-card--row {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 0.85rem;
-    row-gap: 0.25rem;
+    column-gap: 0.75rem;
+    row-gap: 0.2rem;
   }
 
   .complaints--historial .complaint-card--row .complaint-card__top {
@@ -3605,14 +3690,20 @@ button.metrics-agg:focus-visible {
     grid-column: 1 / -1;
   }
 
+  .complaints--historial .complaints__history-row {
+    flex-wrap: wrap;
+  }
+
+  .complaints__search input {
+    padding: 0.28rem 0.5rem;
+  }
+
   .metrics-report .metrics-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .complaints__history-tools {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.25rem;
   }
 
   .gallery__grid {
