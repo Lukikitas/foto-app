@@ -1,42 +1,48 @@
 const ICONS = {
   metrics: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 16V9h3v7H4zm4.5 0V5h3v11h-3zM13 16v-5h3v5h-3z" />
+      <rect x="3.5" y="9" width="3.2" height="7.5" />
+      <rect x="8.4" y="4.5" width="3.2" height="12" />
+      <rect x="13.3" y="7" width="3.2" height="9.5" />
     </svg>
   ),
   capture: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 6.5h2.2l1.1-1.5h5.4l1.1 1.5H16a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 16 16.5H4A1.5 1.5 0 0 1 2.5 15v-7A1.5 1.5 0 0 1 4 6.5zm6 8.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" />
+      <path d="M2.6 6.4h3.1l1.1-1.7h6.4l1.1 1.7h3.1c.7 0 1.2.5 1.2 1.2v8.1c0 .7-.5 1.2-1.2 1.2H2.6c-.7 0-1.2-.5-1.2-1.2V7.6c0-.7.5-1.2 1.2-1.2z" />
     </svg>
   ),
   gallery: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M3.5 4.5h5v5h-5v-5zm8 0h5v5h-5v-5zm-8 8h5v5h-5v-5zm8 0h5v5h-5v-5z" />
+      <rect x="3" y="3" width="6.2" height="6.2" />
+      <rect x="10.8" y="3" width="6.2" height="6.2" />
+      <rect x="3" y="10.8" width="6.2" height="6.2" />
+      <rect x="10.8" y="10.8" width="6.2" height="6.2" />
     </svg>
   ),
   complaints: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 3.5h12v11H8.2L4 16.8V3.5zm3 3.2h6v1.4H7V6.7zm0 3.1h6v1.4H7v-1.4z" />
+      <path d="M4 3.2h12v10.6H8.4L4 16.8V3.2z" />
     </svg>
   ),
   history: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M10 3.2a6.8 6.8 0 1 1-4.8 2M5.2 3.4v3.2H8.4M10 6.6V10l2.4 1.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" />
+      <circle cx="10" cy="10.2" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M10 6.6v4l2.6 1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
     </svg>
   ),
   files: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M5 3.5h6.2L15.5 8v8.5H5V3.5zm6.2 0V8h4.3" />
+      <path d="M5 3.2h6.4L15.2 7v9.6H5V3.2z" />
     </svg>
   ),
   collapse: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M12.2 4.5 6.7 10l5.5 5.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="square" />
+      <path d="M12.4 4.4 6.8 10l5.6 5.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   ),
   expand: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M7.8 4.5 13.3 10l-5.5 5.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="square" />
+      <path d="M7.6 4.4 13.2 10l-5.6 5.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   ),
 };

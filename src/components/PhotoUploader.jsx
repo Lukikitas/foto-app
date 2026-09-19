@@ -254,6 +254,12 @@ export default function PhotoUploader() {
           </label>
         </div>
 
+        {!preview && !file && (
+          <div className="uploader__preview uploader__preview--empty">
+            Elegí un archivo para verlo acá
+          </div>
+        )}
+
         {preview && (
           <div className="uploader__preview">
             <img src={preview} alt="Vista previa" />
