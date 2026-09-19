@@ -103,6 +103,7 @@ export function MetricsPeriodBar({
             key={id}
             type="button"
             className={`filter-row__btn${aggregator === id ? ' filter-row__btn--active' : ''}`}
+            data-agg={id}
             onClick={() => onAggregator(id)}
           >
             {getAggregatorLabel(id)}

@@ -689,6 +689,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                   key={item.id || 'auto'}
                   type="button"
                   className={`filter-row__btn${importAggregator === item.id ? ' filter-row__btn--active' : ''}`}
+                  data-agg={item.id || undefined}
                   onClick={() => changeImportAggregator(item.id)}
                   aria-pressed={importAggregator === item.id}
                 >
@@ -806,6 +807,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                   key={item.id}
                   type="button"
                   className={`filter-row__btn${historyAggregator === item.id ? ' filter-row__btn--active' : ''}`}
+                  data-agg={item.id === 'all' ? undefined : item.id}
                   onClick={() => setHistoryAggregator(item.id)}
                   aria-pressed={historyAggregator === item.id}
                 >
@@ -840,6 +842,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                   key={item.id}
                   type="button"
                   className={`filter-row__btn${filter === item.id ? ' filter-row__btn--active' : ''}`}
+                  data-status={item.id === 'all' ? undefined : item.id}
                   onClick={() => setFilter(item.id)}
                   aria-pressed={filter === item.id}
                 >
