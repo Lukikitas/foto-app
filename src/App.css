@@ -3847,6 +3847,80 @@ button.metrics-agg:focus-visible {
   resize: vertical;
 }
 
+@media (max-width: 1023px) {
+  .app__main--capture {
+    padding-top: 0.7rem;
+    padding-bottom: 7.1rem;
+  }
+
+  .app__main--capture .uploader {
+    flex: 1;
+    min-height: calc(100svh - 8.1rem);
+    display: flex;
+    flex-direction: column;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0.15rem 0.1rem 0;
+  }
+
+  .app__main--capture .uploader__form {
+    flex: 1;
+    min-height: 0;
+    gap: 0.85rem;
+  }
+
+  .app__main--capture .uploader .photographer {
+    padding: 0.15rem 0.2rem 0;
+    border-bottom: 0;
+  }
+
+  .app__main--capture .uploader .photographer__label {
+    font-size: 1.35rem;
+    text-align: center;
+  }
+
+  .app__main--capture .uploader .photographer__chips {
+    justify-content: center;
+  }
+
+  .app__main--capture .uploader .photographer__field input {
+    min-height: 3.2rem;
+    font-size: 1.15rem;
+    text-align: center;
+  }
+
+  .app__main--capture .uploader:not(.uploader--has-file) .uploader__mode {
+    display: none;
+  }
+
+  .app__main--capture .uploader:not(.uploader--has-file) .uploader__workspace,
+  .app__main--capture .uploader:not(.uploader--has-file) .uploader__media,
+  .app__main--capture .uploader:not(.uploader--has-file) .uploader__file-actions {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .app__main--capture .uploader:not(.uploader--has-file) .uploader__file-actions {
+    justify-content: center;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  .app__main--capture .uploader__file-btn--camera {
+    width: min(100%, 21rem);
+    min-height: 5.8rem;
+    font-size: 1.5rem;
+    border-radius: 1.4rem;
+  }
+
+  .app__main--capture .uploader:not(.uploader--has-file) .uploader__file-btn--secondary {
+    width: min(100%, 21rem);
+  }
+}
+
 @media (min-width: 1024px) {
   .app {
     display: grid;

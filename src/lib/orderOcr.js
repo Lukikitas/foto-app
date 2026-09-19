@@ -1,8 +1,13 @@
-import { detectOrderCode } from './orderCode.js';
+import {
+  chooseOrderFromOcrTexts,
+  inspectOrderFromOcrTexts,
+  isConfidentOrderMatch,
+} from './orderCode.js';
 import { loadTesseract, OCR_ENGINE_ERROR, tessAssetUrl } from './tesseract';
 
-const OCR_MAX_SIDE = 2560;
-const TICKET_TARGET_SIDE = 2400;
+const OCR_MAX_SIDE = 2800;
+const TICKET_TARGET_SIDE = 2600;
+const OCR_CHAR_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-: ';
 const NEIGHBORS = [
   [0, 1],
   [1, 0],
@@ -38,6 +43,7 @@ async function getWorker() {
       await worker.setParameters({
         preserve_interword_spaces: '1',
         user_defined_dpi: '300',
+        tessedit_char_whitelist: OCR_CHAR_WHITELIST,
         tessedit_pageseg_mode: PSM.AUTO,
       });
       return { worker, PSM };
@@ -50,14 +56,28 @@ async function getWorker() {
   return workerPromise;
 }
 
-async function recognizeOrder(worker, source, psm) {
+async function recognizeTexts(worker, source, psm) {
   await worker.setParameters({
     tessedit_pageseg_mode: String(psm),
+    tessedit_char_whitelist: OCR_CHAR_WHITELIST,
+    preserve_interword_spaces: '1',
+    user_defined_dpi: '300',
   });
-  const {
-    data: { text },
-  } = await worker.recognize(source);
-  return detectOrderCode(text);
+  const { data } = await worker.recognize(source);
+  const texts = [];
+  if (data?.text) texts.push(data.text);
+  if (data?.lines?.length) {
+    texts.push(data.lines.map((line) => line.text).join('\n'));
+    const confident = data.lines
+      .filter((line) => (line.confidence || 0) >= 40)
+      .map((line) => line.text)
+      .join('\n');
+    if (confident) texts.push(confident);
+  }
+  if (data?.words?.length) {
+    texts.push(data.words.map((word) => word.text).join(' '));
+  }
+  return texts.filter((text) => String(text || '').trim());
 }
 
 function canvasFromSource(source, maxSide) {
@@ -72,6 +92,16 @@ function canvasFromSource(source, maxSide) {
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
   context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function cloneCanvas(source) {
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+  if (!context) fail();
+  context.drawImage(source, 0, 0);
   return canvas;
 }
 
@@ -102,6 +132,69 @@ function enhanceInPlace(canvas) {
     data[index + 2] = stretched;
   }
 
+  context.putImageData(imageData, 0, 0);
+}
+
+function otsuThreshold(canvas) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return 140;
+
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  const hist = new Array(256).fill(0);
+  let total = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    hist[data[index]] += 1;
+    total += 1;
+  }
+
+  let sum = 0;
+  for (let value = 0; value < 256; value += 1) sum += value * hist[value];
+
+  let sumB = 0;
+  let weightB = 0;
+  let max = 0;
+  let threshold = 140;
+  for (let value = 0; value < 256; value += 1) {
+    weightB += hist[value];
+    if (!weightB) continue;
+    const weightF = total - weightB;
+    if (!weightF) break;
+    sumB += value * hist[value];
+    const meanB = sumB / weightB;
+    const meanF = (sum - sumB) / weightF;
+    const between = weightB * weightF * (meanB - meanF) ** 2;
+    if (between > max) {
+      max = between;
+      threshold = value;
+    }
+  }
+  return threshold;
+}
+
+function thresholdInPlace(canvas, cutoff) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) fail();
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imageData;
+  for (let index = 0; index < data.length; index += 4) {
+    const value = data[index] >= cutoff ? 255 : 0;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+  context.putImageData(imageData, 0, 0);
+}
+
+function invertInPlace(canvas) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) fail();
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imageData;
+  for (let index = 0; index < data.length; index += 4) {
+    data[index] = 255 - data[index];
+    data[index + 1] = 255 - data[index + 1];
+    data[index + 2] = 255 - data[index + 2];
+  }
   context.putImageData(imageData, 0, 0);
 }
 
@@ -181,7 +274,7 @@ function findTicketRegions(canvas) {
     for (let col = 0; col < cols; col += 1) {
       const block = blockStats(data, width, height, col * cell, row * cell, cell);
       stats.push({ row, col, ...block });
-      if (block.mean > 145 && block.variance > 45) {
+      if (block.mean > 130 && block.variance > 35) {
         hot.add(row * cols + col);
       }
     }
@@ -212,7 +305,7 @@ function findTicketRegions(canvas) {
       }
     }
 
-    if (cells.length < 5) continue;
+    if (cells.length < 4) continue;
 
     let minRow = Infinity;
     let minCol = Infinity;
@@ -240,8 +333,8 @@ function findTicketRegions(canvas) {
     const aspect = regionWidth / Math.max(regionHeight, 1);
 
     if (regionWidth < 70 || regionHeight < 70) continue;
-    if (areaRatio < 0.02 || areaRatio > 0.72) continue;
-    if (aspect > 3.2 || aspect < 0.18) continue;
+    if (areaRatio < 0.015 || areaRatio > 0.8) continue;
+    if (aspect > 3.6 || aspect < 0.16) continue;
 
     regions.push({
       x,
@@ -252,7 +345,7 @@ function findTicketRegions(canvas) {
     });
   }
 
-  return regions.sort((left, right) => right.score - left.score).slice(0, 3);
+  return regions.sort((left, right) => right.score - left.score).slice(0, 5);
 }
 
 function rotatedCanvas(source, rotation) {
@@ -282,71 +375,131 @@ function rotatedCanvas(source, rotation) {
 
 function prepareCanvases(bitmap) {
   const original = canvasFromSource(bitmap, OCR_MAX_SIDE);
-  const canvases = [original];
+  const enhancedFull = cloneCanvas(original);
+  enhanceInPlace(enhancedFull);
 
-  for (const region of findTicketRegions(original)) {
+  const canvases = [enhancedFull];
+  for (const region of findTicketRegions(enhancedFull)) {
     canvases.push(cropRegion(original, region, TICKET_TARGET_SIDE));
   }
 
-  const topHalf = cropBand(original, { height: 0.52 });
-  if (topHalf) canvases.push(topHalf);
+  const bands = [
+    { height: 0.4 },
+    { height: 0.55 },
+    { left: 0.06, width: 0.88, height: 0.46 },
+    { top: 0.06, left: 0.04, width: 0.92, height: 0.3 },
+  ];
+  for (const band of bands) {
+    const cropped = cropBand(original, band);
+    if (cropped) canvases.push(cropped);
+  }
 
   return canvases;
 }
 
-async function recognizeSources(worker, PSM, canvases, rotations, psms) {
+function withVariants(canvases) {
+  const variants = [...canvases];
+
+  for (const canvas of canvases.slice(0, 5)) {
+    const binary = cloneCanvas(canvas);
+    thresholdInPlace(binary, otsuThreshold(binary));
+    variants.push(binary);
+  }
+
+  for (const canvas of canvases.slice(0, 2)) {
+    const inverted = cloneCanvas(canvas);
+    invertInPlace(inverted);
+    variants.push(inverted);
+  }
+
+  return variants;
+}
+
+async function collectGroup(worker, { sources, rotations, psms }, texts) {
   for (const psm of psms) {
     for (const rotation of rotations) {
-      for (const source of canvases) {
-        let order;
+      for (const source of sources) {
+        let found;
         try {
-          order = await recognizeOrder(worker, rotatedCanvas(source, rotation), psm);
+          found = await recognizeTexts(worker, rotatedCanvas(source, rotation), psm);
         } catch (error) {
           fail(error);
         }
-        if (order) return order;
+        texts.push(...found);
       }
     }
   }
-  return null;
 }
 
-/** Reads a ticket close-up. Never used on the live camera feed. */
-export async function detectOrderFromPhoto(file) {
-  if (!file) fail();
-
-  const { worker, PSM } = await getWorker();
-  let bitmap;
-
+async function readBitmap(file) {
   try {
-    bitmap = await createImageBitmap(file);
+    return await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    return createImageBitmap(file);
+  }
+}
+
+async function readOrderFromFile(worker, PSM, file) {
+  let bitmap;
+  try {
+    bitmap = await readBitmap(file);
   } catch (error) {
     fail(error);
   }
 
   try {
+    const texts = [];
     const canvases = prepareCanvases(bitmap);
+    const variants = withVariants(canvases);
 
-    const found = await recognizeSources(
-      worker,
-      PSM,
-      canvases.slice(0, 4),
-      [0],
-      [PSM.SINGLE_BLOCK, PSM.AUTO],
-    );
-    if (found) return found;
+    const groups = [
+      {
+        sources: variants.slice(0, 8),
+        rotations: [0],
+        psms: [PSM.SINGLE_BLOCK, PSM.SPARSE_TEXT],
+      },
+      {
+        sources: variants.slice(0, 6),
+        rotations: [0],
+        psms: [PSM.SINGLE_LINE, PSM.AUTO],
+      },
+      {
+        sources: canvases.slice(0, 4),
+        rotations: [180],
+        psms: [PSM.SINGLE_BLOCK, PSM.AUTO],
+      },
+      {
+        sources: canvases.slice(0, 2),
+        rotations: [90, 270],
+        psms: [PSM.AUTO],
+      },
+    ];
 
-    const sparse = await recognizeSources(worker, PSM, [canvases[0]], [0], [PSM.SPARSE_TEXT]);
-    if (sparse) return sparse;
+    for (const group of groups) {
+      await collectGroup(worker, group, texts);
+      const inspection = inspectOrderFromOcrTexts(texts);
+      if (isConfidentOrderMatch(inspection)) return inspection.order;
+    }
 
-    return recognizeSources(
-      worker,
-      PSM,
-      canvases.slice(0, 2),
-      [180, 90, 270],
-      [PSM.AUTO],
-    );
+    return chooseOrderFromOcrTexts(texts);
   } finally {
     bitmap.close();
   }
+}
+
+/** Reads a ticket close-up. Never used on the live camera feed. */
+export async function detectOrderFromPhoto(file, options = {}) {
+  if (!file) fail();
+
+  const { worker, PSM } = await getWorker();
+  const found = await readOrderFromFile(worker, PSM, file);
+  if (found) return found;
+
+  for (const extra of options.fallbackFiles || []) {
+    if (!extra || extra === file) continue;
+    const fallback = await readOrderFromFile(worker, PSM, extra);
+    if (fallback) return fallback;
+  }
+
+  return null;
 }

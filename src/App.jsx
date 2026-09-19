@@ -118,7 +118,7 @@ export default function App() {
         <UpdatePrompt />
         <InstallPrompt />
 
-        <main className="app__main">
+        <main className={`app__main${tab === TABS.capture ? ' app__main--capture' : ''}`}>
           {tab === TABS.capture && (
             <>
               <PhotoUploader />

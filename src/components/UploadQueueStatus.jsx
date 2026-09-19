@@ -3,7 +3,7 @@ import { useUploadQueue } from '../hooks/useUploadQueue';
 
 const STATUS_LABEL = {
   pending: 'En cola',
-  analyzing: 'Buscando código…',
+  analyzing: 'Leyendo el código…',
   uploading: 'Subiendo…',
   done: 'Guardado',
   error: 'Error',

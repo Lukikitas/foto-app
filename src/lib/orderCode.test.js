@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { detectOrderCode } from './orderCode.js';
+import {
+  chooseOrderFromOcrTexts,
+  detectOrderCode,
+  inspectOrderFromOcrTexts,
+  isConfidentOrderMatch,
+} from './orderCode.js';
 
 function code(ocrText) {
   const result = detectOrderCode(ocrText);
@@ -139,4 +144,55 @@ test('repairs spaced PEYA without a CODIGO label', () => {
 
 test('does not invent a code from ORDEN numbers', () => {
   assert.equal(code('ORDEN: 44556677'), null);
+});
+
+test('joins a code split across the next ticket lines', () => {
+  assert.deepEqual(code('CODIGO: PEYA12\n34567'), {
+    displayCode: 'PEYA1234567',
+    aggregator: 'pedidosya',
+  });
+});
+
+test('repairs FEYA and PEY8 as PedidosYa prefixes', () => {
+  assert.deepEqual(code('CODIGO: FEYA445566'), {
+    displayCode: 'PEYA445566',
+    aggregator: 'pedidosya',
+  });
+  assert.deepEqual(code('CODIGO: PEY8445566'), {
+    displayCode: 'PEYA445566',
+    aggregator: 'pedidosya',
+  });
+});
+
+test('chooseOrderFromOcrTexts prefers a labeled ticket over a stray code', () => {
+  const chosen = chooseOrderFromOcrTexts([
+    'bolsa RAPPI998877',
+    'CODIGO: PEYA12345 TOTAL 1500',
+    'TOTAL 1500',
+  ]);
+  assert.deepEqual(chosen && {
+    displayCode: chosen.displayCode,
+    aggregator: chosen.aggregator,
+  }, {
+    displayCode: 'PEYA12345',
+    aggregator: 'pedidosya',
+  });
+});
+
+test('chooseOrderFromOcrTexts keeps the code that appears more often', () => {
+  const chosen = chooseOrderFromOcrTexts([
+    'PEYA12345',
+    'ticket PEYA12345',
+    'RAPPI445566',
+  ]);
+  assert.equal(chosen.displayCode, 'PEYA12345');
+});
+
+test('a labeled or repeated reading is confident enough to stop early', () => {
+  const labeled = inspectOrderFromOcrTexts(['CODIGO: PEYA12345']);
+  assert.equal(isConfidentOrderMatch(labeled), true);
+  const repeated = inspectOrderFromOcrTexts(['PEYA12345', 'pedido PEYA12345']);
+  assert.equal(isConfidentOrderMatch(repeated), true);
+  const weak = inspectOrderFromOcrTexts(['ticket PEYA12345']);
+  assert.equal(isConfidentOrderMatch(weak), false);
 });
