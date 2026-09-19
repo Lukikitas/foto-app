@@ -4,7 +4,6 @@ import PhotographerPicker from './PhotographerPicker';
 import { isValidOrderDigits } from '../lib/photos';
 import { getLastTakenBy, getTakenByHistory, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
-import { isPhoneViewport } from '../lib/viewport';
 
 function getEmptyMeta() {
   return {
@@ -32,7 +31,7 @@ export default function PhotoUploader() {
   const [orderDigits, setOrderDigits] = useState('');
   const [detectedOrder, setDetectedOrder] = useState(null);
   const [showManualOrder, setShowManualOrder] = useState(false);
-  const [orderCameraOpen, setOrderCameraOpen] = useState(() => isPhoneViewport());
+  const [orderCameraOpen, setOrderCameraOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [meta, setMeta] = useState(getEmptyMeta);
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);

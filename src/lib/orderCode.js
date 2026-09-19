@@ -5,8 +5,6 @@ const CODIGO_LABEL =
 
 const AGGREGATOR_PREFIX = /\b(RAPPITURBO|PEYA|RAPPI|MPD)(?=[\s-]?[A-Z0-9])/;
 
-const BARE_PREFIXES = new Set(['PEYA', 'RAPPI', 'RAPPITURBO', 'MPD']);
-
 const STOP_WORDS = new Set([
   'TOTAL',
   'SUBTOTAL',
@@ -64,6 +62,8 @@ function compactAlnum(value = '') {
 function repairKnownPrefixes(value = '') {
   return value
     .replace(/P[E3][\s-]*[VY][\s-]*[A4](?=[A-Z0-9\s-]|$)/g, 'PEYA')
+    .replace(/P[E3][\s-]*Y[\s-]*[A8O](?=[A-Z0-9\s-]|$)/g, 'PEYA')
+    .replace(/[RF][E3][\s-]*Y[\s-]*[A4](?=[A-Z0-9\s-]|$)/g, 'PEYA')
     .replace(/R[A4][\s-]*P[\s-]*P[\s-]*[I1L](?=[A-Z0-9\s-]|$)/g, 'RAPPI');
 }
 
@@ -71,10 +71,6 @@ function textAfterLabel(line) {
   const match = line.match(CODIGO_LABEL);
   if (!match) return '';
   return line.slice(match.index + match[0].length).trim();
-}
-
-function isBarePrefix(text) {
-  return BARE_PREFIXES.has(compactAlnum(text));
 }
 
 function makeAggregatorResult(displayCode, aggregator) {
@@ -168,22 +164,65 @@ function parseCompactAggregator(text) {
   return null;
 }
 
-function getCodeAfterLabel(line, nextLine = '') {
+function getCodeAfterLabel(line, nextLine = '', thirdLine = '') {
   const afterLabel = repairKnownPrefixes(textAfterLabel(line));
-  const candidate = !afterLabel || isBarePrefix(afterLabel)
-    ? `${afterLabel} ${nextLine}`.trim()
-    : afterLabel;
-
-  return parseAggregatorCode(candidate);
+  const extra = [nextLine, thirdLine].filter(Boolean).join(' ');
+  const combined = `${afterLabel} ${extra}`.trim();
+  return parseAggregatorCode(afterLabel) || parseAggregatorCode(combined);
 }
 
 function scanLabeledLines(lines) {
   for (let index = 0; index < lines.length; index += 1) {
     if (!CODIGO_LABEL.test(lines[index])) continue;
-    const code = getCodeAfterLabel(lines[index], lines[index + 1] || '');
+    const code = getCodeAfterLabel(
+      lines[index],
+      lines[index + 1] || '',
+      lines[index + 2] || '',
+    );
     if (code) return code;
   }
   return null;
+}
+
+export function hasCodigoLabel(text) {
+  return CODIGO_LABEL.test(repairKnownPrefixes(normalizeLine(String(text || '').replace(/\r?\n/g, ' '))));
+}
+
+export function inspectOrderFromOcrTexts(texts) {
+  const votes = new Map();
+
+  for (const text of texts || []) {
+    const order = detectOrderCode(text);
+    if (!order) continue;
+
+    const key = compactAlnum(order.displayCode);
+    const entry = votes.get(key) || { order, count: 0, labeled: 0 };
+    entry.count += 1;
+    if (hasCodigoLabel(text)) entry.labeled += 1;
+    if (order.displayCode.length > entry.order.displayCode.length) {
+      entry.order = order;
+    }
+    votes.set(key, entry);
+  }
+
+  const ranked = [...votes.values()].sort((left, right) => {
+    if (right.labeled !== left.labeled) return right.labeled - left.labeled;
+    if (right.count !== left.count) return right.count - left.count;
+    const rightDigits = (right.order.displayCode.match(/\d/g) || []).length;
+    const leftDigits = (left.order.displayCode.match(/\d/g) || []).length;
+    if (rightDigits !== leftDigits) return rightDigits - leftDigits;
+    return right.order.displayCode.length - left.order.displayCode.length;
+  });
+
+  return ranked[0] || null;
+}
+
+export function chooseOrderFromOcrTexts(texts) {
+  return inspectOrderFromOcrTexts(texts)?.order || null;
+}
+
+export function isConfidentOrderMatch(inspection) {
+  return Boolean(inspection && (inspection.labeled > 0 || inspection.count >= 2));
 }
 
 /** Extracts a reliable aggregator order code from OCR text. */

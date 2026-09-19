@@ -51,7 +51,7 @@ export function enqueue({
     title,
     aggregator,
     label: kind === 'order'
-      ? orderDigits ? `Pedido #${orderDigits}` : 'Buscando código…'
+      ? orderDigits ? `Pedido #${orderDigits}` : 'Leyendo el código…'
       : title || file.name,
     meta,
     status: 'pending',
@@ -101,9 +101,11 @@ async function processQueue() {
 
     if (needsOcr) {
       next.status = 'analyzing';
-      next.label = 'Buscando código…';
+      next.label = 'Leyendo el código…';
       notify();
-      detectedOrder = await detectOrderFromPhoto(next.ticketFile);
+      detectedOrder = await detectOrderFromPhoto(next.ticketFile, {
+        fallbackFiles: next.file && next.file !== next.ticketFile ? [next.file] : [],
+      });
     }
 
     const preparedFile = next.file.type.startsWith('image/')
