@@ -60,7 +60,14 @@ import {
   recordManualCruzar,
   saveSharedSheetUrl,
 } from '../lib/complaintSyncStore';
-import { downloadPhoto, isImagePhoto } from '../lib/photos';
+import {
+  cachedPhotoBlob,
+  downloadPhoto,
+  fetchPhotosByIds,
+  isImagePhoto,
+  prefetchPhotoBlob,
+  startPhotoDownload,
+} from '../lib/photos';
 import { getImportAggregator, getSavedSheetUrl, saveImportAggregator } from '../lib/storage';
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
@@ -287,6 +294,38 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     () => historyBaseRows.filter((row) => rowMatchesFilter(row, filter)),
     [historyBaseRows, filter],
   );
+
+  useEffect(() => {
+    if (inboxView !== 'historial') return undefined;
+    const ids = listHistoryItems(historyStore, {
+      from: historyPeriod.from,
+      to: historyPeriod.to,
+    })
+      .map((item) => item.photoId)
+      .filter(Boolean);
+    if (ids.length === 0) return undefined;
+
+    let cancelled = false;
+    fetchPhotosByIds(ids)
+      .then((data) => {
+        if (cancelled || !data.length) return;
+        setPhotos((current) => {
+          const map = new Map(current.map((photo) => [photo.id, photo]));
+          data.forEach((photo) => map.set(photo.id, photo));
+          return [...map.values()];
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [inboxView, historyStore, historyPeriod.from, historyPeriod.to]);
+
+  useEffect(() => {
+    historyBaseRows.forEach((row) => {
+      if (row.photo?.public_url) prefetchPhotoBlob(row.photo.public_url);
+    });
+  }, [historyBaseRows]);
 
   const activeRows = inboxView === 'historial' ? historyRows : visibleRows;
 
@@ -555,12 +594,21 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     const code = rowClipboardCode(row);
     const aggregator =
       getComplaintAggregator(row.complaint, row.photo) || row.history?.aggregator;
+    let photo = row.photo;
+    const filename = photo ? getEvidenceFilename(row.complaint, photo) : '';
+    const startedDownload = photo?.public_url
+      ? startPhotoDownload(photo, new Set(), filename)
+      : false;
     const portal = openPartnerPortal(aggregator);
     setLoading(true);
     setError(null);
     try {
-      if (row.photo?.public_url) {
-        await downloadPhoto(row.photo, new Set(), getEvidenceFilename(row.complaint, row.photo));
+      if (photo && !photo.public_url && photo.id) {
+        const [loaded] = await fetchPhotosByIds([photo.id]);
+        if (loaded?.public_url) photo = loaded;
+      }
+      if (photo?.public_url && !startedDownload && !cachedPhotoBlob(photo.public_url)) {
+        await downloadPhoto(photo, new Set(), filename || getEvidenceFilename(row.complaint, photo));
       }
       let copied = false;
       if (code) {
@@ -576,7 +624,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
           [
             portal.opened ? `Se abrió ${portal.label}.` : `${portal.label} ya estaba abierto.`,
             copied ? `Código ${code} copiado.` : `Copiá el código ${code}.`,
-            row.photo?.public_url ? 'Adjuntá la foto descargada.' : '',
+            photo?.public_url ? 'Adjuntá la foto descargada.' : '',
           ]
             .filter(Boolean)
             .join(' '),
@@ -585,7 +633,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         setNotice(
           [
             copied ? `Código ${code} copiado.` : `Copiá el código ${code}.`,
-            row.photo?.public_url ? 'Foto descargada.' : '',
+            photo?.public_url ? 'Foto descargada.' : '',
           ]
             .filter(Boolean)
             .join(' '),

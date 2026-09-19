@@ -1,6 +1,16 @@
 import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { AGGREGATORS, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
+import { downloadPhoto } from './photoDownload.js';
+
+export {
+  cachedPhotoBlob,
+  downloadPhoto,
+  getDownloadFilename,
+  prefetchPhotoBlob,
+  startPhotoDownload,
+  uniqueDownloadFilename,
+} from './photoDownload.js';
 
 const BUCKET = 'photos';
 const ORDER_CODE = /^(?:\d{4,12}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})$/;
@@ -68,16 +78,18 @@ export function normalizePhotoName(value, fallback = 'Archivo') {
   return value?.trim() || fallback;
 }
 
-export function getDownloadFilename(photo, usedNames = new Set()) {
-  const ext = photo.file_path.split('.').pop() || 'jpg';
-  const baseName = normalizePhotoName(photo.name)
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .split('')
-    .filter((char) => char.charCodeAt(0) >= 32)
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return uniqueDownloadFilename(`${baseName}.${ext}`, usedNames);
+export async function fetchPhotosByIds(ids = []) {
+  const clean = [...new Set((ids || []).filter(Boolean))];
+  if (clean.length === 0) return [];
+
+  const photos = [];
+  for (let index = 0; index < clean.length; index += 50) {
+    const chunk = clean.slice(index, index + 50);
+    const { data, error } = await supabase.from('photos').select(PHOTO_COLUMNS).in('id', chunk);
+    if (error) throw error;
+    photos.push(...(data ?? []));
+  }
+  return photos;
 }
 
 export async function fetchPhotos({
@@ -418,47 +430,6 @@ export async function bulkDeletePhotos(photos) {
   const { error: dbError } = await supabase.from('photos').delete().in('id', ids);
 
   if (dbError) throw dbError;
-}
-
-export function uniqueDownloadFilename(filename, usedNames = new Set()) {
-  const safe = String(filename || 'archivo')
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .split('')
-    .filter((char) => char.charCodeAt(0) >= 32)
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim() || 'archivo';
-
-  const dot = safe.lastIndexOf('.');
-  const base = dot === -1 ? safe : safe.slice(0, dot);
-  const ext = dot === -1 ? '' : safe.slice(dot);
-  let next = safe;
-  let counter = 2;
-
-  while (usedNames.has(next)) {
-    next = `${base}-${counter}${ext}`;
-    counter += 1;
-  }
-
-  usedNames.add(next);
-  return next;
-}
-
-export async function downloadPhoto(photo, usedNames = new Set(), filenameOverride) {
-  const response = await fetch(photo.public_url);
-  if (!response.ok) throw new Error('No se pudo descargar la foto');
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filenameOverride
-    ? uniqueDownloadFilename(filenameOverride, usedNames)
-    : getDownloadFilename(photo, usedNames);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
 }
 
 export async function downloadPhotos(photos) {
