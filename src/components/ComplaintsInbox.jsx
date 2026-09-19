@@ -355,7 +355,7 @@ export default function ComplaintsInbox() {
       const photo = await uploadComplaintPhotoFile(
         file,
         row.complaint,
-        getComplaintAggregator(row.complaint, row.photo),
+        getComplaintAggregator(row.complaint, row.photo) || row.history?.aggregator,
       );
       const nextPhotos = applyUpdatedPhotos([photo]);
       const nextPicks = row.complaint.id ? { ...pickedPhotoIds, [row.complaint.id]: photo.id } : pickedPhotoIds;
@@ -414,12 +414,16 @@ export default function ComplaintsInbox() {
   }
 
   function portalFor(row) {
-    return getPartnerPortal(getComplaintAggregator(row.complaint, row.photo));
+    return getPartnerPortal(
+      getComplaintAggregator(row.complaint, row.photo) || row.history?.aggregator,
+    );
   }
 
   async function openPortal(row) {
     const code = rowClipboardCode(row);
-    const portal = openPartnerPortal(getComplaintAggregator(row.complaint, row.photo));
+    const portal = openPartnerPortal(
+      getComplaintAggregator(row.complaint, row.photo) || row.history?.aggregator,
+    );
     if (!portal) {
       setError('Este agregador no tiene portal web para abrir desde la app.');
       return;
@@ -454,7 +458,9 @@ export default function ComplaintsInbox() {
       const code = clipboardOrderCode(updated.name || row.complaint.orderCode);
       await downloadPhoto(updated, new Set(), getEvidenceFilename(row.complaint, updated));
       await copyText(code);
-      const portal = openPartnerPortal(getComplaintAggregator(row.complaint, updated));
+      const portal = openPartnerPortal(
+        getComplaintAggregator(row.complaint, updated) || row.history?.aggregator,
+      );
       setNotice(
         portal
           ? `Se abrió ${portal.label}. Buscá ${code} y adjuntá la foto descargada.`
@@ -818,7 +824,8 @@ function ComplaintCard({
   onOpenPhoto,
 }) {
   const status = complaintRowStatus(row);
-  const aggregator = detectAggregator(row.complaint.orderCode) || row.history?.aggregator;
+  const aggregator =
+    detectAggregator(row.complaint.orderCode) || row.history?.aggregator || getComplaintAggregator(row.complaint, photo);
   const photo = row.photo;
   const amount = row.history?.amount ?? row.complaint.amount;
   const combo = row.history?.combo || row.complaint.combo;

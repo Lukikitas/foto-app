@@ -63,12 +63,16 @@ export default function MetricsReport({ history, range, aggregator }) {
               <strong>{formatMoney(totals.complaintAmount)}</strong>
               <span>Plata dada al cliente</span>
             </article>
-            <article className="metrics-kpi metrics-kpi--good">
+            <article className={`metrics-kpi${totals.recoveredAmount > 0 ? ' metrics-kpi--good' : ''}`}>
               <p>$ recuperado</p>
               <strong>{formatMoney(totals.recoveredAmount)}</strong>
               <span>Volvió con Ref. aceptado</span>
             </article>
-            <article className="metrics-kpi metrics-kpi--bad">
+            <article
+              className={`metrics-kpi${
+                totals.lostAmount > 0 ? ' metrics-kpi--bad' : totals.complaintAmount ? ' metrics-kpi--good' : ''
+              }`}
+            >
               <p>$ perdido</p>
               <strong>{formatMoney(totals.lostAmount)}</strong>
               <span>Quejas menos recuperado</span>
