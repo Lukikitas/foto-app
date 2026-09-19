@@ -1953,7 +1953,7 @@
 }
 
 .complaints__filters {
-  flex: 1;
+  flex: 1 1 12rem;
   min-width: 0;
 }
 
@@ -2361,7 +2361,27 @@
   }
 
   .complaints__url-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .complaints__url-row input {
+    grid-column: 1 / -1;
+  }
+
+  .complaints__list-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .complaints__filters,
+  .complaints__batch {
+    flex: none;
+    width: 100%;
+  }
+
+  .complaints__filters {
+    align-items: flex-start;
+    align-content: flex-start;
   }
 
   .gallery__grid {
@@ -3658,7 +3678,7 @@ button.metrics-agg:focus-visible {
     flex-wrap: nowrap;
   }
 
-  .complaints__list-bar {
+  .complaints--historial .complaints__list-bar {
     flex-wrap: nowrap;
   }
 
