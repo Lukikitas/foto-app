@@ -662,7 +662,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             role="tab"
             aria-selected={inboxView === 'historial'}
           >
-            Historial{historyCount ? ` ${historyCount}` : ''}
+            Historial
+            {historyCount ? <span className="filter-row__count">{historyCount}</span> : null}
           </button>
         </div>
         <div className="complaints__portals">
@@ -842,12 +843,12 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                   key={item.id}
                   type="button"
                   className={`filter-row__btn${filter === item.id ? ' filter-row__btn--active' : ''}`}
-                  data-status={item.id === 'all' ? undefined : item.id}
                   onClick={() => setFilter(item.id)}
                   aria-pressed={filter === item.id}
+                  aria-label={stats[item.id] ? `${item.label}, ${stats[item.id]}` : item.label}
                 >
                   {item.label}
-                  {stats[item.id] ? ` ${stats[item.id]}` : ''}
+                  {stats[item.id] ? <span className="filter-row__count">{stats[item.id]}</span> : null}
                 </button>
               ))}
             </div>

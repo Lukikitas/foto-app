@@ -631,120 +631,82 @@
 }
 
 .filter-row {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
+  gap: 0.3rem;
   max-width: 100%;
-  padding: 3px;
-  background: var(--bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.18);
 }
 
 .filter-row__btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
-  min-height: 1.7rem;
-  padding: 0.15rem 0.58rem;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-muted);
+  gap: 0.35rem;
+  min-height: 1.85rem;
+  padding: 0.2rem 0.45rem 0.2rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-h);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
   cursor: pointer;
 }
 
 .filter-row__btn:hover {
-  color: var(--text-h);
-  background: color-mix(in srgb, var(--text-h) 7%, transparent);
+  border-color: var(--text-muted);
 }
 
 .filter-row__btn--active {
-  background: var(--surface);
+  border-color: var(--accent);
+  background: var(--accent-bg);
   color: var(--text-h);
-  box-shadow:
-    0 1px 0 rgba(0, 0, 0, 0.22),
-    inset 0 0 0 1px var(--border);
 }
 
-.filter-row__btn[data-agg]:not([data-agg='all'])::before,
-.filter-row__btn[data-status]:not([data-status='all'])::before {
+.filter-row__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  padding: 0.05rem 0.32rem;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.filter-row__btn--active .filter-row__count {
+  background: var(--accent);
+  color: #fff;
+}
+
+.filter-row__btn[data-agg]::before {
   content: '';
   width: 7px;
   height: 7px;
   border-radius: 1px;
   background: currentColor;
-  opacity: 0.45;
   flex-shrink: 0;
-}
-
-.filter-row__btn--active[data-agg]::before,
-.filter-row__btn--active[data-status]::before {
-  opacity: 1;
 }
 
 .filter-row__btn[data-agg='pedidosya']::before {
   background: #e4002b;
-  opacity: 1;
 }
 
 .filter-row__btn[data-agg='rappi']::before {
   background: #ff7a1a;
-  opacity: 1;
 }
 
 .filter-row__btn[data-agg='rappi_turbo']::before {
   background: #c2410c;
-  opacity: 1;
 }
 
 .filter-row__btn[data-agg='mercadopago']::before {
   background: #4ea1ff;
-  opacity: 1;
-}
-
-.filter-row__btn[data-status='queja']::before {
-  background: var(--accent);
-}
-
-.filter-row__btn[data-status='refutado']::before {
-  background: var(--info);
-}
-
-.filter-row__btn[data-status='refutado_aceptado']::before {
-  background: #a78bfa;
-}
-
-.filter-row__btn[data-status='refutado_rechazado']::before {
-  background: var(--danger);
-}
-
-.filter-row__btn[data-status='con_foto']::before {
-  background: var(--warning);
-}
-
-.filter-row__btn[data-status='sin_foto']::before {
-  background: var(--text-muted);
-}
-
-.filter-row__btn[data-status='ambiguo']::before {
-  background: var(--warning);
-}
-
-:root[data-theme='light'] .filter-row {
-  box-shadow: inset 0 1px 0 rgba(32, 33, 36, 0.04);
-}
-
-:root[data-theme='light'] .filter-row__btn--active {
-  box-shadow:
-    0 1px 0 rgba(32, 33, 36, 0.06),
-    inset 0 0 0 1px var(--border);
 }
 
 .gallery__live {
@@ -1954,9 +1916,21 @@
 }
 
 .complaints__toolbar .tab-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   min-height: 1.85rem;
   padding: 0.18rem 0.5rem;
   font-size: 0.82rem;
+}
+
+.complaints__toolbar .tab-bar__btn .filter-row__count {
+  background: var(--surface);
+}
+
+.complaints__toolbar .tab-bar__btn--active .filter-row__count {
+  background: var(--accent);
+  color: #fff;
 }
 
 .complaints__hint {
