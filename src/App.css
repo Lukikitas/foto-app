@@ -149,7 +149,6 @@
   background: var(--accent);
   border-bottom: 0;
   min-height: 3.55rem;
-  transform: translateY(-0.55rem);
   box-shadow: 0 6px 14px rgba(228, 0, 43, 0.32);
 }
 
@@ -3935,6 +3934,8 @@ button.metrics-agg:focus-visible {
     justify-content: center;
     width: 100%;
     min-height: 7.5rem;
+    padding-bottom: 5.2rem;
+    box-sizing: border-box;
   }
 
   .app__main--capture .uploader:not(.uploader--has-file) .uploader__file-secondary {
