@@ -645,6 +645,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   return (
     <section className={`complaints complaints--${inboxView}`}>
       <header className="complaints__toolbar">
+        <h2 className="gallery__title">{inboxView === 'historial' ? 'Historial' : 'Reclamos'}</h2>
         <div className="tab-bar complaints__views" role="tablist" aria-label="Vista de reclamos">
           <button
             type="button"

@@ -1957,8 +1957,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.55rem;
+  gap: 0.25rem 0.75rem;
   flex-shrink: 0;
+}
+
+.complaints__toolbar .gallery__title {
+  margin: 0;
+  font-size: 1.15rem;
 }
 
 .complaints__toolbar .tab-bar {
