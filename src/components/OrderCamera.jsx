@@ -324,20 +324,6 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           {status === 'ready' && !photographerReady && 'Poné tu nombre'}
           {status === 'ready' && photographerReady && stepLabel}
         </p>
-        <button
-          type="button"
-          className={`order-camera__flash${flashOn ? ' order-camera__flash--on' : ''}`}
-          onClick={handleFlashToggle}
-          disabled={status !== 'ready'}
-          aria-pressed={flashOn}
-          aria-label={flashOn ? 'Apagar flash' : 'Prender flash'}
-          title={status === 'ready' && !flashSupported ? 'Flash no disponible en este celular' : undefined}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 2h10l-3 8h6L7 22l3.5-9H7L7 2z" />
-          </svg>
-          <span>{flashOn ? 'On' : 'Off'}</span>
-        </button>
       </header>
 
       <div className="order-camera__who">
@@ -378,14 +364,14 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       {error && <p className="message message--error">{error}</p>}
 
       <div className="order-camera__actions">
-        <div className="order-camera__shutter-row">
+        {step === STEPS.evidence && (
           <div className="order-camera__shutter-side">
-            {step === STEPS.evidence && (
-              <button type="button" className="btn btn--ghost order-camera__repeat" onClick={resetToTicket}>
-                Repetir ticket
-              </button>
-            )}
+            <button type="button" className="btn btn--ghost order-camera__repeat" onClick={resetToTicket}>
+              Repetir ticket
+            </button>
           </div>
+        )}
+        <div className="order-camera__shutter-row">
           <button
             type="button"
             className="order-camera__shutter"
@@ -396,7 +382,20 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
             <span className="order-camera__shutter-ring" />
             <span className="order-camera__shutter-core" />
           </button>
-          <div className="order-camera__shutter-side" />
+          <button
+            type="button"
+            className={`order-camera__flash${flashOn ? ' order-camera__flash--on' : ''}`}
+            onClick={handleFlashToggle}
+            disabled={status !== 'ready'}
+            aria-pressed={flashOn}
+            aria-label={flashOn ? 'Apagar flash' : 'Prender flash'}
+            title={status === 'ready' && !flashSupported ? 'Flash no disponible en este celular' : undefined}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 2h10l-3 8h6L7 22l3.5-9H7L7 2z" />
+            </svg>
+            <span>{flashOn ? 'On' : 'Off'}</span>
+          </button>
         </div>
         <p className="order-camera__shutter-label">{captureLabel}</p>
       </div>
