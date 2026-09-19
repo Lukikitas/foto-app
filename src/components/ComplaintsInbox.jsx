@@ -824,9 +824,11 @@ function ComplaintCard({
   onOpenPhoto,
 }) {
   const status = complaintRowStatus(row);
-  const aggregator =
-    detectAggregator(row.complaint.orderCode) || row.history?.aggregator || getComplaintAggregator(row.complaint, photo);
   const photo = row.photo;
+  const aggregator =
+    detectAggregator(row.complaint.orderCode) ||
+    row.history?.aggregator ||
+    getComplaintAggregator(row.complaint, photo);
   const amount = row.history?.amount ?? row.complaint.amount;
   const combo = row.history?.combo || row.complaint.combo;
   const extraFields = Object.entries(row.history?.fields || row.complaint.fields || {});
