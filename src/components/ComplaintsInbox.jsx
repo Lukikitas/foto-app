@@ -769,18 +769,21 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       {showHistoryList && (
         <div className="complaints__history-tools">
           <div className="complaints__history-row">
-            <div className="filter-row" role="group" aria-label="Período">
-              {PERIOD_PRESETS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`filter-row__btn${historyPreset === item.id ? ' filter-row__btn--active' : ''}`}
-                  onClick={() => setHistoryPreset(item.id)}
-                  aria-pressed={historyPreset === item.id}
-                >
-                  {item.label}
-                </button>
-              ))}
+            <div className="filter-cluster">
+              <span className="filter-cluster__label">Período</span>
+              <div className="filter-row filter-row--joined" role="group" aria-label="Período">
+                {PERIOD_PRESETS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`filter-row__btn${historyPreset === item.id ? ' filter-row__btn--active' : ''}`}
+                    onClick={() => setHistoryPreset(item.id)}
+                    aria-pressed={historyPreset === item.id}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
             {historyPreset === 'custom' && (
               <div className="metrics-range complaints__range">
@@ -802,19 +805,22 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                 </label>
               </div>
             )}
-            <div className="filter-row" role="group" aria-label="Agregador">
-              {HISTORY_AGGREGATORS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`filter-row__btn${historyAggregator === item.id ? ' filter-row__btn--active' : ''}`}
-                  data-agg={item.id === 'all' ? undefined : item.id}
-                  onClick={() => setHistoryAggregator(item.id)}
-                  aria-pressed={historyAggregator === item.id}
-                >
-                  {item.label}
-                </button>
-              ))}
+            <div className="filter-cluster">
+              <span className="filter-cluster__label">Agregador</span>
+              <div className="filter-row" role="group" aria-label="Agregador">
+                {HISTORY_AGGREGATORS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`filter-row__btn${historyAggregator === item.id ? ' filter-row__btn--active' : ''}`}
+                    data-agg={item.id === 'all' ? undefined : item.id}
+                    onClick={() => setHistoryAggregator(item.id)}
+                    aria-pressed={historyAggregator === item.id}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <label className="complaints__field complaints__search">
               <span className="visually-hidden">Buscar en el historial</span>

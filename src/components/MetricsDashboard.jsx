@@ -66,17 +66,20 @@ export function MetricsPeriodBar({
 
   return (
     <div className="metrics-toolbar">
-      <div className="filter-row metrics-presets" role="group" aria-label="Período">
-        {PERIOD_PRESETS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`filter-row__btn${preset === item.id && !focusDay ? ' filter-row__btn--active' : ''}`}
-            onClick={() => onPreset(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="filter-cluster">
+        <span className="filter-cluster__label">Período</span>
+        <div className="filter-row filter-row--joined" role="group" aria-label="Período">
+          {PERIOD_PRESETS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`filter-row__btn${preset === item.id && !focusDay ? ' filter-row__btn--active' : ''}`}
+              onClick={() => onPreset(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
       {preset === 'custom' && (
         <div className="metrics-range">
@@ -90,25 +93,28 @@ export function MetricsPeriodBar({
           </label>
         </div>
       )}
-      <div className="filter-row metrics-presets" role="group" aria-label="Agregador">
-        <button
-          type="button"
-          className={`filter-row__btn${aggregator === 'all' ? ' filter-row__btn--active' : ''}`}
-          onClick={() => onAggregator('all')}
-        >
-          Todos
-        </button>
-        {METRIC_AGGREGATORS.map((id) => (
+      <div className="filter-cluster">
+        <span className="filter-cluster__label">Agregador</span>
+        <div className="filter-row" role="group" aria-label="Agregador">
           <button
-            key={id}
             type="button"
-            className={`filter-row__btn${aggregator === id ? ' filter-row__btn--active' : ''}`}
-            data-agg={id}
-            onClick={() => onAggregator(id)}
+            className={`filter-row__btn${aggregator === 'all' ? ' filter-row__btn--active' : ''}`}
+            onClick={() => onAggregator('all')}
           >
-            {getAggregatorLabel(id)}
+            Todos
           </button>
-        ))}
+          {METRIC_AGGREGATORS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={`filter-row__btn${aggregator === id ? ' filter-row__btn--active' : ''}`}
+              data-agg={id}
+              onClick={() => onAggregator(id)}
+            >
+              {getAggregatorLabel(id)}
+            </button>
+          ))}
+        </div>
       </div>
       <form className="metrics-target" onSubmit={handleSaveTargets}>
         <label>
