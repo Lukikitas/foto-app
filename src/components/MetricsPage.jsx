@@ -145,12 +145,12 @@ export default function MetricsPage() {
             Excel.
           </p>
         </div>
-        <div className="metrics__views metrics__views--tabs" role="tablist" aria-label="Métricas">
+        <div className="tab-bar metrics__views metrics__views--tabs" role="tablist" aria-label="Métricas">
           {METRIC_PAGE_TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
-              className={`gallery__view-btn${view === tab.id ? ' gallery__view-btn--active' : ''}`}
+              className={`tab-bar__btn${view === tab.id ? ' tab-bar__btn--active' : ''}`}
               onClick={() => changeView(tab.id)}
               role="tab"
               aria-selected={view === tab.id}

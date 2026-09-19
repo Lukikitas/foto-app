@@ -24,13 +24,13 @@ function formatDelta(value, { pct = false, money = false } = {}) {
   return formatted;
 }
 
-function Kpi({ label, value, hint, tone }) {
+function SheetStat({ label, value, hint, tone }) {
   return (
-    <article className={`metrics-kpi${tone ? ` metrics-kpi--${tone}` : ''}`}>
-      <p>{label}</p>
+    <div className={`metrics-sheet__row${tone ? ` metrics-sheet__row--${tone}` : ''}`}>
+      <span>{label}</span>
       <strong>{value}</strong>
-      {hint ? <span>{hint}</span> : null}
-    </article>
+      {hint ? <em>{hint}</em> : null}
+    </div>
   );
 }
 
@@ -66,12 +66,12 @@ export function MetricsPeriodBar({
 
   return (
     <div className="metrics-toolbar">
-      <div className="metrics-presets" role="group" aria-label="Período">
+      <div className="filter-row metrics-presets" role="group" aria-label="Período">
         {PERIOD_PRESETS.map((item) => (
           <button
             key={item.id}
             type="button"
-            className={`gallery__view-btn${preset === item.id && !focusDay ? ' gallery__view-btn--active' : ''}`}
+            className={`filter-row__btn${preset === item.id && !focusDay ? ' filter-row__btn--active' : ''}`}
             onClick={() => onPreset(item.id)}
           >
             {item.label}
@@ -90,10 +90,10 @@ export function MetricsPeriodBar({
           </label>
         </div>
       )}
-      <div className="metrics-presets" role="group" aria-label="Agregador">
+      <div className="filter-row metrics-presets" role="group" aria-label="Agregador">
         <button
           type="button"
-          className={`gallery__view-btn${aggregator === 'all' ? ' gallery__view-btn--active' : ''}`}
+          className={`filter-row__btn${aggregator === 'all' ? ' filter-row__btn--active' : ''}`}
           onClick={() => onAggregator('all')}
         >
           Todos
@@ -102,7 +102,7 @@ export function MetricsPeriodBar({
           <button
             key={id}
             type="button"
-            className={`gallery__view-btn${aggregator === id ? ' gallery__view-btn--active' : ''}`}
+            className={`filter-row__btn${aggregator === id ? ' filter-row__btn--active' : ''}`}
             onClick={() => onAggregator(id)}
           >
             {getAggregatorLabel(id)}
@@ -207,44 +207,50 @@ export default function MetricsDashboard({
 
   return (
     <div className="metrics-dash">
-      <div className="metrics-kpis">
-        <Kpi label="Pedidos" value={formatNumber(item.orders)} hint={`${formatDelta(compared.orders)} vs anterior`} />
-        <Kpi
-          label="Quejas"
-          value={formatNumber(item.complaints)}
-          hint={`${formatDelta(compared.complaints)} vs anterior`}
-        />
-        <Kpi
-          label="% quejas"
-          value={formatPct(item.complaintPct)}
-          hint={`objetivo ${formatPct(store.targetComplaintPct)}`}
-          tone={complaintBad ? 'bad' : item.orders ? 'good' : undefined}
-        />
-        {showAwt && (
-          <Kpi
-            label="% AWT"
-            value={formatPct(item.awtPct)}
-            hint={`objetivo ${formatPct(store.targetAwtPct)}`}
-            tone={isOutOfTarget(item.awtPct, store.targetAwtPct) ? 'bad' : item.orders ? 'good' : undefined}
+      <div className="metrics-sheet">
+        <section className="metrics-sheet__group">
+          <h3>Operación</h3>
+          <SheetStat label="Pedidos" value={formatNumber(item.orders)} hint={`${formatDelta(compared.orders)} vs anterior`} />
+          <SheetStat
+            label="Quejas"
+            value={formatNumber(item.complaints)}
+            hint={`${formatDelta(compared.complaints)} vs anterior`}
           />
-        )}
-        <Kpi
-          label="$ quejas"
-          value={formatMoney(item.complaintAmount)}
-          hint="Plata dada al cliente"
-        />
-        <Kpi
-          label="$ recuperado"
-          value={formatMoney(item.recoveredAmount)}
-          hint="Volvió con Ref. aceptado"
-          tone={item.recoveredAmount > 0 ? 'good' : undefined}
-        />
-        <Kpi
-          label="$ perdido"
-          value={formatMoney(item.lostAmount)}
-          hint="Quejas menos recuperado"
-          tone={item.lostAmount > 0 ? 'bad' : item.complaintAmount ? 'good' : undefined}
-        />
+          <SheetStat
+            label="% quejas"
+            value={formatPct(item.complaintPct)}
+            hint={`objetivo ${formatPct(store.targetComplaintPct)}`}
+            tone={complaintBad ? 'bad' : item.orders ? 'good' : undefined}
+          />
+          {showAwt && (
+            <SheetStat
+              label="% AWT"
+              value={formatPct(item.awtPct)}
+              hint={`objetivo ${formatPct(store.targetAwtPct)}`}
+              tone={isOutOfTarget(item.awtPct, store.targetAwtPct) ? 'bad' : item.orders ? 'good' : undefined}
+            />
+          )}
+        </section>
+        <section className="metrics-sheet__group">
+          <h3>Plata</h3>
+          <SheetStat
+            label="$ quejas"
+            value={formatMoney(item.complaintAmount)}
+            hint="Dada al cliente"
+          />
+          <SheetStat
+            label="$ recuperado"
+            value={formatMoney(item.recoveredAmount)}
+            hint="Volvió con Ref. aceptado"
+            tone={item.recoveredAmount > 0 ? 'good' : undefined}
+          />
+          <SheetStat
+            label="$ perdido"
+            value={formatMoney(item.lostAmount)}
+            hint="Quejas menos recuperado"
+            tone={item.lostAmount > 0 ? 'bad' : item.complaintAmount ? 'good' : undefined}
+          />
+        </section>
       </div>
 
       <div className="metrics-money-split">
@@ -269,7 +275,7 @@ export default function MetricsDashboard({
               type="button"
               className={`metrics-agg metrics-agg--hero${statusBad ? ' metrics-agg--bad' : ''}${
                 !has ? ' metrics-agg--empty' : ''
-              }${aggregator === id ? ' is-selected' : ''}`}
+              }${id === 'pedidosya' && has ? ' metrics-agg--wide' : ''}${aggregator === id ? ' is-selected' : ''}`}
               onClick={() => onAggregator(aggregator === id ? 'all' : id)}
             >
               <header>

@@ -1,6 +1,7 @@
 const TAKEN_BY_KEY = 'foto-app-taken-by';
 const GALLERY_VIEW_KEY = 'foto-app-gallery-view';
 const FILTERS_OPEN_KEY = 'foto-app-filters-open';
+const NAV_COLLAPSED_KEY = 'foto-app-nav-collapsed';
 
 export function getLastTakenBy() {
   try {
@@ -47,6 +48,22 @@ export function getFiltersOpen() {
 export function saveFiltersOpen(open) {
   try {
     localStorage.setItem(FILTERS_OPEN_KEY, String(open));
+  } catch {
+    // localStorage no disponible
+  }
+}
+
+export function getNavCollapsed() {
+  try {
+    return localStorage.getItem(NAV_COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function saveNavCollapsed(collapsed) {
+  try {
+    localStorage.setItem(NAV_COLLAPSED_KEY, String(Boolean(collapsed)));
   } catch {
     // localStorage no disponible
   }

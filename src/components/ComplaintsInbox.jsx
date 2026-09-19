@@ -27,7 +27,7 @@ import {
   complaintRowStatus,
   matchComplaintsToPhotos,
 } from '../lib/complaintMatch';
-import { formatMoney } from '../lib/metrics';
+import { argentinaToday, formatMoney, PERIOD_PRESETS, resolvePeriod } from '../lib/metrics';
 import {
   cachedComplaintHistory,
   deleteHistoryItemById,
@@ -125,7 +125,7 @@ function historyFromResult(result) {
   return result?.store || result;
 }
 
-export default function ComplaintsInbox() {
+export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory } = {}) {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
   const [sync, setSync] = useState(cachedComplaintSync);
@@ -137,9 +137,12 @@ export default function ComplaintsInbox() {
   const [pickedPhotoIds, setPickedPhotoIds] = useState(storedBatch.pickedPhotoIds);
   const [skipped, setSkipped] = useState(0);
   const [filter, setFilter] = useState('all');
-  const [inboxView, setInboxView] = useState('cruzar');
+  const inboxView = view === 'historial' ? 'historial' : 'cruzar';
   const [historyAggregator, setHistoryAggregator] = useState('all');
   const [historySearch, setHistorySearch] = useState('');
+  const [historyPreset, setHistoryPreset] = useState('month');
+  const [historyCustomFrom, setHistoryCustomFrom] = useState('');
+  const [historyCustomTo, setHistoryCustomTo] = useState('');
   const [loading, setLoading] = useState(storedBatch.complaints.length > 0);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -163,6 +166,19 @@ export default function ComplaintsInbox() {
   );
 
   useEffect(() => subscribeComplaintHistory(setHistoryStore), []);
+
+  const historyPeriod = useMemo(
+    () => resolvePeriod(historyPreset, argentinaToday(), historyCustomFrom, historyCustomTo),
+    [historyPreset, historyCustomFrom, historyCustomTo],
+  );
+
+  function openCruzar() {
+    onRequestCruzar?.();
+  }
+
+  function openHistorial() {
+    onRequestHistory?.();
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -259,8 +275,10 @@ export default function ComplaintsInbox() {
     return listHistoryItems(historyStore, {
       aggregator: historyAggregator,
       search: historySearch,
+      from: historyPeriod.from,
+      to: historyPeriod.to,
     }).map((item) => historyItemToRow(item, photos));
-  }, [historyStore, historyAggregator, historySearch, photos]);
+  }, [historyStore, historyAggregator, historySearch, photos, historyPeriod]);
 
   const historyRows = useMemo(
     () => historyBaseRows.filter((row) => rowMatchesFilter(row, filter)),
@@ -617,12 +635,12 @@ export default function ComplaintsInbox() {
   const showHistoryList = inboxView === 'historial';
 
   return (
-    <section className="complaints">
-      <h2 className="gallery__title">Reclamos</h2>
+    <section className={`complaints complaints--${inboxView}`}>
+      <h2 className="gallery__title">{inboxView === 'historial' ? 'Historial' : 'Reclamos'}</h2>
       <p className="complaints__lead">
-        Pegá el Excel del día o guardá el link del Sheet. Después de las 13:30, la primera vez
-        que alguien abre la app se cruza solo y queda en todos los dispositivos. Marcás Queja →
-        Refutado → Ref. aceptado o Ref. rechazado. La plata recuperada se ve en Métricas.
+        {inboxView === 'historial'
+          ? 'Quejas ya cruzadas. Filtrá por día o período y marcá el estado.'
+          : 'Pegá el Excel del día o guardá el link del Sheet. Después de las 13:30 se cruza solo. Marcás Queja → Refutado → Ref. aceptado o Ref. rechazado.'}
       </p>
 
       <div className="complaints__portals">
@@ -639,11 +657,11 @@ export default function ComplaintsInbox() {
         ))}
       </div>
 
-      <div className="gallery__view-toggle complaints__views" role="tablist" aria-label="Vista de reclamos">
+      <div className="tab-bar complaints__views" role="tablist" aria-label="Vista de reclamos">
         <button
           type="button"
-          className={`gallery__view-btn${inboxView === 'cruzar' ? ' gallery__view-btn--active' : ''}`}
-          onClick={() => setInboxView('cruzar')}
+          className={`tab-bar__btn${inboxView === 'cruzar' ? ' tab-bar__btn--active' : ''}`}
+          onClick={openCruzar}
           role="tab"
           aria-selected={inboxView === 'cruzar'}
         >
@@ -651,8 +669,8 @@ export default function ComplaintsInbox() {
         </button>
         <button
           type="button"
-          className={`gallery__view-btn${inboxView === 'historial' ? ' gallery__view-btn--active' : ''}`}
-          onClick={() => setInboxView('historial')}
+          className={`tab-bar__btn${inboxView === 'historial' ? ' tab-bar__btn--active' : ''}`}
+          onClick={openHistorial}
           role="tab"
           aria-selected={inboxView === 'historial'}
         >
@@ -661,76 +679,78 @@ export default function ComplaintsInbox() {
       </div>
 
       {inboxView === 'cruzar' && (
-        <p className="complaints__hint">{dailyImportStatusMessage(sync)}</p>
-      )}
+        <div className="complaints__cruzar-source">
+          <p className="complaints__hint">{dailyImportStatusMessage(sync)}</p>
 
-      {inboxView === 'cruzar' && rowsWithHistory.length > 0 && (
-        <button
-          type="button"
-          className={`gallery__filters-toggle${importOpen ? ' gallery__filters-toggle--open' : ''}`}
-          onClick={() => setImportOpen((open) => !open)}
-          aria-expanded={importOpen}
-        >
-          {importOpen ? 'Cerrar carga' : 'Cargar otro Sheet'}
-        </button>
-      )}
-
-      {inboxView === 'cruzar' && importOpen && (
-        <form className="complaints__import" onSubmit={handleSubmit}>
-          <label className="complaints__field">
-            <span>Pegar celdas del Google Sheet</span>
-            <textarea
-              value={pasteText}
-              onChange={(e) => setPasteText(e.target.value)}
-              rows={5}
-              placeholder="Código, hora, monto, combo, motivo…"
-              disabled={loading}
-            />
-          </label>
-
-          <div className="complaints__import-actions">
+          {rowsWithHistory.length > 0 && (
             <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={loading || (!pasteText.trim() && !sheetUrl.trim())}
+              type="button"
+              className={`gallery__filters-toggle${importOpen ? ' gallery__filters-toggle--open' : ''}`}
+              onClick={() => setImportOpen((open) => !open)}
+              aria-expanded={importOpen}
             >
-              {loading ? 'Cruzando…' : 'Cruzar con fotos'}
+              {importOpen ? 'Cerrar carga' : 'Cargar otro Sheet'}
             </button>
-            <label className="btn btn--ghost complaints__file-btn">
-              Subir CSV
-              <input type="file" accept=".csv,text/csv,text/tab-separated-values,.tsv,text/plain" onChange={handleFile} hidden />
-            </label>
-          </div>
+          )}
 
-          <label className="complaints__field">
-            <span>O link del Google Sheet (compartido con enlace)</span>
-            <div className="complaints__url-row">
-              <input
-                type="url"
-                value={sheetUrl}
-                onChange={(e) => setSheetUrl(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/…"
-                disabled={loading}
-              />
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={handleSaveUrl}
-                disabled={loading}
-              >
-                Guardar link
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={handleUrl}
-                disabled={loading || !sheetUrl.trim()}
-              >
-                Leer link
-              </button>
-            </div>
-          </label>
-        </form>
+          {importOpen && (
+            <form className="complaints__import" onSubmit={handleSubmit}>
+              <label className="complaints__field">
+                <span>Pegar celdas del Google Sheet</span>
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  rows={5}
+                  placeholder="Código, hora, monto, combo, motivo…"
+                  disabled={loading}
+                />
+              </label>
+
+              <div className="complaints__import-actions">
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={loading || (!pasteText.trim() && !sheetUrl.trim())}
+                >
+                  {loading ? 'Cruzando…' : 'Cruzar con fotos'}
+                </button>
+                <label className="btn btn--ghost complaints__file-btn">
+                  Subir CSV
+                  <input type="file" accept=".csv,text/csv,text/tab-separated-values,.tsv,text/plain" onChange={handleFile} hidden />
+                </label>
+              </div>
+
+              <label className="complaints__field">
+                <span>O link del Google Sheet (compartido con enlace)</span>
+                <div className="complaints__url-row">
+                  <input
+                    type="url"
+                    value={sheetUrl}
+                    onChange={(e) => setSheetUrl(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/…"
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={handleSaveUrl}
+                    disabled={loading}
+                  >
+                    Guardar link
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={handleUrl}
+                    disabled={loading || !sheetUrl.trim()}
+                  >
+                    Leer link
+                  </button>
+                </div>
+              </label>
+            </form>
+          )}
+        </div>
       )}
 
       {error && (
@@ -746,12 +766,45 @@ export default function ComplaintsInbox() {
 
       {showHistoryList && (
         <div className="complaints__history-tools">
-          <div className="gallery__view-toggle complaints__filters" role="group" aria-label="Agregador">
+          <div className="filter-row" role="group" aria-label="Período">
+            {PERIOD_PRESETS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`filter-row__btn${historyPreset === item.id ? ' filter-row__btn--active' : ''}`}
+                onClick={() => setHistoryPreset(item.id)}
+                aria-pressed={historyPreset === item.id}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {historyPreset === 'custom' && (
+            <div className="metrics-range">
+              <label>
+                Desde
+                <input
+                  type="date"
+                  value={historyCustomFrom || historyPeriod.from}
+                  onChange={(e) => setHistoryCustomFrom(e.target.value)}
+                />
+              </label>
+              <label>
+                Hasta
+                <input
+                  type="date"
+                  value={historyCustomTo || historyPeriod.to}
+                  onChange={(e) => setHistoryCustomTo(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
+          <div className="filter-row" role="group" aria-label="Agregador">
             {HISTORY_AGGREGATORS.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className={`gallery__view-btn${historyAggregator === item.id ? ' gallery__view-btn--active' : ''}`}
+                className={`filter-row__btn${historyAggregator === item.id ? ' filter-row__btn--active' : ''}`}
                 onClick={() => setHistoryAggregator(item.id)}
                 aria-pressed={historyAggregator === item.id}
               >
@@ -772,7 +825,7 @@ export default function ComplaintsInbox() {
       )}
 
       {(showCruzarList || showHistoryList) && (
-        <>
+        <div className={inboxView === 'cruzar' ? 'complaints__cruzar-result' : 'complaints__history-result'}>
           <div className="complaints__summary">
             <p className="gallery__count">
               {stats.all} reclamo{stats.all !== 1 ? 's' : ''}
@@ -786,12 +839,12 @@ export default function ComplaintsInbox() {
             )}
           </div>
 
-          <div className="gallery__view-toggle complaints__filters" role="group" aria-label="Filtrar reclamos">
+          <div className="filter-row complaints__filters" role="group" aria-label="Filtrar reclamos">
             {FILTERS.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className={`gallery__view-btn${filter === item.id ? ' gallery__view-btn--active' : ''}`}
+                className={`filter-row__btn${filter === item.id ? ' filter-row__btn--active' : ''}`}
                 onClick={() => setFilter(item.id)}
                 aria-pressed={filter === item.id}
               >
@@ -869,6 +922,7 @@ export default function ComplaintsInbox() {
               <ComplaintCard
                 key={row.complaint.id}
                 row={row}
+                layout={inboxView === 'historial' ? 'row' : 'card'}
                 disabled={loading}
                 onPick={pickPhoto}
                 onPrepare={prepareEvidence}
@@ -884,7 +938,7 @@ export default function ComplaintsInbox() {
               />
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {lightboxPhoto && isImagePhoto(lightboxPhoto) && (
@@ -900,6 +954,7 @@ export default function ComplaintsInbox() {
 
 function ComplaintCard({
   row,
+  layout = 'card',
   disabled,
   onPick,
   onPrepare,
@@ -924,7 +979,7 @@ function ComplaintCard({
   const extraFields = Object.entries(row.history?.fields || row.complaint.fields || {});
 
   return (
-    <article className={`complaint-card complaint-card--${status}`}>
+    <article className={`complaint-card complaint-card--${status}${layout === 'row' ? ' complaint-card--row' : ''}`}>
       <div className="complaint-card__top">
         {photo?.public_url ? (
           <button

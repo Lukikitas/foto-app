@@ -409,10 +409,10 @@ export default function PhotoGallery({
         </div>
 
         <div className="gallery__header-actions">
-          <div className="gallery__view-toggle" role="group" aria-label="Modo de vista">
+          <div className="tab-bar" role="group" aria-label="Modo de vista">
             <button
               type="button"
-              className={`gallery__view-btn${viewMode === 'grid' ? ' gallery__view-btn--active' : ''}`}
+              className={`tab-bar__btn${viewMode === 'grid' ? ' tab-bar__btn--active' : ''}`}
               onClick={() => changeViewMode('grid')}
               aria-pressed={viewMode === 'grid'}
             >
@@ -420,7 +420,7 @@ export default function PhotoGallery({
             </button>
             <button
               type="button"
-              className={`gallery__view-btn${viewMode === 'list' ? ' gallery__view-btn--active' : ''}`}
+              className={`tab-bar__btn${viewMode === 'list' ? ' tab-bar__btn--active' : ''}`}
               onClick={() => changeViewMode('list')}
               aria-pressed={viewMode === 'list'}
             >

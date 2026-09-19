@@ -3,6 +3,7 @@ import { formatDateTime } from '../lib/date';
 import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
+import PhotoEditForm from './PhotoEditForm';
 import CompleteOrderCode from './CompleteOrderCode';
 import {
   deletePhoto,
@@ -14,6 +15,7 @@ import {
   isImagePhoto,
   isOrderPhoto,
   isUnidentifiedOrder,
+  isValidOrderDigits,
   updatePhoto,
 } from '../lib/photos';
 
@@ -29,8 +31,8 @@ function RowBadges({ photo }) {
       {isFile && <span className="badge badge--file">{getPhotoKind(photo)}</span>}
       {aggregator && <span className={aggregatorBadgeClass(aggregator)}>{getAggregatorLabel(aggregator)}</span>}
       {codeNotFound && <span className="badge badge--missing-code">Código no encontrado</span>}
-      {photo.has_complaint && <span className="badge badge--complaint">R</span>}
-      {photo.is_refutado && <span className="badge badge--refutado">Ref</span>}
+      {photo.has_complaint && <span className="badge badge--complaint">Reclamo</span>}
+      {photo.is_refutado && <span className="badge badge--refutado">Refutado</span>}
     </span>
   );
 }
@@ -44,11 +46,14 @@ export default function PhotoListRow({
   onDeleted,
 }) {
   const [lightbox, setLightbox] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const timestamp = getPhotoTimestamp(photo);
   const title = getPhotoTitle(photo);
+  const isOrder = isOrderPhoto(photo);
   const isImage = isImagePhoto(photo);
   const isUnidentified = isUnidentifiedOrder(photo);
   const extension = getFileExtension(photo).toUpperCase() || 'FILE';
@@ -73,8 +78,6 @@ export default function PhotoListRow({
   }
 
   async function handleDelete() {
-    if (!window.confirm(`¿Eliminar ${title}?`)) return;
-
     setLoading(true);
     setError(null);
     try {
@@ -82,6 +85,34 @@ export default function PhotoListRow({
       onDeleted?.(photo.id);
     } catch (err) {
       setError(err.message || 'Error al eliminar.');
+      setConfirmDelete(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleEdit(form) {
+    if (isOrder && !isValidOrderDigits(form.name)) {
+      setError('Ingresá un código de pedido válido.');
+      return;
+    }
+    if (!form.name.trim()) {
+      setError('Ingresá un nombre.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await updatePhoto(photo.id, form.name, {
+        ...form,
+        has_complaint: isOrder ? form.has_complaint : false,
+        is_refutado: isOrder ? form.is_refutado : false,
+      });
+      onUpdated?.(updated);
+      setEditing(false);
+    } catch (err) {
+      setError(err.message || 'Error al guardar los cambios.');
     } finally {
       setLoading(false);
     }
@@ -112,11 +143,12 @@ export default function PhotoListRow({
   }
 
   const pressHandlers = longPress.bind(openItem);
+  const busy = editing || completing || confirmDelete;
 
   return (
     <>
       <div
-        className={`photo-row${selected ? ' photo-row--selected' : ''}${photo.has_complaint ? ' photo-row--complaint' : ''}${completing ? ' photo-row--completing' : ''}`}
+        className={`photo-row${selected ? ' photo-row--selected' : ''}${photo.has_complaint ? ' photo-row--complaint' : ''}${busy ? ' photo-row--busy' : ''}`}
       >
         <input
           type="checkbox"
@@ -155,42 +187,78 @@ export default function PhotoListRow({
           <RowBadges photo={photo} />
         </button>
 
-        <div className="photo-row__actions">
-          {isUnidentified && !completing && (
+        {!busy && (
+          <div className="photo-row__actions">
             <button
               type="button"
-              className="btn btn--small btn--primary"
+              className="btn btn--small btn--ghost"
+              onClick={openItem}
+            >
+              {isImage ? 'Ver' : 'Abrir'}
+            </button>
+            <button
+              type="button"
+              className="btn btn--small btn--ghost"
               onClick={() => {
-                setCompleting(true);
+                setEditing(true);
                 setError(null);
               }}
               disabled={loading}
             >
-              Completar código
+              Editar
             </button>
-          )}
-          <button
-            type="button"
-            className="btn btn--icon"
-            onClick={handleDownload}
-            title="Descargar"
-            disabled={loading}
-          >
-            ↓
-          </button>
-          <button
-            type="button"
-            className="btn btn--icon btn--icon-danger"
-            onClick={handleDelete}
-            title="Borrar"
-            disabled={loading}
-          >
-            ×
-          </button>
-        </div>
+            <button
+              type="button"
+              className="btn btn--small btn--ghost"
+              onClick={handleDownload}
+              disabled={loading}
+            >
+              Descargar
+            </button>
+            {isUnidentified && (
+              <button
+                type="button"
+                className="btn btn--small btn--primary"
+                onClick={() => {
+                  setCompleting(true);
+                  setError(null);
+                }}
+                disabled={loading}
+              >
+                Completar código
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn--small btn--danger"
+              onClick={() => {
+                setConfirmDelete(true);
+                setError(null);
+              }}
+              disabled={loading}
+            >
+              Borrar
+            </button>
+          </div>
+        )}
+
+        {editing && (
+          <div className="photo-row__panel">
+            <PhotoEditForm
+              key={photo.id}
+              photo={photo}
+              loading={loading}
+              onSubmit={handleEdit}
+              onCancel={() => {
+                setEditing(false);
+                setError(null);
+              }}
+            />
+          </div>
+        )}
 
         {completing && (
-          <div className="photo-row__complete">
+          <div className="photo-row__panel">
             <CompleteOrderCode
               loading={loading}
               error={error}
@@ -200,6 +268,30 @@ export default function PhotoListRow({
                 setError(null);
               }}
             />
+          </div>
+        )}
+
+        {confirmDelete && (
+          <div className="photo-row__panel photo-row__confirm">
+            <p>¿Eliminar {title} del {formatDateTime(timestamp)}?</p>
+            <div className="photo-card__confirm-actions">
+              <button
+                type="button"
+                className="btn btn--small btn--danger"
+                onClick={handleDelete}
+                disabled={loading}
+              >
+                {loading ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+              <button
+                type="button"
+                className="btn btn--small btn--ghost"
+                onClick={() => setConfirmDelete(false)}
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         )}
 

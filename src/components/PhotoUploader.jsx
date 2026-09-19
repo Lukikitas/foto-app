@@ -196,11 +196,13 @@ export default function PhotoUploader() {
           </button>
         </div>
 
+        <div className="uploader__workspace">
+        <div className="uploader__media">
         <div className="uploader__file-actions">
           {isOrderMode ? (
             <button
               type="button"
-              className="uploader__file-btn"
+              className="uploader__file-btn uploader__mobile-camera"
               onClick={() => {
                 setOrderCameraOpen(true);
                 setError(null);
@@ -209,7 +211,7 @@ export default function PhotoUploader() {
               Abrir cámara rápida
             </button>
           ) : (
-            <label className="uploader__file-label">
+            <label className="uploader__file-label uploader__mobile-camera">
               <input
                 ref={cameraInputRef}
                 type="file"
@@ -223,7 +225,7 @@ export default function PhotoUploader() {
           )}
 
           {isOrderMode && (
-            <label className="uploader__file-label">
+            <label className="uploader__file-label uploader__mobile-camera">
               <input
                 ref={cameraInputRef}
                 type="file"
@@ -246,7 +248,7 @@ export default function PhotoUploader() {
               onChange={handleFileChange}
               className="uploader__file-input"
             />
-            <span className="uploader__file-btn uploader__file-btn--secondary">
+            <span className="uploader__file-btn uploader__file-btn--secondary uploader__file-btn--pick">
               {isOrderMode ? 'Elegir de galería' : 'Elegir archivo'}
             </span>
           </label>
@@ -271,6 +273,9 @@ export default function PhotoUploader() {
             <span>{Math.ceil(file.size / 1024)} KB</span>
           </div>
         )}
+        </div>
+
+        <div className="uploader__fields">
 
         {isOrderMode && detectedOrder && !showManualOrder && (
           <div className="uploader__detected-order" role="status">
@@ -374,6 +379,8 @@ export default function PhotoUploader() {
         >
           {saving ? 'Preparando...' : 'Guardar y seguir'}
         </button>
+        </div>
+        </div>
       </form>
     </section>
   );

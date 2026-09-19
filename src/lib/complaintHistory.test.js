@@ -173,6 +173,26 @@ test('deletes one complaint or the whole history', () => {
   assert.equal(Object.keys(store.items).length, 0);
 });
 
+test('history can be filtered by a single day or a period', () => {
+  const store = upsertHistoryItems(emptyHistory(), [
+    complaint(),
+    complaint({
+      orderCode: 'PEYA-2286878999',
+      orderAtIso: '2026-09-18T17:51:00.000-03:00',
+    }),
+    complaint({
+      orderCode: 'RAPPI-480403041',
+      orderAtIso: '2026-09-19T12:00:00.000-03:00',
+    }),
+  ]).store;
+  const day = listHistoryItems(store, { from: '2026-09-17', to: '2026-09-17' });
+  assert.equal(day.length, 1);
+  assert.equal(day[0].orderCode, 'PEYA-2286878556');
+  const range = listHistoryItems(store, { from: '2026-09-18', to: '2026-09-19' });
+  assert.equal(range.length, 2);
+  assert.equal(listHistoryItems(store, { from: '2026-09-20', to: '2026-09-20' }).length, 0);
+});
+
 test('parseHistory drops broken records and keeps a valid map', () => {
   const parsed = parseHistory({
     items: {
