@@ -69,9 +69,39 @@ export function assignComplaintsAggregator(complaints, aggregator) {
   return list.map((complaint) => ({ ...complaint, aggregator }));
 }
 
+const portalWindows = new Map();
+
+export function partnerPortalWindowName(aggregator) {
+  if (aggregator === 'rappi_turbo') return 'foto-app-portal-rappi';
+  return `foto-app-portal-${aggregator}`;
+}
+
+export function resetPartnerPortalWindows() {
+  portalWindows.clear();
+}
+
+function rememberPortalWindow(name, handle) {
+  if (handle) portalWindows.set(name, handle);
+  return handle;
+}
+
 export function openPartnerPortal(aggregator) {
   const portal = getPartnerPortal(aggregator);
   if (!portal) return null;
-  window.open(portal.url, '_blank', 'noopener,noreferrer');
-  return portal;
+  const name = partnerPortalWindowName(aggregator);
+  const current = portalWindows.get(name);
+  if (current && !current.closed) {
+    try {
+      current.focus();
+    } catch {
+      // el navegador puede bloquear focus; el portal ya está abierto
+    }
+    return { ...portal, opened: false };
+  }
+  if (typeof window === 'undefined' || typeof window.open !== 'function') {
+    return { ...portal, opened: false };
+  }
+  const opened = window.open(portal.url, name);
+  rememberPortalWindow(name, opened);
+  return { ...portal, opened: Boolean(opened) };
 }

@@ -552,27 +552,32 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   }
 
   async function prepareEvidence(row) {
-    if (!row.photo) return;
+    const code = rowClipboardCode(row);
+    const aggregator =
+      getComplaintAggregator(row.complaint, row.photo) || row.history?.aggregator;
+    const portal = openPartnerPortal(aggregator);
     setLoading(true);
     setError(null);
     try {
-      const updated = await applyComplaintToPhoto(row.photo, row.complaint, { refutado: false });
-      applyUpdatedPhotos([updated]);
-      const history = await setHistoryResolution(row.complaint, updated, {});
-      setHistoryStore(historyFromResult(history));
-      const code = clipboardOrderCode(updated.name || row.complaint.orderCode);
-      await downloadPhoto(updated, new Set(), getEvidenceFilename(row.complaint, updated));
-      await copyText(code);
-      const portal = openPartnerPortal(
-        getComplaintAggregator(row.complaint, updated) || row.history?.aggregator,
-      );
-      setNotice(
-        portal
-          ? `Se abrió ${portal.label}. Buscá ${code} y adjuntá la foto descargada.`
-          : `Código ${code} copiado y foto descargada.`,
-      );
+      if (row.photo?.public_url) {
+        await downloadPhoto(row.photo, new Set(), getEvidenceFilename(row.complaint, row.photo));
+      }
+      if (code) await copyText(code);
+      if (portal && code) {
+        setNotice(
+          portal.opened
+            ? `Se abrió ${portal.label}. Código ${code} copiado. Adjuntá la foto descargada.`
+            : `${portal.label} ya estaba abierto. Código ${code} copiado.`,
+        );
+      } else if (code) {
+        setNotice(
+          row.photo?.public_url
+            ? `Código ${code} copiado y foto descargada.`
+            : `Código ${code} copiado.`,
+        );
+      }
     } catch (err) {
-      setError(err.message || 'No se pudo preparar la evidencia.');
+      setError(err.message || 'No se pudo preparar para refutar.');
     } finally {
       setLoading(false);
     }
@@ -972,6 +977,7 @@ function ComplaintCard({
   const amount = row.history?.amount ?? row.complaint.amount;
   const combo = row.history?.combo || row.complaint.combo;
   const extraFields = Object.entries(row.history?.fields || row.complaint.fields || {});
+  const code = clipboardOrderCode(photo?.name || row.complaint.orderCode);
 
   return (
     <article className={`complaint-card complaint-card--${status}${layout === 'row' ? ' complaint-card--row' : ''}`}>
@@ -1045,10 +1051,20 @@ function ComplaintCard({
       )}
 
       <div className="complaint-card__actions">
+        {(photo?.public_url || portal || code) && (
+          <button
+            type="button"
+            className={`btn btn--small ${status === COMPLAINT_STATUSES.queja ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => onPrepare(row)}
+            disabled={disabled}
+          >
+            Preparar para refutar
+          </button>
+        )}
         {status === COMPLAINT_STATUSES.queja && (
           <button
             type="button"
-            className="btn btn--primary btn--small"
+            className="btn btn--ghost btn--small"
             onClick={() => onMarkStatus(row, COMPLAINT_STATUSES.refutado)}
             disabled={disabled}
           >
@@ -1077,16 +1093,6 @@ function ComplaintCard({
         )}
         {!photo?.public_url && (
           <ComplaintEvidenceUpload disabled={disabled} onFile={(file) => onUploadPhoto(row, file)} />
-        )}
-        {photo?.id && (
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={() => onPrepare(row)}
-            disabled={disabled}
-          >
-            {portal ? `Preparar y abrir ${portal.label}` : 'Preparar evidencia'}
-          </button>
         )}
         {portal && (
           <button
