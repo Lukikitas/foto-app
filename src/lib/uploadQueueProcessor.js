@@ -1,8 +1,14 @@
 import { isAbortError, OCR_ENGINE_ERROR } from './tesseractAssets.js';
-import { buildStoragePath, itemNeedsOcr } from './uploadQueueProtocol.js';
+import { buildStoragePath, isDocumentHidden, itemNeedsOcr } from './uploadQueueProtocol.js';
 
 function releaseTicket(item) {
   item.ticketFile = null;
+}
+
+function isInterrupted(error, shouldYield, signal) {
+  if (typeof shouldYield === 'function' && shouldYield()) return true;
+  if (signal?.aborted) return true;
+  return isAbortError(error);
 }
 
 export async function processQueueItem(item, options = {}) {
@@ -17,22 +23,36 @@ export async function processQueueItem(item, options = {}) {
     shouldYield = () => false,
     onComplete,
     signal,
+    allowOcr = true,
   } = options;
 
   if (
-    typeof detectOrderFromPhoto !== 'function'
-    || typeof compressImage !== 'function'
+    typeof compressImage !== 'function'
     || typeof uploadFile !== 'function'
     || typeof uploadPhoto !== 'function'
     || typeof uploadUnidentifiedOrder !== 'function'
   ) {
     throw new Error('Faltan las funciones de la cola de subida.');
   }
+  if (allowOcr && typeof detectOrderFromPhoto !== 'function') {
+    throw new Error('Faltan las funciones de la cola de subida.');
+  }
 
-  const yielded = () => shouldYield() || Boolean(signal?.aborted);
+  const yielded = () => shouldYield() || Boolean(signal?.aborted) || isDocumentHidden();
+
+  const yieldNow = async () => {
+    if (item.status !== 'done' && item.status !== 'error') {
+      item.status = 'pending';
+      item.error = null;
+    }
+    notify();
+    await persist(item, { holdLease: false });
+    return { yielded: true };
+  };
 
   await persist(item);
-  if (yielded()) return { yielded: true };
+  if (yielded()) return yieldNow();
+  if (itemNeedsOcr(item) && !allowOcr) return yieldNow();
 
   let detectedOrder = null;
   const heartbeat = setInterval(() => {
@@ -51,25 +71,27 @@ export async function processQueueItem(item, options = {}) {
           signal,
         });
       } catch (error) {
-        if (isAbortError(error) || yielded()) return { yielded: true };
+        if (isInterrupted(error, shouldYield, signal) || isDocumentHidden()) {
+          return yieldNow();
+        }
         throw error;
       }
-      if (yielded()) return { yielded: true };
       if (detectedOrder?.displayCode) {
         item.orderDigits = detectedOrder.displayCode;
         item.aggregator = detectedOrder.aggregator;
         item.label = `Pedido #${detectedOrder.displayCode}`;
         await persist(item);
       }
+      if (yielded()) return yieldNow();
     }
 
-    if (yielded()) return { yielded: true };
+    if (yielded()) return yieldNow();
 
     const preparedFile = item.file?.type?.startsWith('image/')
       ? await compressImage(item.file)
       : item.file;
 
-    if (yielded()) return { yielded: true };
+    if (yielded()) return yieldNow();
 
     item.storagePath = buildStoragePath(item, preparedFile);
     item.status = 'uploading';
@@ -112,7 +134,8 @@ export async function processQueueItem(item, options = {}) {
     onComplete?.(photo);
     return { photo };
   } catch (error) {
-    if (isAbortError(error) || yielded()) return { yielded: true };
+    if (isInterrupted(error, shouldYield, signal)) return yieldNow();
+    if (item.status === 'analyzing' && isDocumentHidden()) return yieldNow();
     const analyzing = item.status === 'analyzing';
     item.status = 'error';
     item.error = error.message || (analyzing ? OCR_ENGINE_ERROR : 'Error al subir la foto.');

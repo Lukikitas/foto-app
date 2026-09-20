@@ -7,7 +7,6 @@ import {
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import {
   compressImage,
-  detectOrderFromPhoto,
   uploadFile,
   uploadPhoto,
   uploadUnidentifiedOrder,
@@ -30,7 +29,6 @@ registerRoute(
 
 function drainQueue() {
   return processStoredUploadQueue({
-    detectOrderFromPhoto,
     compressImage,
     uploadFile,
     uploadPhoto,

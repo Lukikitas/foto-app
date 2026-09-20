@@ -1,6 +1,6 @@
+import { detectOrderFromPhoto } from './orderOcr.js';
 import {
   compressImage,
-  detectOrderFromPhoto,
   uploadFile,
   uploadPhoto,
   uploadUnidentifiedOrder,
@@ -15,6 +15,7 @@ import {
   clearLease,
   getQueueOwner,
   isActiveQueueStatus,
+  itemNeedsOcr,
 } from './uploadQueueProtocol.js';
 import {
   deleteQueueRecord,
@@ -78,7 +79,13 @@ function persistVisibleQueue({ holdLease = true } = {}) {
 
 async function pausePageQueueAndHandoff() {
   pagePaused = true;
-  pageAbort?.abort();
+  const current = queue.find((entry) => entry.id === processingId);
+  const readingTicket = Boolean(
+    current && (current.status === 'analyzing' || itemNeedsOcr(current)),
+  );
+  if (!readingTicket) {
+    pageAbort?.abort();
+  }
   for (const item of queue) {
     if (item.status === 'done') continue;
     void persistItem(item, { holdLease: item.status === 'uploading' });
@@ -113,7 +120,9 @@ function bindPersistListeners() {
   window.addEventListener('beforeunload', persist);
   document.addEventListener('visibilitychange', handleQueueVisibilityChange);
   subscribeBackgroundQueueUpdates(() => {
-    void syncQueueFromStore();
+    void syncQueueFromStore().then(() => {
+      if (!pagePaused) processQueue();
+    });
   });
 }
 
@@ -230,8 +239,10 @@ async function processQueue() {
     });
     if (result?.yielded && next.status !== 'done' && next.status !== 'error') {
       next.status = 'pending';
+      next.error = null;
       notify();
       await persistItem(next, { holdLease: false });
+      if (pagePaused) void requestBackgroundQueueProcessing();
     }
   } catch (error) {
     console.error(error);
@@ -261,7 +272,7 @@ export async function syncQueueFromStore() {
     if (!hydrated) continue;
     const current = existing.get(record.id);
     if (current) {
-      if (!pagePaused && processingId === current.id) continue;
+      if (processingId === current.id) continue;
       current.status = hydrated.status;
       current.label = hydrated.label;
       current.error = hydrated.error;
@@ -278,7 +289,7 @@ export async function syncQueueFromStore() {
 
   for (const item of queue) {
     if (storedIds.has(item.id) || item.status === 'done' || item.status === 'error') continue;
-    if (!pagePaused && processingId === item.id) continue;
+    if (processingId === item.id && storedIds.has(item.id)) continue;
     markItemDone(item);
   }
 

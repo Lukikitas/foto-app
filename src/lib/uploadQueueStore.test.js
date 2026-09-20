@@ -78,13 +78,27 @@ test('finished jobs are not restored', () => {
 });
 
 test('error jobs stay in the queue so they can be retried after reload', () => {
+  const uploadError = serializeQueueRecord(sampleItem({
+    status: 'error',
+    error: 'Error al subir la foto.',
+    orderDigits: 'PEYA1',
+    ticketFile: null,
+    label: 'Pedido #PEYA1',
+  }));
+  const restoredUpload = hydrateQueueRecord(uploadError);
+  assert.equal(restoredUpload.status, 'error');
+  assert.equal(restoredUpload.error, 'Error al subir la foto.');
+});
+
+test('background OCR errors resume as pending instead of staying failed', () => {
   const record = serializeQueueRecord(sampleItem({
     status: 'error',
     error: 'No se pudo leer el ticket.',
   }));
   const restored = hydrateQueueRecord(record);
-  assert.equal(restored.status, 'error');
-  assert.equal(restored.error, 'No se pudo leer el ticket.');
+  assert.equal(restored.status, 'pending');
+  assert.equal(restored.error, null);
+  assert.equal(restored.label, 'Leyendo el código…');
 });
 
 test('memory store keeps records across a simulated close', async () => {

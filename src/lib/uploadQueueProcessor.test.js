@@ -88,7 +88,7 @@ test('processQueueItem yields instead of failing when the page is handed off', a
   assert.notEqual(item.status, 'error');
 });
 
-test('the stored queue keeps draining after the page would have been hidden', async () => {
+test('the stored queue uploads coded jobs and leaves OCR jobs pending', async () => {
   const store = createMemoryQueueStore();
   useQueueStoreForTests(store);
 
@@ -105,8 +105,12 @@ test('the stored queue keeps draining after the page would have been hidden', as
   await store.put(serializeQueueRecord(second));
 
   const uploaded = [];
+  let ocrCalls = 0;
   await processStoredUploadQueue({
-    detectOrderFromPhoto: async () => ({ displayCode: 'PEYA1', aggregator: 'pedidosya' }),
+    detectOrderFromPhoto: async () => {
+      ocrCalls += 1;
+      throw new Error('No se pudo leer el ticket.');
+    },
     compressImage: async (file) => file,
     uploadFile: async () => {
       throw new Error('no file');
@@ -120,6 +124,80 @@ test('the stored queue keeps draining after the page would have been hidden', as
     },
   });
 
-  assert.deepEqual(uploaded.map((item) => item.orderDigits), ['PEYA1', 'RAPPI99']);
-  assert.equal((await store.list()).length, 0);
+  assert.equal(ocrCalls, 0);
+  assert.deepEqual(uploaded.map((item) => item.orderDigits), ['RAPPI99']);
+  const remaining = await store.list();
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].id, 'one');
+  assert.notEqual(remaining[0].status, 'error');
+});
+
+test('OCR engine errors while the app is hidden stay pending', async () => {
+  const original = globalThis.document;
+  globalThis.document = { visibilityState: 'visible' };
+  try {
+    const item = sampleItem();
+    const result = await processQueueItem(item, mockDeps({
+      detectOrderFromPhoto: async () => {
+        globalThis.document.visibilityState = 'hidden';
+        throw new Error('No se pudo leer el ticket.');
+      },
+    }));
+
+    assert.equal(result.yielded, true);
+    assert.notEqual(item.status, 'error');
+    assert.equal(item.error, null);
+  } finally {
+    if (original === undefined) delete globalThis.document;
+    else globalThis.document = original;
+  }
+});
+
+test('successful OCR while hidden keeps the code instead of failing', async () => {
+  const original = globalThis.document;
+  globalThis.document = { visibilityState: 'visible' };
+  try {
+    const item = sampleItem();
+    const result = await processQueueItem(item, mockDeps({
+      detectOrderFromPhoto: async () => {
+        globalThis.document.visibilityState = 'hidden';
+        return { displayCode: 'PEYA12345', aggregator: 'pedidosya' };
+      },
+    }));
+
+    assert.equal(result.yielded, true);
+    assert.equal(item.orderDigits, 'PEYA12345');
+    assert.equal(item.aggregator, 'pedidosya');
+    assert.notEqual(item.status, 'error');
+  } finally {
+    if (original === undefined) delete globalThis.document;
+    else globalThis.document = original;
+  }
+});
+
+test('OCR engine errors while visible still fail', async () => {
+  const item = sampleItem();
+  await assert.rejects(() => processQueueItem(item, mockDeps({
+    detectOrderFromPhoto: async () => {
+      throw new Error('No se pudo leer el ticket.');
+    },
+  })));
+  assert.equal(item.status, 'error');
+  assert.equal(item.error, 'No se pudo leer el ticket.');
+});
+
+test('the worker does not run OCR even if a reader is provided', async () => {
+  const item = sampleItem();
+  let ocrCalls = 0;
+  const result = await processQueueItem(item, mockDeps({
+    allowOcr: false,
+    detectOrderFromPhoto: async () => {
+      ocrCalls += 1;
+      throw new Error('No se pudo leer el ticket.');
+    },
+  }));
+
+  assert.equal(result.yielded, true);
+  assert.equal(ocrCalls, 0);
+  assert.notEqual(item.status, 'error');
 });

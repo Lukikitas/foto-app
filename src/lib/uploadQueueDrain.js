@@ -40,9 +40,8 @@ export async function processStoredUploadQueue(overrides = {}) {
           return;
         }
 
-        const record = pickStoredQueueRecord(records, owner);
+        const record = pickStoredQueueRecord(records, owner, Date.now(), { skipIds: seen });
         if (!record) return;
-        if (seen.has(record.id)) return;
         seen.add(record.id);
         const item = hydrateQueueRecord(record);
         if (!item) {
@@ -60,9 +59,10 @@ export async function processStoredUploadQueue(overrides = {}) {
             onComplete: () => {
               void notifyQueueProcessed();
             },
+            allowOcr: owner !== QUEUE_OWNER.sw,
             ...itemOverrides,
           });
-          if (result?.yielded) return;
+          if (result?.yielded) continue;
         } catch (error) {
           console.error(error);
         }

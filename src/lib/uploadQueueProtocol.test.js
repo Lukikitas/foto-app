@@ -7,6 +7,7 @@ import {
   itemNeedsOcr,
   pickStoredQueueRecord,
   QUEUE_OWNER,
+  queueRecordWaitsForPageOcr,
   UPLOAD_QUEUE_MESSAGE,
   UPLOAD_QUEUE_SYNC_TAG,
 } from './uploadQueueProtocol.js';
@@ -22,6 +23,11 @@ test('camera captures without a code still need OCR', () => {
     orderDigits: 'PEYA1',
     ticketFile: new Blob(['ticket']),
   }), false);
+  assert.equal(itemNeedsOcr({
+    kind: 'order',
+    orderDigits: '',
+    ticket: new Blob(['ticket']),
+  }), true);
 });
 
 test('a live lease from the page blocks the service worker', () => {
@@ -56,6 +62,44 @@ test('the worker picks the oldest unlocked job and skips errors', () => {
     { id: 'ready', status: 'uploading', createdAt: 3, leaseUntil: 0 },
   ];
   assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.sw, now).id, 'ready');
+});
+
+test('the worker skips jobs that still need OCR and keeps coded uploads', () => {
+  const records = [
+    {
+      id: 'ocr',
+      status: 'pending',
+      createdAt: 1,
+      kind: 'order',
+      orderDigits: '',
+      ticket: new Blob(['ticket']),
+    },
+    {
+      id: 'ready',
+      status: 'pending',
+      createdAt: 2,
+      kind: 'order',
+      orderDigits: 'PEYA1',
+    },
+  ];
+  assert.equal(queueRecordWaitsForPageOcr(records[0]), true);
+  assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.sw).id, 'ready');
+  assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.page).id, 'ocr');
+});
+
+test('the worker still uploads unidentified jobs that already left OCR', () => {
+  const records = [
+    {
+      id: 'unidentified',
+      status: 'uploading',
+      createdAt: 1,
+      kind: 'order',
+      orderDigits: '',
+      ticket: new Blob(['ticket']),
+    },
+  ];
+  assert.equal(queueRecordWaitsForPageOcr(records[0]), false);
+  assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.sw).id, 'unidentified');
 });
 
 test('background protocol uses a stable sync tag and message type', () => {

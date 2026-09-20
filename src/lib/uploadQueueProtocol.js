@@ -22,7 +22,15 @@ export function getQueueOwner() {
 }
 
 export function itemNeedsOcr(item) {
-  return item?.kind === 'order' && !item.orderDigits && Boolean(item.ticketFile);
+  return item?.kind === 'order' && !item.orderDigits && Boolean(item.ticketFile || item.ticket);
+}
+
+export function isDocumentHidden() {
+  return typeof document !== 'undefined' && document.visibilityState === 'hidden';
+}
+
+export function queueRecordWaitsForPageOcr(record) {
+  return itemNeedsOcr(record) && record.status !== 'uploading';
 }
 
 export function isActiveQueueStatus(status) {
@@ -70,9 +78,17 @@ export function buildStoragePath(item, file) {
   return `orders/no_code/${id}.${ext}`;
 }
 
-export function pickStoredQueueRecord(records, owner, now = Date.now()) {
+export function pickStoredQueueRecord(records, owner, now = Date.now(), options = {}) {
+  const skipOcr = options.skipOcr ?? owner === QUEUE_OWNER.sw;
+  const skipIds = options.skipIds;
+
   return [...(records || [])]
     .filter((record) => record?.id && record.status !== 'done' && record.status !== 'error')
     .sort((left, right) => (left.createdAt || 0) - (right.createdAt || 0))
-    .find((record) => !isForeignLeaseActive(record, owner, now)) || null;
+    .find((record) => {
+      if (skipIds?.has(record.id)) return false;
+      if (isForeignLeaseActive(record, owner, now)) return false;
+      if (skipOcr && queueRecordWaitsForPageOcr(record)) return false;
+      return true;
+    }) || null;
 }

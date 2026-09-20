@@ -1,3 +1,6 @@
+import { OCR_ENGINE_ERROR } from './tesseractAssets.js';
+import { itemNeedsOcr } from './uploadQueueProtocol.js';
+
 const DB_NAME = 'foto-app-upload-queue';
 const DB_VERSION = 1;
 const STORE_NAME = 'items';
@@ -8,6 +11,12 @@ let dbPromise = null;
 
 export function isInterruptedQueueStatus(status) {
   return status === 'analyzing' || status === 'uploading';
+}
+
+export function isRetryableBackgroundOcrError(record) {
+  return record?.status === 'error'
+    && record.error === OCR_ENGINE_ERROR
+    && itemNeedsOcr(record);
 }
 
 export function shouldRestoreQueueRecord(record) {
@@ -59,7 +68,7 @@ export function hydrateQueueRecord(record) {
   const file = fileFromStoredBlob(record.file, record.fileName, record.fileType);
   if (!file) return null;
 
-  const interrupted = isInterruptedQueueStatus(record.status);
+  const resume = isInterruptedQueueStatus(record.status) || isRetryableBackgroundOcrError(record);
   return {
     id: record.id,
     file,
@@ -68,10 +77,10 @@ export function hydrateQueueRecord(record) {
     orderDigits: record.orderDigits || '',
     title: record.title || '',
     aggregator: record.aggregator || '',
-    label: record.label || 'Leyendo el código…',
+    label: resume && !record.orderDigits ? 'Leyendo el código…' : (record.label || 'Leyendo el código…'),
     meta: record.meta && typeof record.meta === 'object' ? { ...record.meta } : {},
-    status: interrupted ? 'pending' : record.status || 'pending',
-    error: interrupted ? null : record.error || null,
+    status: resume ? 'pending' : record.status || 'pending',
+    error: resume ? null : record.error || null,
     createdAt: record.createdAt || Date.now(),
     storagePath: record.storagePath || '',
   };
