@@ -1,7 +1,21 @@
-import { compressImage } from './compressImage';
-import { detectOrderFromPhoto } from './orderOcr';
-import { OCR_ENGINE_ERROR } from './tesseract';
-import { uploadFile, uploadPhoto, uploadUnidentifiedOrder } from './photos';
+import {
+  compressImage,
+  detectOrderFromPhoto,
+  uploadFile,
+  uploadPhoto,
+  uploadUnidentifiedOrder,
+} from './uploadQueueDeps.js';
+import { processQueueItem } from './uploadQueueProcessor.js';
+import {
+  requestBackgroundQueueProcessing,
+  subscribeBackgroundQueueUpdates,
+} from './uploadQueueBackground.js';
+import {
+  applyLease,
+  clearLease,
+  getQueueOwner,
+  isActiveQueueStatus,
+} from './uploadQueueProtocol.js';
 import {
   deleteQueueRecord,
   hydrateQueueRecord,
@@ -15,6 +29,9 @@ const queue = [];
 const listeners = new Set();
 const persistLocks = new Map();
 let processing = false;
+let pagePaused = false;
+let pageAbort = null;
+let processingId = null;
 let onCompleteHandler = null;
 let restorePromise = null;
 let persistListenersBound = false;
@@ -34,13 +51,16 @@ function notify() {
   listeners.forEach((fn) => fn(data));
 }
 
-function persistItem(item) {
+function persistItem(item, { holdLease = true } = {}) {
   const previous = persistLocks.get(item.id) || Promise.resolve();
   const job = previous
     .catch(() => {})
     .then(() => {
       if (item.status === 'done') return deleteQueueRecord(item.id);
-      return putQueueRecord(serializeQueueRecord(item));
+      const record = holdLease
+        ? applyLease(serializeQueueRecord(item), getQueueOwner())
+        : clearLease(serializeQueueRecord(item));
+      return putQueueRecord(record);
     })
     .catch((error) => {
       console.error(error);
@@ -49,22 +69,51 @@ function persistItem(item) {
   return job;
 }
 
-function persistVisibleQueue() {
+function persistVisibleQueue({ holdLease = true } = {}) {
   for (const item of queue) {
     if (item.status === 'done') continue;
-    void persistItem(item);
+    void persistItem(item, { holdLease });
   }
+}
+
+async function pausePageQueueAndHandoff() {
+  pagePaused = true;
+  pageAbort?.abort();
+  for (const item of queue) {
+    if (item.status === 'done') continue;
+    void persistItem(item, { holdLease: item.status === 'uploading' });
+  }
+  await requestBackgroundQueueProcessing();
+}
+
+async function resumePageQueue() {
+  pagePaused = false;
+  await syncQueueFromStore();
+  processQueue();
+}
+
+export function handleQueueVisibilityChange() {
+  if (typeof document === 'undefined') return;
+  if (document.visibilityState === 'hidden') {
+    void pausePageQueueAndHandoff();
+    return;
+  }
+  void resumePageQueue();
 }
 
 function bindPersistListeners() {
   if (persistListenersBound || typeof window === 'undefined') return;
   persistListenersBound = true;
 
-  const persist = () => persistVisibleQueue();
-  window.addEventListener('pagehide', persist);
+  const persist = () => persistVisibleQueue({ holdLease: false });
+  window.addEventListener('pagehide', () => {
+    persistVisibleQueue({ holdLease: false });
+    void requestBackgroundQueueProcessing();
+  });
   window.addEventListener('beforeunload', persist);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') persist();
+  document.addEventListener('visibilitychange', handleQueueVisibilityChange);
+  subscribeBackgroundQueueUpdates(() => {
+    void syncQueueFromStore();
   });
 }
 
@@ -102,13 +151,18 @@ export function enqueue({
     status: 'pending',
     error: null,
     createdAt: Date.now(),
+    storagePath: '',
   };
 
   queue.push(item);
   notify();
   bindPersistListeners();
   void persistItem(item);
-  processQueue();
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    void requestBackgroundQueueProcessing();
+  } else {
+    processQueue();
+  }
   return item.id;
 }
 
@@ -120,6 +174,10 @@ export function retryUpload(id) {
   item.error = null;
   notify();
   void persistItem(item);
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    void requestBackgroundQueueProcessing();
+    return;
+  }
   processQueue();
 }
 
@@ -134,108 +192,103 @@ export function dismissUpload(id) {
   processQueue();
 }
 
-function releaseTicket(item) {
-  item.ticketFile = null;
+function markItemDone(item, photo) {
+  item.status = 'done';
+  item.error = null;
+  notify();
+  onCompleteHandler?.(photo);
+  setTimeout(() => {
+    const index = queue.findIndex((entry) => entry.id === item.id);
+    if (index !== -1 && queue[index].status === 'done') {
+      queue.splice(index, 1);
+      notify();
+    }
+  }, 4000);
 }
 
 async function processQueue() {
-  if (processing) return;
+  if (processing || pagePaused) return;
 
   const next = queue.find((entry) => entry.status === 'pending');
   if (!next) return;
 
   processing = true;
+  processingId = next.id;
+  pageAbort = typeof AbortController === 'function' ? new AbortController() : null;
   try {
-    await persistItem(next);
-
-    let detectedOrder = null;
-    const needsOcr = next.kind === 'order' && !next.orderDigits && next.ticketFile;
-
-    if (needsOcr) {
-      next.status = 'analyzing';
-      next.label = 'Leyendo el código…';
+    const result = await processQueueItem(next, {
+      detectOrderFromPhoto,
+      compressImage,
+      uploadFile,
+      uploadPhoto,
+      uploadUnidentifiedOrder,
+      persist: persistItem,
+      notify,
+      shouldYield: () => pagePaused,
+      signal: pageAbort?.signal,
+      onComplete: (photo) => markItemDone(next, photo),
+    });
+    if (result?.yielded && next.status !== 'done' && next.status !== 'error') {
+      next.status = 'pending';
       notify();
-      await persistItem(next);
-      detectedOrder = await detectOrderFromPhoto(next.ticketFile, {
-        fallbackFiles: next.file && next.file !== next.ticketFile ? [next.file] : [],
-      });
-      if (detectedOrder?.displayCode) {
-        next.orderDigits = detectedOrder.displayCode;
-        next.aggregator = detectedOrder.aggregator;
-        next.label = `Pedido #${detectedOrder.displayCode}`;
-        await persistItem(next);
-      }
+      await persistItem(next, { holdLease: false });
     }
-
-    const preparedFile = next.file.type.startsWith('image/')
-      ? await compressImage(next.file)
-      : next.file;
-
-    // OCR uses ticketFile only. Evidence (`next.file`) is the only image uploaded.
-
-    let photo;
-    if (next.kind === 'file') {
-      next.status = 'uploading';
-      notify();
-      await persistItem(next);
-      photo = await uploadFile(preparedFile, next.title, next.meta);
-    } else if (next.orderDigits) {
-      next.status = 'uploading';
-      if (next.orderDigits && next.label === 'Leyendo el código…') {
-        next.label = `Pedido #${next.orderDigits}`;
-      }
-      notify();
-      await persistItem(next);
-      photo = await uploadPhoto(preparedFile, next.orderDigits, next.meta, next.aggregator);
-    } else if (detectedOrder?.aggregator) {
-      next.status = 'uploading';
-      next.label = `Pedido #${detectedOrder.displayCode}`;
-      notify();
-      await persistItem(next);
-      photo = await uploadPhoto(
-        preparedFile,
-        detectedOrder.displayCode,
-        next.meta,
-        detectedOrder.aggregator,
-      );
-    } else {
-      next.status = 'uploading';
-      next.label = 'Código no encontrado';
-      notify();
-      await persistItem(next);
-      photo = await uploadUnidentifiedOrder(preparedFile, next.meta);
-    }
-
-    releaseTicket(next);
-    next.status = 'done';
-    next.error = null;
-    notify();
-    await persistItem(next);
-    onCompleteHandler?.(photo);
-
-    setTimeout(() => {
-      const index = queue.findIndex((entry) => entry.id === next.id);
-      if (index !== -1 && queue[index].status === 'done') {
-        queue.splice(index, 1);
-        notify();
-      }
-    }, 4000);
-  } catch (err) {
-    const analyzing = next.status === 'analyzing';
-    next.status = 'error';
-    next.error = err.message || (analyzing ? OCR_ENGINE_ERROR : 'Error al subir la foto.');
-    notify();
-    await persistItem(next);
+  } catch (error) {
+    console.error(error);
   } finally {
     processing = false;
-    processQueue();
+    processingId = null;
+    pageAbort = null;
+    if (!pagePaused) processQueue();
   }
 }
 
+export async function syncQueueFromStore() {
+  let records;
+  try {
+    records = await listQueueRecords();
+  } catch (error) {
+    console.error(error);
+    return snapshot();
+  }
+
+  const storedIds = new Set(records.map((record) => record.id));
+  const existing = new Map(queue.map((item) => [item.id, item]));
+
+  for (const record of records) {
+    if (!shouldRestoreQueueRecord(record)) continue;
+    const hydrated = hydrateQueueRecord(record);
+    if (!hydrated) continue;
+    const current = existing.get(record.id);
+    if (current) {
+      if (!pagePaused && processingId === current.id) continue;
+      current.status = hydrated.status;
+      current.label = hydrated.label;
+      current.error = hydrated.error;
+      current.orderDigits = hydrated.orderDigits;
+      current.aggregator = hydrated.aggregator;
+      current.storagePath = hydrated.storagePath;
+      current.file = hydrated.file || current.file;
+      current.ticketFile = hydrated.ticketFile;
+      continue;
+    }
+    queue.push(hydrated);
+    existing.set(hydrated.id, hydrated);
+  }
+
+  for (const item of queue) {
+    if (storedIds.has(item.id) || item.status === 'done' || item.status === 'error') continue;
+    if (!pagePaused && processingId === item.id) continue;
+    markItemDone(item);
+  }
+
+  queue.sort((left, right) => left.createdAt - right.createdAt);
+  notify();
+  return snapshot();
+}
+
 export function getPendingCount() {
-  return queue.filter((entry) =>
-    entry.status === 'pending' || entry.status === 'analyzing' || entry.status === 'uploading'
-  ).length;
+  return queue.filter((entry) => isActiveQueueStatus(entry.status)).length;
 }
 
 export function restorePersistedQueue() {
@@ -243,26 +296,12 @@ export function restorePersistedQueue() {
 
   restorePromise = (async () => {
     bindPersistListeners();
-    let records = [];
-    try {
-      records = await listQueueRecords();
-    } catch (error) {
-      console.error(error);
-      return queue.slice();
+    await syncQueueFromStore();
+    if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+      processQueue();
+    } else {
+      void requestBackgroundQueueProcessing();
     }
-
-    const existing = new Set(queue.map((item) => item.id));
-    for (const record of records) {
-      if (!shouldRestoreQueueRecord(record) || existing.has(record.id)) continue;
-      const item = hydrateQueueRecord(record);
-      if (!item) continue;
-      queue.push(item);
-      existing.add(item.id);
-    }
-
-    queue.sort((left, right) => left.createdAt - right.createdAt);
-    notify();
-    processQueue();
     return snapshot();
   })();
 
@@ -273,7 +312,11 @@ export function resetUploadQueueForTests() {
   queue.splice(0, queue.length);
   persistLocks.clear();
   processing = false;
+  pagePaused = false;
+  pageAbort = null;
+  processingId = null;
   restorePromise = null;
   onCompleteHandler = null;
+  persistListenersBound = false;
   notify();
 }

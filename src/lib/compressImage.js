@@ -1,3 +1,5 @@
+import { canvasToBlob, createDrawCanvas } from './drawCanvas.js';
+
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.8;
 
@@ -22,30 +24,24 @@ export async function compressImage(file) {
     }
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
+  try {
+    const canvas = createDrawCanvas(targetWidth, targetHeight);
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('No se pudo preparar la compresión.');
+    }
 
-  const context = canvas.getContext('2d');
-  if (!context) {
+    context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+    const blob = await canvasToBlob(canvas, 'image/jpeg', JPEG_QUALITY);
+    const baseName = file.name.replace(/\.[^.]+$/, '') || 'foto';
+    if (typeof File === 'function') {
+      return new File([blob], `${baseName}.jpg`, {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+    }
+    return blob;
+  } finally {
     bitmap.close();
-    throw new Error('No se pudo preparar la compresión.');
   }
-
-  context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
-  bitmap.close();
-
-  const blob = await new Promise((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY);
-  });
-
-  if (!blob) {
-    throw new Error('No se pudo comprimir la imagen.');
-  }
-
-  const baseName = file.name.replace(/\.[^.]+$/, '') || 'foto';
-  return new File([blob], `${baseName}.jpg`, {
-    type: 'image/jpeg',
-    lastModified: Date.now(),
-  });
 }

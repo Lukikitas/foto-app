@@ -26,6 +26,9 @@ export default function UploadQueueStatus() {
           <span className="upload-queue__badge">{activeCount} activa{activeCount !== 1 ? 's' : ''}</span>
         )}
       </div>
+      {activeCount > 0 && (
+        <p className="upload-queue__hint">Podés cambiar de app; la cola sigue subiendo.</p>
+      )}
 
       <ul className="upload-queue__list">
         {items.map((item) => (

@@ -101,6 +101,17 @@ test('memory store keeps records across a simulated close', async () => {
   assert.equal(restored.ticketFile.name, 'ticket.jpg');
 });
 
+test('serialize keeps a stable storage path for retries', () => {
+  const item = sampleItem({
+    status: 'uploading',
+    orderDigits: 'PEYA12345',
+    storagePath: 'orders/pedidosya/abc.jpg',
+  });
+  const restored = hydrateQueueRecord(serializeQueueRecord(item));
+  assert.equal(restored.storagePath, 'orders/pedidosya/abc.jpg');
+  assert.equal(restored.status, 'pending');
+});
+
 test('fileFromStoredBlob rebuilds a File from a saved blob', () => {
   const blob = new Blob([Uint8Array.from([9, 8, 7])], { type: 'image/jpeg' });
   const file = fileFromStoredBlob(blob, 'ticket.jpg', 'image/jpeg');

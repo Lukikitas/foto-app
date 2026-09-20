@@ -303,27 +303,34 @@ export function photoMatchesFilters(
   return true;
 }
 
-async function insertStoredFile(file, name, meta = {}, folder = '') {
+async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '') {
   const photoMeta = normalizePhotoMeta(meta);
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
   const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const filePath = folder ? `${folder}/${fileName}` : fileName;
+  const resolvedPath = filePath || (folder ? `${folder}/${fileName}` : fileName);
+
+  const { data: existing } = await supabase
+    .from('photos')
+    .select()
+    .eq('file_path', resolvedPath)
+    .maybeSingle();
+  if (existing) return existing;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(filePath, file, { cacheControl: '3600', upsert: false });
+    .upload(resolvedPath, file, { cacheControl: '3600', upsert: true });
 
   if (uploadError) throw uploadError;
 
   const { data: urlData } = supabase.storage
     .from(BUCKET)
-    .getPublicUrl(filePath);
+    .getPublicUrl(resolvedPath);
 
   const { data, error: dbError } = await supabase
     .from('photos')
     .insert({
       name,
-      file_path: filePath,
+      file_path: resolvedPath,
       public_url: urlData.publicUrl,
       ...photoMeta,
     })
@@ -331,27 +338,33 @@ async function insertStoredFile(file, name, meta = {}, folder = '') {
     .single();
 
   if (dbError) {
-    await supabase.storage.from(BUCKET).remove([filePath]);
+    const { data: inserted } = await supabase
+      .from('photos')
+      .select()
+      .eq('file_path', resolvedPath)
+      .maybeSingle();
+    if (inserted) return inserted;
+    await supabase.storage.from(BUCKET).remove([resolvedPath]);
     throw dbError;
   }
 
   return data;
 }
 
-export async function uploadPhoto(file, orderDigits, meta = {}, aggregator = 'sin_agregador') {
+export async function uploadPhoto(file, orderDigits, meta = {}, aggregator = 'sin_agregador', filePath = '') {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('Ingresá el código completo o los últimos 4 dígitos del pedido.');
   }
 
   const storageAggregator = AGGREGATORS[aggregator] ? aggregator : 'sin_agregador';
-  return insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`);
+  return insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`, filePath);
 }
 
-export async function uploadUnidentifiedOrder(file, meta = {}) {
-  return insertStoredFile(file, UNIDENTIFIED_ORDER_NAME, meta, 'orders/no_code');
+export async function uploadUnidentifiedOrder(file, meta = {}, filePath = '') {
+  return insertStoredFile(file, UNIDENTIFIED_ORDER_NAME, meta, 'orders/no_code', filePath);
 }
 
-export async function uploadFile(file, title, meta = {}) {
+export async function uploadFile(file, title, meta = {}, filePath = '') {
   const fallback = file.name.replace(/\.[^.]+$/, '') || 'Archivo';
   const name = normalizePhotoName(title, fallback);
   return insertStoredFile(
@@ -363,6 +376,7 @@ export async function uploadFile(file, title, meta = {}) {
       is_refutado: false,
     },
     'files',
+    filePath,
   );
 }
 

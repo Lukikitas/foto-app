@@ -8,9 +8,10 @@ import {
   OCR_MAX_SIDE,
   TICKET_TARGET_SIDE,
 } from './ocrPlan.js';
-import { loadTesseract, OCR_ENGINE_ERROR, tessAssetUrl } from './tesseract';
+import { createDrawCanvas } from './drawCanvas.js';
+import { recognizeOcrData } from './ocrRecognize.js';
+import { isAbortError, OCR_ENGINE_ERROR, PSM } from './tesseractAssets.js';
 
-const OCR_CHAR_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-: ';
 const NEIGHBORS = [
   [0, 1],
   [1, 0],
@@ -18,55 +19,21 @@ const NEIGHBORS = [
   [-1, 0],
 ];
 
-let workerPromise = null;
-
 function fail(error) {
   if (error) console.error(error);
   throw new Error(OCR_ENGINE_ERROR);
 }
 
-async function getWorker() {
-  if (!workerPromise) {
-    workerPromise = (async () => {
-      const { createWorker, PSM } = await loadTesseract();
-      const options = {
-        workerPath: tessAssetUrl('worker.min.js'),
-        corePath: tessAssetUrl('core'),
-        langPath: tessAssetUrl('lang'),
-        gzip: true,
-        errorHandler: (error) => console.error(error),
-      };
-      let worker;
-      try {
-        worker = await createWorker('spa+eng', 1, options);
-      } catch (error) {
-        console.error(error);
-        worker = await createWorker('eng', 1, options);
-      }
-      await worker.setParameters({
-        preserve_interword_spaces: '1',
-        user_defined_dpi: '300',
-        tessedit_char_whitelist: OCR_CHAR_WHITELIST,
-        tessedit_pageseg_mode: PSM.AUTO,
-      });
-      return { worker, PSM };
-    })().catch((error) => {
-      workerPromise = null;
-      fail(error);
-    });
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    const error = new Error('Aborted');
+    error.name = 'AbortError';
+    throw error;
   }
-
-  return workerPromise;
 }
 
-async function recognizeTexts(worker, source, psm) {
-  await worker.setParameters({
-    tessedit_pageseg_mode: String(psm),
-    tessedit_char_whitelist: OCR_CHAR_WHITELIST,
-    preserve_interword_spaces: '1',
-    user_defined_dpi: '300',
-  });
-  const { data } = await worker.recognize(source);
+async function recognizeTexts(source, psm) {
+  const { data } = await recognizeOcrData(source, psm);
   const texts = [];
   if (data?.text) texts.push(data.text);
   if (data?.lines?.length) {
@@ -87,9 +54,10 @@ function canvasFromSource(source, maxSide) {
   const sourceWidth = source.width || source.videoWidth;
   const sourceHeight = source.height || source.videoHeight;
   const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight, 1));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = createDrawCanvas(
+    Math.max(1, Math.round(sourceWidth * scale)),
+    Math.max(1, Math.round(sourceHeight * scale)),
+  );
   const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) fail();
   context.imageSmoothingEnabled = true;
@@ -99,9 +67,7 @@ function canvasFromSource(source, maxSide) {
 }
 
 function cloneCanvas(source) {
-  const canvas = document.createElement('canvas');
-  canvas.width = source.width;
-  canvas.height = source.height;
+  const canvas = createDrawCanvas(source.width, source.height);
   const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) fail();
   context.drawImage(source, 0, 0);
@@ -226,9 +192,10 @@ function blockStats(data, width, height, startX, startY, cell) {
 
 function cropRegion(source, region, targetSide) {
   const scale = Math.min(4, Math.max(1.35, targetSide / Math.max(region.width, region.height, 1)));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(region.width * scale));
-  canvas.height = Math.max(1, Math.round(region.height * scale));
+  const canvas = createDrawCanvas(
+    Math.max(1, Math.round(region.width * scale)),
+    Math.max(1, Math.round(region.height * scale)),
+  );
   const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) fail();
   context.imageSmoothingEnabled = true;
@@ -354,10 +321,11 @@ function findTicketRegions(canvas) {
 function rotatedCanvas(source, rotation) {
   if (!rotation) return source;
 
-  const canvas = document.createElement('canvas');
   const swapped = rotation === 90 || rotation === 270;
-  canvas.width = swapped ? source.height : source.width;
-  canvas.height = swapped ? source.width : source.height;
+  const canvas = createDrawCanvas(
+    swapped ? source.height : source.width,
+    swapped ? source.width : source.height,
+  );
   const context = canvas.getContext('2d', { alpha: false });
   if (!context) fail();
 
@@ -412,15 +380,17 @@ function applyPassVariants(sources, variants) {
   return out;
 }
 
-async function collectGroup(worker, { sources, rotations, psms, variants }, texts) {
+async function collectGroup({ sources, rotations, psms, variants }, texts, signal) {
   const prepared = applyPassVariants(sources, variants || ['plain']);
   for (const psm of psms) {
     for (const rotation of rotations) {
       for (const source of prepared) {
+        throwIfAborted(signal);
         let found;
         try {
-          found = await recognizeTexts(worker, rotatedCanvas(source, rotation), psm);
+          found = await recognizeTexts(rotatedCanvas(source, rotation), psm);
         } catch (error) {
+          if (isAbortError(error)) throw error;
           fail(error);
         }
         texts.push(...found);
@@ -437,7 +407,8 @@ async function readBitmap(file) {
   }
 }
 
-async function readOrderFromFile(worker, PSM, file, { thorough = true } = {}) {
+async function readOrderFromFile(file, { thorough = true, signal } = {}) {
+  throwIfAborted(signal);
   let bitmap;
   try {
     bitmap = await readBitmap(file);
@@ -451,7 +422,7 @@ async function readOrderFromFile(worker, PSM, file, { thorough = true } = {}) {
     const passes = buildRecognitionPasses({ ...views, PSM, thorough });
 
     for (const pass of passes) {
-      await collectGroup(worker, pass, texts);
+      await collectGroup(pass, texts, signal);
       const inspection = inspectOrderFromOcrTexts(texts);
       if (isConfidentOrderMatch(inspection)) return inspection.order;
     }
@@ -465,14 +436,14 @@ async function readOrderFromFile(worker, PSM, file, { thorough = true } = {}) {
 /** Reads a ticket close-up. Never used on the live camera feed. */
 export async function detectOrderFromPhoto(file, options = {}) {
   if (!file) fail();
+  throwIfAborted(options.signal);
 
-  const { worker, PSM } = await getWorker();
-  const found = await readOrderFromFile(worker, PSM, file, { thorough: true });
+  const found = await readOrderFromFile(file, { thorough: true, signal: options.signal });
   if (found) return found;
 
   for (const extra of options.fallbackFiles || []) {
     if (!extra || extra === file) continue;
-    const fallback = await readOrderFromFile(worker, PSM, extra, { thorough: false });
+    const fallback = await readOrderFromFile(extra, { thorough: false, signal: options.signal });
     if (fallback) return fallback;
   }
 

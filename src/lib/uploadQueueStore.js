@@ -32,6 +32,9 @@ export function serializeQueueRecord(item) {
     ticket: item.ticketFile || null,
     ticketName: item.ticketFile?.name || '',
     ticketType: item.ticketFile?.type || '',
+    storagePath: item.storagePath || '',
+    leaseOwner: item.leaseOwner || null,
+    leaseUntil: item.leaseUntil || 0,
   };
 }
 
@@ -70,6 +73,7 @@ export function hydrateQueueRecord(record) {
     status: interrupted ? 'pending' : record.status || 'pending',
     error: interrupted ? null : record.error || null,
     createdAt: record.createdAt || Date.now(),
+    storagePath: record.storagePath || '',
   };
 }
 

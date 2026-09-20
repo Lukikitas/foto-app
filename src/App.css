@@ -2038,6 +2038,12 @@
   font-weight: 700;
 }
 
+.upload-queue__hint {
+  margin: -0.35rem 0 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
 .upload-queue__list {
   list-style: none;
   margin: 0;

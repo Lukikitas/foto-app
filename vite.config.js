@@ -53,9 +53,18 @@ export default defineConfig({
     react(),
     tesseractAssets(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm,gz}'],
+        globIgnores: ['**/node_modules/**', '**/presentacion/**'],
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+        rollupFormat: 'iife',
+      },
       manifest: {
         name: 'Delivery La Plata',
         short_name: 'Delivery',
@@ -90,14 +99,6 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
-      },
-      workbox: {
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm,gz}'],
-        globIgnores: ['**/node_modules/**', '**/presentacion/**'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/tesseract\//, /^\/presentacion(\/|$)/],
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
     }),
   ],
