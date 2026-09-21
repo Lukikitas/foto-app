@@ -57,7 +57,9 @@ export default function UpdatePrompt() {
     },
   });
 
-  updateFnRef.current = updateServiceWorker;
+  useEffect(() => {
+    updateFnRef.current = updateServiceWorker;
+  }, [updateServiceWorker]);
 
   useEffect(() => {
     const check = () => checkForUpdate(registrationRef.current);

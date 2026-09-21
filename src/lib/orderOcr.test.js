@@ -6,6 +6,7 @@ import {
   buildRecognitionPasses,
   countRecognitionJobs,
 } from './ocrPlan.js';
+import { fastCodeCropPlan } from './orderOcrPipeline.js';
 
 const PSM = {
   SINGLE_BLOCK: 6,
@@ -52,4 +53,10 @@ test('fallback evidence photos use a lighter plan', () => {
 
   assert.equal(passes.some((pass) => pass.rotations.includes(90)), false);
   assert.ok(countRecognitionJobs(passes) <= 6);
+});
+
+test('focused ticket reads prioritize the likely orientation without requiring live OCR', () => {
+  assert.deepEqual(fastCodeCropPlan(960, 1280).map((entry) => entry.rotation), [0, 0, 180]);
+  assert.deepEqual(fastCodeCropPlan(1280, 960).map((entry) => entry.rotation), [270, 90, 0, 0, 180]);
+  assert.equal(fastCodeCropPlan(960, 1280)[0].top, 0.2);
 });

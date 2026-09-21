@@ -61,6 +61,7 @@ function compactAlnum(value = '') {
 
 function repairKnownPrefixes(value = '') {
   return value
+    .replace(/R[A4]PPI[\s-]*T[\s-]*URB[O0](?=[A-Z0-9\s-]|$)/g, 'RAPPITURBO')
     .replace(/P[E3][\s-]*[VY][\s-]*[A4](?=[A-Z0-9\s-]|$)/g, 'PEYA')
     .replace(/P[E3][\s-]*Y[\s-]*[A8O](?=[A-Z0-9\s-]|$)/g, 'PEYA')
     .replace(/[RF][E3][\s-]*Y[\s-]*[A4](?=[A-Z0-9\s-]|$)/g, 'PEYA')
@@ -255,6 +256,12 @@ export function detectOrderCode(ocrText) {
 
   const fromCodigo = scanLabeledLines(lines);
   if (fromCodigo) return fromCodigo;
+
+  // Reading only the code's line avoids appending the first digit of TOTAL or CLIENTE.
+  for (const line of lines) {
+    const fromLine = parseAggregatorCode(line);
+    if (fromLine) return fromLine;
+  }
 
   const full = repairKnownPrefixes(normalizeLine(raw.replace(/\r?\n/g, ' ')));
   if (CODIGO_LABEL.test(full)) {

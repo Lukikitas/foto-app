@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { processQueueItem } from './uploadQueueProcessor.js';
 import { processStoredUploadQueue, resetStoredUploadQueueForTests } from './uploadQueueDrain.js';
+import { applyLease, QUEUE_OWNER } from './uploadQueueProtocol.js';
 import {
   createMemoryQueueStore,
   serializeQueueRecord,
@@ -88,7 +89,7 @@ test('processQueueItem yields instead of failing when the page is handed off', a
   assert.notEqual(item.status, 'error');
 });
 
-test('the stored queue uploads coded jobs and leaves OCR jobs pending', async () => {
+test('the stored queue reads tickets and uploads their evidence without the page', async () => {
   const store = createMemoryQueueStore();
   useQueueStoreForTests(store);
 
@@ -109,7 +110,7 @@ test('the stored queue uploads coded jobs and leaves OCR jobs pending', async ()
   await processStoredUploadQueue({
     detectOrderFromPhoto: async () => {
       ocrCalls += 1;
-      throw new Error('No se pudo leer el ticket.');
+      return { displayCode: 'PEYA12345', aggregator: 'pedidosya' };
     },
     compressImage: async (file) => file,
     uploadFile: async () => {
@@ -124,12 +125,55 @@ test('the stored queue uploads coded jobs and leaves OCR jobs pending', async ()
     },
   });
 
-  assert.equal(ocrCalls, 0);
-  assert.deepEqual(uploaded.map((item) => item.orderDigits), ['RAPPI99']);
+  assert.equal(ocrCalls, 1);
+  assert.deepEqual(uploaded.map((item) => item.orderDigits), ['PEYA12345', 'RAPPI99']);
   const remaining = await store.list();
-  assert.equal(remaining.length, 1);
-  assert.equal(remaining[0].id, 'one');
-  assert.notEqual(remaining[0].status, 'error');
+  assert.equal(remaining.length, 0);
+});
+
+test('the background worker resumes a ticket after the closing page lease expires', async () => {
+  const store = createMemoryQueueStore();
+  useQueueStoreForTests(store);
+  await store.put(applyLease(serializeQueueRecord(sampleItem()), QUEUE_OWNER.page, Date.now(), 20));
+  let uploaded = false;
+  await processStoredUploadQueue({
+    detectOrderFromPhoto: async () => ({ displayCode: 'PEYA12345', aggregator: 'pedidosya' }),
+    compressImage: async (file) => file,
+    uploadFile: async () => { throw new Error('no file'); },
+    uploadPhoto: async () => {
+      uploaded = true;
+      return { id: 'photo-1' };
+    },
+    uploadUnidentifiedOrder: async () => { throw new Error('no unidentified'); },
+  });
+  assert.equal(uploaded, true);
+  assert.equal((await store.list()).length, 0);
+});
+
+test('the ticket is discarded as soon as its code is safely persisted', async () => {
+  const item = sampleItem();
+  const saved = [];
+  await processQueueItem(item, mockDeps({
+    persist: async (entry) => saved.push(serializeQueueRecord(entry)),
+    compressImage: async (file) => {
+      assert.equal(item.ticketFile, null);
+      return file;
+    },
+  }));
+  const identified = saved.find((record) => record.orderDigits === 'PEYA12345');
+  assert.equal(identified.ticket, null);
+});
+
+test('order evidence gets higher-quality processing without changing generic files', async () => {
+  const options = [];
+  await processQueueItem(sampleItem(), mockDeps({
+    compressImage: async (file, config) => {
+      options.push(config);
+      return file;
+    },
+  }));
+  assert.equal(options[0].maxDimension, 2400);
+  assert.equal(options[0].sharpen, true);
 });
 
 test('OCR engine errors while the app is hidden stay pending', async () => {
@@ -175,15 +219,23 @@ test('successful OCR while hidden keeps the code instead of failing', async () =
   }
 });
 
-test('OCR engine errors while visible still fail', async () => {
+test('OCR engine errors still save the important evidence in the no-code category', async () => {
   const item = sampleItem();
-  await assert.rejects(() => processQueueItem(item, mockDeps({
+  let savedWithoutCode = false;
+  await processQueueItem(item, mockDeps({
+    onOcrError: () => {},
     detectOrderFromPhoto: async () => {
       throw new Error('No se pudo leer el ticket.');
     },
-  })));
-  assert.equal(item.status, 'error');
-  assert.equal(item.error, 'No se pudo leer el ticket.');
+    uploadUnidentifiedOrder: async () => {
+      savedWithoutCode = true;
+      return { id: 'no-code' };
+    },
+  }));
+  assert.equal(savedWithoutCode, true);
+  assert.equal(item.status, 'done');
+  assert.equal(item.ticketFile, null);
+  assert.match(item.storagePath, /^orders\/no_code\//);
 });
 
 test('the worker does not run OCR even if a reader is provided', async () => {

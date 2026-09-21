@@ -111,7 +111,7 @@ export async function recognize(source, psm, extraParams = {}) {
   const TessModule = await getModule();
   const bytes = await sourceToBytes(source);
   TessModule.FS.writeFile('/input', bytes);
-  if (api.SetImageFile(1, 0) === 1) throw new Error(OCR_ENGINE_ERROR);
+  if (api.SetImageFile() === 1) throw new Error(OCR_ENGINE_ERROR);
 
   api.SetVariable('tessedit_pageseg_mode', String(psm));
   api.SetVariable('tessedit_char_whitelist', OCR_CHAR_WHITELIST);

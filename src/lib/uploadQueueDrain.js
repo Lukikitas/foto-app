@@ -3,7 +3,10 @@ import { processQueueItem } from './uploadQueueProcessor.js';
 import {
   applyLease,
   clearLease,
+  isActiveQueueStatus,
+  isForeignLeaseActive,
   pickStoredQueueRecord,
+  QUEUE_LEASE_MS,
   QUEUE_OWNER,
 } from './uploadQueueProtocol.js';
 import {
@@ -31,6 +34,7 @@ export async function processStoredUploadQueue(overrides = {}) {
   storedDrain = (async () => {
     try {
       const seen = new Set();
+      let waitedForPageLease = false;
       while (true) {
         let records = [];
         try {
@@ -41,7 +45,23 @@ export async function processStoredUploadQueue(overrides = {}) {
         }
 
         const record = pickStoredQueueRecord(records, owner, Date.now(), { skipIds: seen });
-        if (!record) return;
+        if (!record) {
+          if (owner === QUEUE_OWNER.sw && !waitedForPageLease) {
+            const now = Date.now();
+            const leased = records.filter((entry) =>
+              isActiveQueueStatus(entry.status)
+              && isForeignLeaseActive(entry, owner, now)
+              && !seen.has(entry.id));
+            if (leased.length) {
+              waitedForPageLease = true;
+              const soonest = Math.min(...leased.map((entry) => entry.leaseUntil));
+              const delay = Math.min(QUEUE_LEASE_MS + 50, Math.max(25, soonest - now + 25));
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+          return;
+        }
         seen.add(record.id);
         const item = hydrateQueueRecord(record);
         if (!item) {
@@ -59,7 +79,6 @@ export async function processStoredUploadQueue(overrides = {}) {
             onComplete: () => {
               void notifyQueueProcessed();
             },
-            allowOcr: owner !== QUEUE_OWNER.sw,
             ...itemOverrides,
           });
           if (result?.yielded) continue;

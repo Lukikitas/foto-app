@@ -83,6 +83,8 @@ export function hydrateQueueRecord(record) {
     error: resume ? null : record.error || null,
     createdAt: record.createdAt || Date.now(),
     storagePath: record.storagePath || '',
+    leaseOwner: record.leaseOwner || null,
+    leaseUntil: record.leaseUntil || 0,
   };
 }
 

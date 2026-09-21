@@ -12,6 +12,7 @@ import {
   uploadUnidentifiedOrder,
 } from './lib/uploadQueueDeps.js';
 import { processStoredUploadQueue } from './lib/uploadQueueDrain.js';
+import { detectOrderFromPhoto } from './lib/orderOcrServiceWorker.js';
 import {
   UPLOAD_QUEUE_MESSAGE,
   UPLOAD_QUEUE_SYNC_TAG,
@@ -29,6 +30,7 @@ registerRoute(
 
 function drainQueue() {
   return processStoredUploadQueue({
+    detectOrderFromPhoto,
     compressImage,
     uploadFile,
     uploadPhoto,

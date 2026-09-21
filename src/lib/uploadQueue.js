@@ -1,6 +1,6 @@
 import { detectOrderFromPhoto } from './orderOcr.js';
+import { compressImageInWorker as compressImage } from './compressImageInWorker.js';
 import {
-  compressImage,
   uploadFile,
   uploadPhoto,
   uploadUnidentifiedOrder,
@@ -15,7 +15,7 @@ import {
   clearLease,
   getQueueOwner,
   isActiveQueueStatus,
-  itemNeedsOcr,
+  isForeignLeaseActive,
 } from './uploadQueueProtocol.js';
 import {
   deleteQueueRecord,
@@ -36,6 +36,8 @@ let processingId = null;
 let onCompleteHandler = null;
 let restorePromise = null;
 let persistListenersBound = false;
+let handoffPromise = null;
+let leaseRetryTimer = null;
 
 function snapshot() {
   return queue.map((item) => ({
@@ -70,30 +72,25 @@ function persistItem(item, { holdLease = true } = {}) {
   return job;
 }
 
-function persistVisibleQueue({ holdLease = true } = {}) {
-  for (const item of queue) {
-    if (item.status === 'done') continue;
-    void persistItem(item, { holdLease });
-  }
-}
-
 async function pausePageQueueAndHandoff() {
+  if (handoffPromise) return handoffPromise;
   pagePaused = true;
-  const current = queue.find((entry) => entry.id === processingId);
-  const readingTicket = Boolean(
-    current && (current.status === 'analyzing' || itemNeedsOcr(current)),
-  );
-  if (!readingTicket) {
-    pageAbort?.abort();
+  pageAbort?.abort();
+  handoffPromise = (async () => {
+    await Promise.all(queue
+      .filter((item) => item.status !== 'done')
+      .map((item) => persistItem(item, { holdLease: item.status === 'uploading' })));
+    await requestBackgroundQueueProcessing();
+  })();
+  try {
+    return await handoffPromise;
+  } finally {
+    handoffPromise = null;
   }
-  for (const item of queue) {
-    if (item.status === 'done') continue;
-    void persistItem(item, { holdLease: item.status === 'uploading' });
-  }
-  await requestBackgroundQueueProcessing();
 }
 
 async function resumePageQueue() {
+  if (handoffPromise) await handoffPromise;
   pagePaused = false;
   await syncQueueFromStore();
   processQueue();
@@ -112,12 +109,8 @@ function bindPersistListeners() {
   if (persistListenersBound || typeof window === 'undefined') return;
   persistListenersBound = true;
 
-  const persist = () => persistVisibleQueue({ holdLease: false });
-  window.addEventListener('pagehide', () => {
-    persistVisibleQueue({ holdLease: false });
-    void requestBackgroundQueueProcessing();
-  });
-  window.addEventListener('beforeunload', persist);
+  window.addEventListener('pagehide', () => { void pausePageQueueAndHandoff(); });
+  window.addEventListener('beforeunload', () => { void pausePageQueueAndHandoff(); });
   document.addEventListener('visibilitychange', handleQueueVisibilityChange);
   subscribeBackgroundQueueUpdates(() => {
     void syncQueueFromStore().then(() => {
@@ -218,8 +211,25 @@ function markItemDone(item, photo) {
 async function processQueue() {
   if (processing || pagePaused) return;
 
-  const next = queue.find((entry) => entry.status === 'pending');
-  if (!next) return;
+  const now = Date.now();
+  const next = queue.find((entry) => entry.status === 'pending'
+    && !isForeignLeaseActive(entry, getQueueOwner(), now));
+  if (leaseRetryTimer) {
+    clearTimeout(leaseRetryTimer);
+    leaseRetryTimer = null;
+  }
+  if (!next) {
+    const blocked = queue.filter((entry) => entry.status === 'pending'
+      && isForeignLeaseActive(entry, getQueueOwner(), now));
+    if (blocked.length) {
+      const delay = Math.max(100, Math.min(...blocked.map((entry) => entry.leaseUntil)) - now + 50);
+      leaseRetryTimer = setTimeout(() => {
+        leaseRetryTimer = null;
+        void syncQueueFromStore().then(() => processQueue());
+      }, delay);
+    }
+    return;
+  }
 
   processing = true;
   processingId = next.id;
@@ -231,7 +241,7 @@ async function processQueue() {
       uploadFile,
       uploadPhoto,
       uploadUnidentifiedOrder,
-      persist: persistItem,
+      persist: (entry, options) => pagePaused ? Promise.resolve() : persistItem(entry, options),
       notify,
       shouldYield: () => pagePaused,
       signal: pageAbort?.signal,
@@ -241,7 +251,7 @@ async function processQueue() {
       next.status = 'pending';
       next.error = null;
       notify();
-      await persistItem(next, { holdLease: false });
+      if (!pagePaused) await persistItem(next, { holdLease: false });
       if (pagePaused) void requestBackgroundQueueProcessing();
     }
   } catch (error) {
@@ -281,6 +291,8 @@ export async function syncQueueFromStore() {
       current.storagePath = hydrated.storagePath;
       current.file = hydrated.file || current.file;
       current.ticketFile = hydrated.ticketFile;
+      current.leaseOwner = hydrated.leaseOwner;
+      current.leaseUntil = hydrated.leaseUntil;
       continue;
     }
     queue.push(hydrated);
@@ -329,5 +341,8 @@ export function resetUploadQueueForTests() {
   restorePromise = null;
   onCompleteHandler = null;
   persistListenersBound = false;
+  handoffPromise = null;
+  if (leaseRetryTimer) clearTimeout(leaseRetryTimer);
+  leaseRetryTimer = null;
   notify();
 }

@@ -29,10 +29,6 @@ export function isDocumentHidden() {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';
 }
 
-export function queueRecordWaitsForPageOcr(record) {
-  return itemNeedsOcr(record) && record.status !== 'uploading';
-}
-
 export function isActiveQueueStatus(status) {
   return status === 'pending' || status === 'analyzing' || status === 'uploading';
 }
@@ -79,7 +75,6 @@ export function buildStoragePath(item, file) {
 }
 
 export function pickStoredQueueRecord(records, owner, now = Date.now(), options = {}) {
-  const skipOcr = options.skipOcr ?? owner === QUEUE_OWNER.sw;
   const skipIds = options.skipIds;
 
   return [...(records || [])]
@@ -88,7 +83,6 @@ export function pickStoredQueueRecord(records, owner, now = Date.now(), options 
     .find((record) => {
       if (skipIds?.has(record.id)) return false;
       if (isForeignLeaseActive(record, owner, now)) return false;
-      if (skipOcr && queueRecordWaitsForPageOcr(record)) return false;
       return true;
     }) || null;
 }

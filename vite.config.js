@@ -4,8 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
 
 function copyTesseractAssets() {
   const destRoot = path.join(root, 'public', 'tesseract')
@@ -19,7 +21,8 @@ function copyTesseractAssets() {
     path.join(destRoot, 'worker.min.js'),
   )
 
-  const coreDir = path.join(root, 'node_modules/tesseract.js-core')
+  const tesseractDir = path.dirname(require.resolve('tesseract.js'))
+  const coreDir = path.dirname(require.resolve('tesseract.js-core', { paths: [tesseractDir] }))
   for (const file of fs.readdirSync(coreDir)) {
     if (file.includes('lstm') && file.endsWith('.wasm.js')) {
       fs.copyFileSync(path.join(coreDir, file), path.join(coreDest, file))

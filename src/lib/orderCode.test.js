@@ -35,6 +35,14 @@ test('reads hyphenated aggregator codes as prefix plus digits', () => {
     displayCode: 'RAPPITURBO112233',
     aggregator: 'rappi_turbo',
   });
+  assert.deepEqual(code('CODIGO:\nRAPPIT URBO 480195216'), {
+    displayCode: 'RAPPITURBO480195216',
+    aggregator: 'rappi_turbo',
+  });
+  assert.deepEqual(code('RAPPIT URBO 480195216\nTOTAL 20550'), {
+    displayCode: 'RAPPITURBO480195216',
+    aggregator: 'rappi_turbo',
+  });
   assert.deepEqual(code('CODIGO: MPD-445566'), {
     displayCode: 'MPD445566',
     aggregator: 'mercadopago',

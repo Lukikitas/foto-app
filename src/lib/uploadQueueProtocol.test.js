@@ -7,7 +7,6 @@ import {
   itemNeedsOcr,
   pickStoredQueueRecord,
   QUEUE_OWNER,
-  queueRecordWaitsForPageOcr,
   UPLOAD_QUEUE_MESSAGE,
   UPLOAD_QUEUE_SYNC_TAG,
 } from './uploadQueueProtocol.js';
@@ -64,7 +63,7 @@ test('the worker picks the oldest unlocked job and skips errors', () => {
   assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.sw, now).id, 'ready');
 });
 
-test('the worker skips jobs that still need OCR and keeps coded uploads', () => {
+test('the worker can pick tickets needing OCR when the page is closed', () => {
   const records = [
     {
       id: 'ocr',
@@ -82,8 +81,7 @@ test('the worker skips jobs that still need OCR and keeps coded uploads', () => 
       orderDigits: 'PEYA1',
     },
   ];
-  assert.equal(queueRecordWaitsForPageOcr(records[0]), true);
-  assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.sw).id, 'ready');
+  assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.sw).id, 'ocr');
   assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.page).id, 'ocr');
 });
 
@@ -98,7 +96,6 @@ test('the worker still uploads unidentified jobs that already left OCR', () => {
       ticket: new Blob(['ticket']),
     },
   ];
-  assert.equal(queueRecordWaitsForPageOcr(records[0]), false);
   assert.equal(pickStoredQueueRecord(records, QUEUE_OWNER.sw).id, 'unidentified');
 });
 

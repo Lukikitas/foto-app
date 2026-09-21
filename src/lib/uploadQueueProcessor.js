@@ -1,4 +1,5 @@
 import { isAbortError, OCR_ENGINE_ERROR } from './tesseractAssets.js';
+import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
 import { buildStoragePath, isDocumentHidden, itemNeedsOcr } from './uploadQueueProtocol.js';
 
 function releaseTicket(item) {
@@ -22,6 +23,7 @@ export async function processQueueItem(item, options = {}) {
     notify = () => {},
     shouldYield = () => false,
     onComplete,
+    onOcrError = (error) => console.error('No se pudo completar el OCR; se guarda la evidencia sin código.', error),
     signal,
     allowOcr = true,
   } = options;
@@ -67,19 +69,20 @@ export async function processQueueItem(item, options = {}) {
       await persist(item);
       try {
         detectedOrder = await detectOrderFromPhoto(item.ticketFile, {
-          fallbackFiles: item.file && item.file !== item.ticketFile ? [item.file] : [],
           signal,
         });
       } catch (error) {
         if (isInterrupted(error, shouldYield, signal) || isDocumentHidden()) {
           return yieldNow();
         }
-        throw error;
+        onOcrError(error);
+        detectedOrder = null;
       }
       if (detectedOrder?.displayCode) {
         item.orderDigits = detectedOrder.displayCode;
         item.aggregator = detectedOrder.aggregator;
         item.label = `Pedido #${detectedOrder.displayCode}`;
+        releaseTicket(item);
         await persist(item);
       }
       if (yielded()) return yieldNow();
@@ -88,7 +91,7 @@ export async function processQueueItem(item, options = {}) {
     if (yielded()) return yieldNow();
 
     const preparedFile = item.file?.type?.startsWith('image/')
-      ? await compressImage(item.file)
+      ? await compressImage(item.file, item.kind === 'order' ? EVIDENCE_IMAGE_OPTIONS : undefined)
       : item.file;
 
     if (yielded()) return yieldNow();

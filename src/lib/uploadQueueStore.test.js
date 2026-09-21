@@ -126,6 +126,15 @@ test('serialize keeps a stable storage path for retries', () => {
   assert.equal(restored.status, 'pending');
 });
 
+test('restored jobs retain the worker lease so the page cannot upload them twice', () => {
+  const restored = hydrateQueueRecord(serializeQueueRecord(sampleItem({
+    leaseOwner: 'sw',
+    leaseUntil: Date.now() + 10_000,
+  })));
+  assert.equal(restored.leaseOwner, 'sw');
+  assert.ok(restored.leaseUntil > Date.now());
+});
+
 test('fileFromStoredBlob rebuilds a File from a saved blob', () => {
   const blob = new Blob([Uint8Array.from([9, 8, 7])], { type: 'image/jpeg' });
   const file = fileFromStoredBlob(blob, 'ticket.jpg', 'image/jpeg');

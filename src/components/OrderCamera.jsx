@@ -83,6 +83,36 @@ function makePhoto(video, name) {
   return canvasToFile(canvas, name, 'image/jpeg', 0.95);
 }
 
+async function makeEvidencePhoto(video, track, name) {
+  if (!video?.videoWidth || !video?.videoHeight) {
+    throw new Error('La cámara todavía no está lista.');
+  }
+
+  // Freeze the video frame at the shutter as a fast fallback; supported phones
+  // can supply a full still image with their own camera processing.
+  const fallback = document.createElement('canvas');
+  drawFrame(video, fallback);
+  if (typeof ImageCapture === 'function' && track?.readyState === 'live') {
+    try {
+      const capture = new ImageCapture(track);
+      const blob = await Promise.race([
+        capture.takePhoto(),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error('La foto tardó demasiado.')), 1500)),
+      ]);
+      if (blob?.size && blob.type?.startsWith('image/')) {
+        const extension = blob.type === 'image/png' ? 'png' : 'jpg';
+        return new File([blob], name.replace(/\.jpg$/, `.${extension}`), {
+          type: blob.type,
+          lastModified: Date.now(),
+        });
+      }
+    } catch {
+      // A video frame still keeps the two-photo flow working on unsupported devices.
+    }
+  }
+  return canvasToFile(fallback, name, 'image/jpeg', 0.95);
+}
+
 function getLiveTrack(stream) {
   return stream?.getVideoTracks?.()[0] || null;
 }
@@ -258,7 +288,11 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         return;
       }
 
-      const evidenceFile = await makePhoto(videoRef.current, `evidencia-${Date.now()}.jpg`);
+      const evidenceFile = await makeEvidencePhoto(
+        videoRef.current,
+        getLiveTrack(streamRef.current),
+        `evidencia-${Date.now()}.jpg`,
+      );
       const ticketFile = ticketFileRef.current;
       ticketFileRef.current = null;
       if (!ticketFile) {
