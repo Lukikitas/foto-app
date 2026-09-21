@@ -86,3 +86,23 @@ test('buildReportWorkbook produces multi-sheet workbook with 6 sheets and proper
   assert.ok(regBlob.size > 500);
 });
 
+test('generateReportHtml generates executive HTML with print-color-adjust, KPIs, and progress bar', async () => {
+  const store = upsertHistoryItems(emptyHistory(), [
+    complaint(),
+    complaint({ orderCode: 'RAPPI-1', amount: 3000, combo: 'Twister' }),
+  ]).store;
+  const report = buildComplaintReport(store, { from: '2026-09-17', to: '2026-09-17' });
+  const { generateReportHtml } = await import('./pdfReportGenerator.js');
+
+  const html = generateReportHtml(report, { includeDetail: true });
+  assert.ok(html.includes('<!DOCTYPE html>'));
+  assert.ok(html.includes('Delivery La Plata'));
+  assert.ok(html.includes('print-color-adjust: exact'));
+  assert.ok(html.includes('kpi-grid'));
+  assert.ok(html.includes('status-panel'));
+  assert.ok(html.includes('insights-box'));
+  assert.ok(html.includes('Anexo: Registro Detallado de Reclamos'));
+  assert.ok(html.includes('Combo Crispy'));
+});
+
+

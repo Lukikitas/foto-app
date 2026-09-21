@@ -11,6 +11,7 @@ import {
 } from '../lib/complaintReport';
 import { downloadTextFile } from '../lib/complaints';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
+import { openReportInNewTab } from '../lib/pdfReportGenerator';
 import ReportPdfModal from './ReportPdfModal';
 
 function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
@@ -141,6 +142,17 @@ export default function MetricsReport({ history, range, aggregator }) {
 
             {showMoreMenu && (
               <div className="report-more-menu" role="menu">
+                <button
+                  type="button"
+                  className="report-more-menu__item"
+                  role="menuitem"
+                  onClick={() => {
+                    openReportInNewTab(report, { includeDetail: false });
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  Ver PDF en pestaña nueva
+                </button>
                 <button
                   type="button"
                   className="report-more-menu__item"
