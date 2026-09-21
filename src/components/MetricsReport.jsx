@@ -1,9 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import { COMPLAINT_STATUS_LABELS } from '../lib/complaintHistory';
-import { buildComplaintReport, buildRegistryCsv, buildReportCsv, extraFieldKeys } from '../lib/complaintReport';
+import {
+  buildComplaintReport,
+  buildRegistryCsv,
+  buildReportCsv,
+  downloadRegistryXlsx,
+  downloadReportXlsx,
+  extraFieldKeys,
+} from '../lib/complaintReport';
 import { downloadTextFile } from '../lib/complaints';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
+import ReportPdfModal from './ReportPdfModal';
 
 function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
   if (!rows.length) return null;
@@ -41,6 +49,9 @@ function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
 }
 
 export default function MetricsReport({ history, range, aggregator }) {
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+
   const report = useMemo(
     () => buildComplaintReport(history, { from: range.from, to: range.to, aggregator }),
     [history, range, aggregator],
@@ -87,25 +98,91 @@ export default function MetricsReport({ history, range, aggregator }) {
         <div className="complaints__batch metrics-report__actions">
           <button
             type="button"
-            className="btn btn--primary btn--small"
-            onClick={() => downloadTextFile('informe-quejas.csv', buildReportCsv(report))}
+            className="btn btn--primary btn--small report-btn-excel"
+            onClick={() => downloadReportXlsx(report)}
             disabled={!totals.count}
+            title="Descargar libro de Excel completo con múltiples pestañas y estilos"
           >
-            Exportar informe
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="16" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            Exportar Excel (.xlsx)
           </button>
+
           <button
             type="button"
-            className="btn btn--ghost btn--small"
-            onClick={() => downloadTextFile('registro-quejas.csv', buildRegistryCsv(report.items))}
+            className="btn btn--ghost btn--small report-btn-pdf"
+            onClick={() => setShowPdfModal(true)}
             disabled={!totals.count}
+            title="Generar y previsualizar informe ejecutivo en PDF listo para imprimir o compartir"
           >
-            Exportar detalle
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 9V2h12v7"></path>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            Exportar PDF
           </button>
-          <button type="button" className="btn btn--ghost btn--small" onClick={() => window.print()}>
-            Imprimir
-          </button>
+
+          <div className="report-more-wrap">
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => setShowMoreMenu((prev) => !prev)}
+              disabled={!totals.count}
+              aria-expanded={showMoreMenu}
+            >
+              Más opciones ▾
+            </button>
+
+            {showMoreMenu && (
+              <div className="report-more-menu" role="menu">
+                <button
+                  type="button"
+                  className="report-more-menu__item"
+                  role="menuitem"
+                  onClick={() => {
+                    downloadRegistryXlsx(report.items);
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  Detalle de quejas (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  className="report-more-menu__item"
+                  role="menuitem"
+                  onClick={() => {
+                    downloadTextFile('informe-quejas.csv', buildReportCsv(report));
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  Descargar CSV resumen
+                </button>
+                <button
+                  type="button"
+                  className="report-more-menu__item"
+                  role="menuitem"
+                  onClick={() => {
+                    downloadTextFile('registro-quejas.csv', buildRegistryCsv(report.items));
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  Descargar CSV detalle
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
+
+      {showPdfModal && (
+        <ReportPdfModal report={report} onClose={() => setShowPdfModal(false)} />
+      )}
 
       {!totals.count ? (
         <div className="gallery__state gallery__state--empty">

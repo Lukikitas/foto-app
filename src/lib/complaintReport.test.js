@@ -56,3 +56,33 @@ test('report totals recovered money only from Ref. aceptado', () => {
   assert.match(csv, /Combo Crispy/);
   assert.match(csv, /8000/);
 });
+
+test('buildReportWorkbook produces multi-sheet workbook with 6 sheets and proper data', async () => {
+  const store = upsertHistoryItems(emptyHistory(), [
+    complaint(),
+    complaint({ orderCode: 'RAPPI-1', amount: 3000, combo: 'Twister' }),
+  ]).store;
+  const report = buildComplaintReport(store, { from: '2026-09-17', to: '2026-09-17' });
+  const { buildReportWorkbook, buildRegistryWorkbook } = await import('./complaintReport.js');
+  const { generateXlsxBlob } = await import('./xlsxExport.js');
+
+  const wb = buildReportWorkbook(report);
+  assert.equal(wb.sheets.length, 6);
+  assert.equal(wb.sheets[0].name, 'Resumen');
+  assert.equal(wb.sheets[1].name, 'Por Agregador');
+  assert.equal(wb.sheets[2].name, 'Top Combos');
+  assert.equal(wb.sheets[3].name, 'Por Motivo');
+  assert.equal(wb.sheets[4].name, 'Por Día');
+  assert.equal(wb.sheets[5].name, 'Detalle de Quejas');
+
+  const blob = generateXlsxBlob(wb);
+  assert.ok(blob);
+  assert.equal(blob.type, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  assert.ok(blob.size > 1000, `Blob size is ${blob.size}`);
+
+  const regWb = buildRegistryWorkbook(report.items);
+  assert.equal(regWb.sheets.length, 1);
+  const regBlob = generateXlsxBlob(regWb);
+  assert.ok(regBlob.size > 500);
+});
+
