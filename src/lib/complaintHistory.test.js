@@ -7,6 +7,7 @@ import {
   complaintHistoryId,
   COMPLAINT_STATUSES,
   deleteHistoryItem,
+  deleteHistoryItems,
   editHistoryItemInStore,
   emptyHistory,
   groupHistoryFlags,
@@ -15,6 +16,7 @@ import {
   listHistoryItems,
   parseHistory,
   patchHistoryItem,
+  patchHistoryItems,
   PENDING_COMPLAINT_DETAILS,
   syncGalleryComplaintInStore,
   upsertHistoryItems,
@@ -367,3 +369,72 @@ test('a later sheet import keeps a manually corrected history code and aggregato
   assert.match(item.comment, /Nuevo detalle/);
   assert.equal(attachHistoryToRows([{ complaint: complaint() }], imported.store)[0].history?.id, item.id);
 });
+
+test('patchHistoryItems updates status and aggregator for multiple complaints at once', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [
+    complaint({ orderCode: 'PEYA-1111' }),
+    complaint({ orderCode: 'PEYA-2222' }),
+    complaint({ orderCode: 'PEYA-3333' }),
+  ]).store;
+
+  const ids = Object.keys(seeded.items);
+  const targetIds = [ids[0], ids[1]];
+
+  const patched = patchHistoryItems(seeded, targetIds, {
+    status: COMPLAINT_STATUSES.refutado_aceptado,
+    aggregator: 'rappi',
+  });
+
+  assert.equal(patched.items[ids[0]].status, COMPLAINT_STATUSES.refutado_aceptado);
+  assert.equal(patched.items[ids[0]].aggregator, 'rappi');
+  assert.equal(patched.items[ids[1]].status, COMPLAINT_STATUSES.refutado_aceptado);
+  assert.equal(patched.items[ids[1]].aggregator, 'rappi');
+
+  // Untouched item remains in original state
+  assert.equal(patched.items[ids[2]].status, COMPLAINT_STATUSES.queja);
+  assert.equal(patched.items[ids[2]].aggregator, 'pedidosya');
+});
+
+test('patchHistoryItems batch edits combo, reason, amount and appends comment', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [
+    complaint({ orderCode: 'PEYA-1001', comment: 'Nota previa 1' }),
+    complaint({ orderCode: 'PEYA-1002', comment: 'Nota previa 2' }),
+  ]).store;
+
+  const ids = Object.keys(seeded.items);
+
+  const patched = patchHistoryItems(seeded, ids, {
+    combo: 'Combo Megabox',
+    reason: 'Faltó gaseosa',
+    amount: 15500,
+    commentAppend: 'Refutado con captura de ticket',
+  });
+
+  ids.forEach((id, idx) => {
+    const item = patched.items[id];
+    assert.equal(item.combo, 'Combo Megabox');
+    assert.equal(item.reason, 'Faltó gaseosa');
+    assert.equal(item.amount, 15500);
+    assert.match(item.comment, new RegExp(`Nota previa ${idx + 1}`));
+    assert.match(item.comment, /Refutado con captura de ticket/);
+  });
+});
+
+test('deleteHistoryItems removes multiple items in a single call', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [
+    complaint({ orderCode: 'PEYA-1' }),
+    complaint({ orderCode: 'PEYA-2' }),
+    complaint({ orderCode: 'PEYA-3' }),
+  ]).store;
+
+  const ids = Object.keys(seeded.items);
+  assert.equal(ids.length, 3);
+
+  const pruned = deleteHistoryItems(seeded, [ids[0], ids[2]]);
+  const remainingKeys = Object.keys(pruned.items);
+
+  assert.equal(remainingKeys.length, 1);
+  assert.equal(remainingKeys[0], ids[1]);
+  assert.equal(pruned.items[ids[1]].orderCode, 'PEYA-2');
+});
+

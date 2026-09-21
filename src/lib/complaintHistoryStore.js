@@ -5,10 +5,12 @@ import {
   complaintHistoryId,
   COMPLAINT_STATUSES,
   deleteHistoryItem,
+  deleteHistoryItems,
   editHistoryItemInStore,
   emptyHistory,
   parseHistory,
   patchHistoryItem,
+  patchHistoryItems,
   syncGalleryComplaintInStore,
   upsertHistoryItems,
 } from './complaintHistory.js';
@@ -210,6 +212,14 @@ export function setHistoryPhoto(complaint, photo) {
 
 export function deleteHistoryItemById(id) {
   return mutateComplaintHistory((store) => deleteHistoryItem(store, id));
+}
+
+export function deleteHistoryItemsByIds(ids) {
+  return mutateComplaintHistory((store) => deleteHistoryItems(store, ids));
+}
+
+export function patchHistoryItemsByIds(ids, patch) {
+  return mutateComplaintHistory((store) => patchHistoryItems(store, ids, patch));
 }
 
 export function editHistoryItemById(id, changes) {

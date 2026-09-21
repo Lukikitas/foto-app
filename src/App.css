@@ -5129,4 +5129,361 @@ button.metrics-agg:focus-visible {
   }
 }
 
+/* ==========================================================================
+   Complaints Multi-Selection & Bulk Actions
+   ========================================================================== */
+
+.complaint-card {
+  position: relative;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.complaint-card.is-selected {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--accent), var(--shadow);
+}
+
+.complaint-card__select-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0.25rem 0.35rem 0.25rem 0;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.complaint-card__checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+  accent-color: var(--accent);
+  border-radius: 4px;
+}
+
+/* Master checkbox in list bar */
+.complaints__select-all-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-h);
+  user-select: none;
+  transition: border-color 0.15s;
+}
+
+.complaints__select-all-box:hover {
+  border-color: var(--border-strong);
+}
+
+.complaints__select-all-box input[type='checkbox'] {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.complaints__period-select-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--accent-bg);
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  color: var(--text-h);
+}
+
+.complaints__period-select-btn {
+  font-weight: 700;
+  color: var(--accent) !important;
+  border-color: var(--accent-border) !important;
+}
+
+/* Sticky Bulk Action Bar */
+.complaints-bulk-bar {
+  position: fixed;
+  bottom: calc(4.6rem + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 250;
+  width: min(94vw, 840px);
+  background: #18191c;
+  color: #f1f2f4;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(16px);
+  padding: 0.6rem 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  animation: bulkBarSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes bulkBarSlideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.complaints-bulk-bar__info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.complaints-bulk-bar__badge {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #fff;
+}
+
+.complaints-bulk-bar__badge strong {
+  background: var(--accent);
+  color: #fff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.complaints-bulk-bar__amount {
+  background: rgba(255, 255, 255, 0.1);
+  color: #6ee7b7;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.complaints-bulk-bar__clear-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #cbd5e1;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: background 0.15s, color 0.15s;
+}
+
+.complaints-bulk-bar__clear-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.complaints-bulk-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.complaints-bulk-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+  white-space: nowrap;
+}
+
+.complaints-bulk-bar .btn--ghost {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.complaints-bulk-bar .btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.complaints-bulk-bar__btn--danger {
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+.complaints-bulk-bar__btn--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #fff !important;
+}
+
+/* Dropdown menus in bulk bar */
+.complaints-bulk-bar__dropdown-wrap {
+  position: relative;
+}
+
+.complaints-bulk-bar__menu {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  background: #1e2025;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  padding: 0.35rem;
+  min-width: 13rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  z-index: 300;
+  animation: menuFadeIn 0.15s ease;
+}
+
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.complaints-bulk-bar__menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.complaints-bulk-bar__menu-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.complaints-bulk-bar__menu-item small {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+/* Batch Edit Modal form */
+.complaint-batch-modal {
+  max-width: 580px;
+  width: 95vw;
+}
+
+.complaint-batch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.complaint-batch-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.complaint-batch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.complaint-batch-field--full {
+  grid-column: 1 / -1;
+}
+
+.complaint-batch-field__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-h);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.complaint-batch-field__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.complaint-batch-field select,
+.complaint-batch-field input {
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 0.85rem;
+  box-sizing: border-box;
+}
+
+.complaint-batch-field select:focus,
+.complaint-batch-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+.complaint-batch-field__reason-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.complaint-batch-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .complaint-batch-form__grid {
+    grid-template-columns: 1fr;
+  }
+  .complaints-bulk-bar {
+    padding: 0.5rem 0.65rem;
+    gap: 0.5rem;
+  }
+  .complaints-bulk-bar__actions {
+    gap: 0.25rem;
+  }
+  .complaints-bulk-bar__btn {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.5rem;
+  }
+}
+
+
 

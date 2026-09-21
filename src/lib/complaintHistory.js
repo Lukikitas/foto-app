@@ -261,11 +261,71 @@ export function patchHistoryItem(store, id, patch) {
   return next;
 }
 
+export function patchHistoryItems(store, ids, patch = {}) {
+  const next = parseHistory(store);
+  const idList = Array.isArray(ids) ? ids : [...(ids || [])];
+  if (idList.length === 0) return next;
+  const stamp = nowIso();
+  let changed = false;
+
+  idList.forEach((id) => {
+    const current = next.items[id];
+    if (!current) return;
+    const itemPatch = { ...patch };
+    if (itemPatch.commentAppend !== undefined) {
+      delete itemPatch.commentAppend;
+      const prev = current.comment || '';
+      const addition = String(patch.commentAppend || '').trim();
+      if (addition) {
+        itemPatch.comment = prev ? `${prev} · ${addition}` : addition;
+      }
+    }
+    const normalized = normalizeHistoryItem(
+      {
+        ...current,
+        ...itemPatch,
+        id,
+        updatedAt: stamp,
+      },
+      current,
+    );
+    if (normalized) {
+      next.items[id] = normalized;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    next.updatedAt = stamp;
+  }
+  return next;
+}
+
 export function deleteHistoryItem(store, id) {
   const next = parseHistory(store);
   if (!next.items[id]) return next;
   delete next.items[id];
   next.updatedAt = nowIso();
+  return next;
+}
+
+export function deleteHistoryItems(store, ids) {
+  const next = parseHistory(store);
+  const idList = Array.isArray(ids) ? ids : [...(ids || [])];
+  if (idList.length === 0) return next;
+  const stamp = nowIso();
+  let changed = false;
+
+  idList.forEach((id) => {
+    if (next.items[id]) {
+      delete next.items[id];
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    next.updatedAt = stamp;
+  }
   return next;
 }
 

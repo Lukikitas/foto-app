@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import {
   AGGREGATOR_OPTIONS,
@@ -16,6 +16,7 @@ import {
   attachHistoryToRows,
   COMPLAINT_STATUS_LABELS,
   COMPLAINT_STATUSES,
+  complaintDay,
   historyItemToRow,
   editHistoryItemInStore,
   listHistoryItems,
@@ -34,15 +35,18 @@ import { argentinaToday, formatMoney, PERIOD_PRESETS, resolvePeriod } from '../l
 import {
   cachedComplaintHistory,
   deleteHistoryItemById,
+  deleteHistoryItemsByIds,
   editHistoryItemById,
   importComplaintsToHistory,
   loadComplaintHistory,
+  patchHistoryItemsByIds,
   setHistoryPhoto,
   setHistoryResolution,
   setHistoryResolutions,
   subscribeComplaintHistory,
   syncGalleryComplaintToHistory,
 } from '../lib/complaintHistoryStore';
+import { downloadRegistryXlsx } from '../lib/complaintReport';
 import {
   applyComplaintToPhoto,
   applyComplaintsToPhotos,
@@ -80,6 +84,8 @@ import {
 import { getImportAggregator, getSavedSheetUrl, saveImportAggregator } from '../lib/storage';
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
+import ComplaintBatchEditModal from './ComplaintBatchEditModal';
+import ComplaintsBulkBar from './ComplaintsBulkBar';
 
 const FILTERS = [
   { id: 'all', label: 'Todas' },
@@ -169,6 +175,15 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     const saved = getImportAggregator();
     return AGGREGATOR_OPTIONS.some((item) => item.id === saved) ? saved : '';
   });
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [lastClickedIndex, setLastClickedIndex] = useState(null);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const masterCheckboxRef = useRef(null);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setLastClickedIndex(null);
+  }, [inboxView, filter, historyPreset, historyAggregator]);
 
   const rematch = useCallback((nextComplaints, nextPicks, nextPhotos) => {
     const matched = matchComplaintsToPhotos(nextComplaints, nextPhotos, nextPicks);
@@ -337,6 +352,93 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   }, [historyBaseRows]);
 
   const activeRows = inboxView === 'historial' ? historyRows : visibleRows;
+
+  const selectedRows = useMemo(() => {
+    if (selectedIds.size === 0) return [];
+    const source = inboxView === 'historial' ? historyBaseRows : rowsWithHistory;
+    return source.filter((r) => selectedIds.has(r.history?.id || r.complaint.id));
+  }, [selectedIds, inboxView, historyBaseRows, rowsWithHistory]);
+
+  const totalSelectedAmount = useMemo(() => {
+    return selectedRows.reduce(
+      (sum, r) => sum + (Number(r.history?.amount ?? r.complaint?.amount) || 0),
+      0,
+    );
+  }, [selectedRows]);
+
+  const hasSelectedPhotos = useMemo(() => {
+    return selectedRows.some((r) => r.photo?.public_url || r.photo?.id);
+  }, [selectedRows]);
+
+  const isAllVisibleSelected = useMemo(() => {
+    if (activeRows.length === 0) return false;
+    return activeRows.every((r) => selectedIds.has(r.history?.id || r.complaint.id));
+  }, [activeRows, selectedIds]);
+
+  useEffect(() => {
+    if (masterCheckboxRef.current) {
+      masterCheckboxRef.current.indeterminate =
+        selectedIds.size > 0 && !isAllVisibleSelected;
+    }
+  }, [selectedIds.size, isAllVisibleSelected]);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    if (isAllVisibleSelected) {
+      setSelectedIds(new Set());
+      setLastClickedIndex(null);
+    } else {
+      const next = new Set(selectedIds);
+      activeRows.forEach((r) => {
+        const id = r.history?.id || r.complaint.id;
+        if (id) next.add(id);
+      });
+      setSelectedIds(next);
+    }
+  }, [isAllVisibleSelected, activeRows, selectedIds]);
+
+  const selectAllPeriod = useCallback(() => {
+    const next = new Set();
+    historyBaseRows.forEach((r) => {
+      const id = r.history?.id || r.complaint.id;
+      if (id) next.add(id);
+    });
+    setSelectedIds(next);
+  }, [historyBaseRows]);
+
+  const handleToggleSelect = useCallback(
+    (row, event, index) => {
+      const id = row.history?.id || row.complaint.id;
+      if (!id) return;
+
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (event?.shiftKey && lastClickedIndex !== null && typeof index === 'number') {
+          const start = Math.min(lastClickedIndex, index);
+          const end = Math.max(lastClickedIndex, index);
+          const shouldSelect = !prev.has(id);
+          for (let i = start; i <= end; i++) {
+            const targetRow = activeRows[i];
+            if (targetRow) {
+              const targetId = targetRow.history?.id || targetRow.complaint.id;
+              if (targetId) {
+                if (shouldSelect) next.add(targetId);
+                else next.delete(targetId);
+              }
+            }
+          }
+        } else {
+          if (next.has(id)) {
+            next.delete(id);
+          } else {
+            next.add(id);
+          }
+        }
+        return next;
+      });
+      setLastClickedIndex(index);
+    },
+    [activeRows, lastClickedIndex],
+  );
 
   const stats = useMemo(() => {
     const source = inboxView === 'historial' ? historyBaseRows : rowsWithHistory;
@@ -769,6 +871,144 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setSkipped(0);
     setNotice(null);
     setError(null);
+    setSelectedIds(new Set());
+  }
+
+  async function handleBatchMarkStatus(status) {
+    if (selectedIds.size === 0) return;
+    const targetIds = [...selectedIds];
+    setLoading(true);
+    setError(null);
+    try {
+      const disputed = status && status !== COMPLAINT_STATUSES.queja;
+      const photoRows = selectedRows.filter((row) => row.photo?.id);
+      if (photoRows.length) {
+        const updatedPhotos = await applyComplaintsToPhotos(photoRows, { refutado: Boolean(disputed) });
+        if (updatedPhotos.length) applyUpdatedPhotos(updatedPhotos);
+      }
+      if (inboxView === 'historial') {
+        const updated = await patchHistoryItemsByIds(targetIds, { status });
+        setHistoryStore(historyFromResult(updated));
+      } else {
+        const history = await setHistoryResolutions(selectedRows, { status });
+        setHistoryStore(historyFromResult(history));
+      }
+      setNotice(`${targetIds.length} reclamos marcados como ${statusLabel(status)}.`);
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(err.message || 'No se pudieron actualizar los reclamos seleccionados.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBatchSetAggregator(aggregator) {
+    if (selectedIds.size === 0) return;
+    const targetIds = [...selectedIds];
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await patchHistoryItemsByIds(targetIds, { aggregator });
+      setHistoryStore(historyFromResult(updated));
+      const label = aggregator ? getAggregatorLabel(aggregator) : 'Sin agregador';
+      setNotice(`Agregador cambiado a "${label}" en ${targetIds.length} reclamos.`);
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(err.message || 'No se pudo cambiar el agregador en los reclamos.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBatchEditApply(changes) {
+    if (selectedIds.size === 0) return;
+    const targetIds = [...selectedIds];
+    setLoading(true);
+    setError(null);
+    try {
+      if (changes.status) {
+        const disputed = changes.status !== COMPLAINT_STATUSES.queja;
+        const photoRows = selectedRows.filter((row) => row.photo?.id);
+        if (photoRows.length) {
+          const updatedPhotos = await applyComplaintsToPhotos(photoRows, { refutado: Boolean(disputed) });
+          if (updatedPhotos.length) applyUpdatedPhotos(updatedPhotos);
+        }
+      }
+      const updated = await patchHistoryItemsByIds(targetIds, changes);
+      setHistoryStore(historyFromResult(updated));
+      setNotice(`Se actualizaron datos en ${targetIds.length} reclamos del historial.`);
+      setBatchModalOpen(false);
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(err.message || 'No se pudieron aplicar los cambios en lote.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBatchDelete() {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!window.confirm(`¿Seguro que querés eliminar ${count} reclamos del historial? Las fotos no se borran.`)) {
+      return;
+    }
+    const targetIds = [...selectedIds];
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await deleteHistoryItemsByIds(targetIds);
+      setHistoryStore(historyFromResult(updated));
+      setNotice(`Se eliminaron ${count} reclamos del historial.`);
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(err.message || 'No se pudieron eliminar los reclamos seleccionados.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBatchDownloadEvidence() {
+    const photoRows = selectedRows.filter((r) => r.photo?.public_url);
+    if (photoRows.length === 0) {
+      setError('Ninguno de los reclamos seleccionados tiene foto cargada.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const usedNames = new Set();
+      for (const row of photoRows) {
+        await downloadPhoto(
+          row.photo,
+          usedNames,
+          getEvidenceFilename(row.complaint, row.photo),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      setNotice(`${photoRows.length} evidencias descargadas.`);
+    } catch (err) {
+      setError(err.message || 'No se pudieron descargar las evidencias.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleBatchExportExcel() {
+    if (selectedRows.length === 0) return;
+    const items = selectedRows.map((r) => r.history || {
+      id: r.complaint.id,
+      orderCode: r.complaint.orderCode,
+      aggregator: getComplaintAggregator(r.complaint, r.photo),
+      day: r.complaint.day || complaintDay(r.complaint),
+      combo: r.complaint.combo,
+      reason: r.complaint.reason,
+      amount: r.complaint.amount,
+      status: complaintRowStatus(r),
+      photoUrl: r.photo?.public_url || null,
+      comment: r.complaint.comment,
+    });
+    downloadRegistryXlsx(items, `reclamos-seleccionados-${items.length}.xlsx`);
+    setNotice(`Descargando Excel con ${items.length} reclamos.`);
   }
 
   const historyCount = Object.keys(historyStore.items || {}).length;
@@ -972,6 +1212,21 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       {(showCruzarList || showHistoryList) && (
         <div className={inboxView === 'cruzar' ? 'complaints__cruzar-result' : 'complaints__history-result'}>
           <div className="complaints__list-bar">
+            <label
+              className="complaints__select-all-box"
+              title={isAllVisibleSelected ? 'Deseleccionar todos' : 'Seleccionar visibles'}
+            >
+              <input
+                type="checkbox"
+                ref={masterCheckboxRef}
+                checked={isAllVisibleSelected}
+                onChange={toggleSelectAllVisible}
+                aria-label="Seleccionar todos los reclamos visibles"
+              />
+              <span className="complaints__select-all-label">
+                {selectedIds.size > 0 ? <strong>{selectedIds.size} sel.</strong> : 'Todos'}
+              </span>
+            </label>
             <p className="gallery__count">
               {stats.all} reclamo{stats.all !== 1 ? 's' : ''}
               {inboxView === 'cruzar' && skipped ? ` · ${skipped} sin código` : ''}
@@ -1031,6 +1286,21 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             </div>
           </div>
 
+          {inboxView === 'historial' && selectedIds.size > 0 && selectedIds.size < historyBaseRows.length && (
+            <div className="complaints__period-select-banner">
+              <span>
+                Seleccionaste <strong>{selectedIds.size}</strong> reclamo{selectedIds.size !== 1 ? 's' : ''} de esta vista filtrada.
+              </span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--small complaints__period-select-btn"
+                onClick={selectAllPeriod}
+              >
+                Seleccionar todos los {historyBaseRows.length} del período
+              </button>
+            </div>
+          )}
+
           {((loading && inboxView === 'cruzar') || (historyLoading && inboxView === 'historial')) && activeRows.length === 0 && (
             <div className="gallery__state">
               <div className="spinner" aria-hidden="true" />
@@ -1049,28 +1319,62 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
           )}
 
           <div className="complaints__list">
-            {activeRows.map((row) => (
-              <ComplaintCard
-                key={row.complaint.id}
-                row={row}
-                layout={inboxView === 'historial' ? 'row' : 'card'}
-                disabled={loading}
-                onPick={pickPhoto}
-                onPrepare={prepareEvidence}
-                onDownload={downloadEvidence}
-                onCopy={copyLink}
-                onCopyCode={copyCode}
-                onOpenPortal={openPortal}
-                portal={portalFor(row)}
-                onMarkStatus={(item, status) => markRow(item, { status })}
-                onUploadPhoto={uploadRowPhoto}
-                onDelete={deleteRow}
-                onEdit={inboxView === 'historial' ? editRow : undefined}
-                onOpenPhoto={(photo) => setLightboxPhoto(photo)}
-              />
-            ))}
+            {activeRows.map((row, index) => {
+              const rowId = row.history?.id || row.complaint.id;
+              return (
+                <ComplaintCard
+                  key={row.complaint.id}
+                  row={row}
+                  index={index}
+                  selected={selectedIds.has(rowId)}
+                  onToggleSelect={handleToggleSelect}
+                  layout={inboxView === 'historial' ? 'row' : 'card'}
+                  disabled={loading}
+                  onPick={pickPhoto}
+                  onPrepare={prepareEvidence}
+                  onDownload={downloadEvidence}
+                  onCopy={copyLink}
+                  onCopyCode={copyCode}
+                  onOpenPortal={openPortal}
+                  portal={portalFor(row)}
+                  onMarkStatus={(item, status) => markRow(item, { status })}
+                  onUploadPhoto={uploadRowPhoto}
+                  onDelete={deleteRow}
+                  onEdit={inboxView === 'historial' ? editRow : undefined}
+                  onOpenPhoto={(photo) => setLightboxPhoto(photo)}
+                />
+              );
+            })}
           </div>
         </div>
+      )}
+
+      {/* Floating Bulk Action Bar */}
+      <ComplaintsBulkBar
+        selectedCount={selectedIds.size}
+        totalSelectedAmount={totalSelectedAmount}
+        hasPhotos={hasSelectedPhotos}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onSelectAllVisible={toggleSelectAllVisible}
+        isAllVisibleSelected={isAllVisibleSelected}
+        visibleCount={activeRows.length}
+        onMarkStatus={handleBatchMarkStatus}
+        onSetAggregator={handleBatchSetAggregator}
+        onOpenBatchEdit={() => setBatchModalOpen(true)}
+        onDownloadEvidence={hasSelectedPhotos ? handleBatchDownloadEvidence : undefined}
+        onExportExcel={handleBatchExportExcel}
+        onDeleteSelected={inboxView === 'historial' ? handleBatchDelete : undefined}
+        disabled={loading}
+      />
+
+      {/* Batch Edit Modal */}
+      {batchModalOpen && (
+        <ComplaintBatchEditModal
+          selectedCount={selectedIds.size}
+          onApply={handleBatchEditApply}
+          onClose={() => setBatchModalOpen(false)}
+          disabled={loading}
+        />
       )}
 
       {lightboxPhoto && isImagePhoto(lightboxPhoto) && (
@@ -1086,6 +1390,9 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
 
 function ComplaintCard({
   row,
+  index,
+  selected = false,
+  onToggleSelect,
   layout = 'card',
   disabled,
   onPick,
@@ -1115,8 +1422,28 @@ function ComplaintCard({
   const code = clipboardOrderCode(photo?.name || row.complaint.orderCode);
 
   return (
-    <article className={`complaint-card complaint-card--${status}${layout === 'row' ? ' complaint-card--row' : ''}`}>
+    <article
+      className={`complaint-card complaint-card--${status}${layout === 'row' ? ' complaint-card--row' : ''}${
+        selected ? ' is-selected' : ''
+      }`}
+    >
       <div className="complaint-card__top">
+        {onToggleSelect && (
+          <label
+            className="complaint-card__select-label"
+            onClick={(e) => e.stopPropagation()}
+            title={selected ? 'Deseleccionar' : 'Seleccionar'}
+          >
+            <input
+              type="checkbox"
+              className="complaint-card__checkbox"
+              checked={Boolean(selected)}
+              onChange={(e) => onToggleSelect(row, e, index)}
+              disabled={disabled}
+              aria-label={`Seleccionar pedido ${code || row.complaint.orderCode}`}
+            />
+          </label>
+        )}
         {photo?.public_url ? (
           <button
             type="button"
