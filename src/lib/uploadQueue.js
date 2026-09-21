@@ -54,7 +54,7 @@ function notify() {
   listeners.forEach((fn) => fn(data));
 }
 
-function persistItem(item, { holdLease = true } = {}) {
+function persistItem(item, { holdLease = true, reportError = false } = {}) {
   const previous = persistLocks.get(item.id) || Promise.resolve();
   const job = previous
     .catch(() => {})
@@ -64,12 +64,12 @@ function persistItem(item, { holdLease = true } = {}) {
         ? applyLease(serializeQueueRecord(item), getQueueOwner())
         : clearLease(serializeQueueRecord(item));
       return putQueueRecord(record);
-    })
-    .catch((error) => {
-      console.error(error);
     });
-  persistLocks.set(item.id, job);
-  return job;
+  const loggedJob = job.catch((error) => {
+    console.error(error);
+  });
+  persistLocks.set(item.id, loggedJob);
+  return reportError ? job : loggedJob;
 }
 
 async function pausePageQueueAndHandoff() {
@@ -129,7 +129,7 @@ export function subscribe(listener) {
   return () => listeners.delete(listener);
 }
 
-export function enqueue({
+export async function enqueue({
   file,
   ticketFile,
   kind = 'order',
@@ -151,6 +151,7 @@ export function enqueue({
       : title || file.name,
     meta,
     status: 'pending',
+    initialPersistPending: true,
     error: null,
     createdAt: Date.now(),
     storagePath: '',
@@ -159,7 +160,18 @@ export function enqueue({
   queue.push(item);
   notify();
   bindPersistListeners();
-  void persistItem(item);
+  try {
+    await persistItem(item, { reportError: true });
+    item.initialPersistPending = false;
+  } catch {
+    item.initialPersistPending = false;
+    item.status = 'error';
+    item.error = 'No se guardó en este celular. No cierres la app: liberá espacio y reintentá.';
+    notify();
+    const error = new Error('No se guardó la foto. No cierres la app: reintentá desde la cola.');
+    error.queueId = item.id;
+    throw error;
+  }
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     void requestBackgroundQueueProcessing();
   } else {
@@ -174,13 +186,23 @@ export function retryUpload(id) {
 
   item.status = 'pending';
   item.error = null;
+  item.initialPersistPending = true;
   notify();
-  void persistItem(item);
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-    void requestBackgroundQueueProcessing();
-    return;
-  }
-  processQueue();
+  void persistItem(item, { reportError: true })
+    .then(() => {
+      item.initialPersistPending = false;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        void requestBackgroundQueueProcessing();
+      } else {
+        processQueue();
+      }
+    })
+    .catch(() => {
+      item.initialPersistPending = false;
+      item.status = 'error';
+      item.error = 'No se guardó en este celular. No cierres la app: liberá espacio y reintentá.';
+      notify();
+    });
 }
 
 export function dismissUpload(id) {
@@ -213,6 +235,7 @@ async function processQueue() {
 
   const now = Date.now();
   const next = queue.find((entry) => entry.status === 'pending'
+    && !entry.initialPersistPending
     && !isForeignLeaseActive(entry, getQueueOwner(), now));
   if (leaseRetryTimer) {
     clearTimeout(leaseRetryTimer);
@@ -241,7 +264,9 @@ async function processQueue() {
       uploadFile,
       uploadPhoto,
       uploadUnidentifiedOrder,
-      persist: (entry, options) => pagePaused ? Promise.resolve() : persistItem(entry, options),
+      persist: (entry, options) => pagePaused
+        ? Promise.resolve()
+        : persistItem(entry, { ...options, reportError: true }),
       notify,
       shouldYield: () => pagePaused,
       signal: pageAbort?.signal,
@@ -300,6 +325,7 @@ export async function syncQueueFromStore() {
   }
 
   for (const item of queue) {
+    if (item.initialPersistPending) continue;
     if (storedIds.has(item.id) || item.status === 'done' || item.status === 'error') continue;
     if (processingId === item.id && storedIds.has(item.id)) continue;
     markItemDone(item);

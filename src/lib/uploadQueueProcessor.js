@@ -60,7 +60,7 @@ export async function processQueueItem(item, options = {}) {
 
   let detectedOrder = null;
   const heartbeat = setInterval(() => {
-    void persist(item);
+    void persist(item).catch((error) => console.error('No se pudo actualizar la cola.', error));
   }, 8000);
 
   try {

@@ -299,7 +299,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         throw new Error('Falta la foto del ticket. Volvé a empezar el par.');
       }
 
-      onCapturePair({ ticketFile, evidenceFile });
+      await onCapturePair({ ticketFile, evidenceFile });
       setQueuedPairs((count) => count + 1);
       setError(null);
       setStep(STEPS.ticket);

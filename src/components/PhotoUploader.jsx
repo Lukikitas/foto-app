@@ -113,11 +113,11 @@ export default function PhotoUploader() {
     setError(null);
   }
 
-  function handleOrderCapture({ ticketFile, evidenceFile }) {
+  async function handleOrderCapture({ ticketFile, evidenceFile }) {
     setError(null);
     saveLastTakenBy(meta.taken_by);
     setTakenByHistory(getTakenByHistory());
-    enqueue({
+    await enqueue({
       file: evidenceFile,
       ticketFile,
       kind: UPLOAD_MODES.order,
@@ -174,7 +174,7 @@ export default function PhotoUploader() {
       saveLastTakenBy(meta.taken_by);
       setTakenByHistory(getTakenByHistory());
 
-      enqueue({
+      await enqueue({
         file,
         kind: uploadMode,
         orderDigits,
@@ -194,6 +194,7 @@ export default function PhotoUploader() {
       );
       resetForm();
     } catch (err) {
+      if (err.queueId) resetForm();
       setError(err.message || 'Error al preparar el archivo.');
     } finally {
       setSaving(false);
