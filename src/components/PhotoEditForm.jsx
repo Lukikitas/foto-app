@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AGGREGATOR_OPTIONS, getPhotoAggregator } from '../lib/aggregators';
 import { isOrderPhoto, isValidOrderDigits } from '../lib/photos';
 
 export default function PhotoEditForm({
@@ -14,6 +15,8 @@ export default function PhotoEditForm({
     has_complaint: Boolean(photo.has_complaint),
     taken_by: photo.taken_by || '',
     is_refutado: Boolean(photo.is_refutado),
+    aggregator: getPhotoAggregator(photo) || '',
+    file: null,
   });
 
   function updateForm(key, value) {
@@ -32,7 +35,7 @@ export default function PhotoEditForm({
     onSubmit?.(form);
   }
 
-  const invalidOrder = isOrder && !isValidOrderDigits(form.name);
+  const invalidOrder = isOrder && form.name !== 'Código no encontrado' && !isValidOrderDigits(form.name);
 
   return (
     <form className="photo-card__edit-form" onSubmit={handleSubmit}>
@@ -46,6 +49,33 @@ export default function PhotoEditForm({
           maxLength={isOrder ? 32 : 120}
           autoFocus
         />
+      </label>
+
+      {isOrder && (
+        <label>
+          Agregador
+          <select
+            value={form.aggregator}
+            onChange={(e) => updateForm('aggregator', e.target.value)}
+            disabled={loading}
+          >
+            <option value="">Sin agregador</option>
+            {AGGREGATOR_OPTIONS.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      <label>
+        {isOrder ? 'Reemplazar foto' : 'Reemplazar archivo'}
+        <input
+          type="file"
+          accept={isOrder ? 'image/*' : undefined}
+          onChange={(e) => updateForm('file', e.target.files?.[0] || null)}
+          disabled={loading}
+        />
+        {form.file && <small>Nueva foto: {form.file.name}</small>}
       </label>
 
       <label>

@@ -3,6 +3,8 @@ import { AGGREGATORS, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
 import { downloadPhoto } from './photoDownload.js';
 import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
+import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
+import { compressImageInWorker } from './compressImageInWorker.js';
 
 export {
   cachedPhotoBlob,
@@ -412,6 +414,101 @@ export async function updatePhoto(id, name, meta = {}) {
     }
   }
   return data;
+}
+
+export async function updatePhotoDetails(photo, { name, aggregator, file, ...meta }) {
+  if (!photo?.id || !photo.file_path) throw new Error('No se encontró la foto para editar.');
+  const nextName = normalizePhotoName(name, '');
+  const order = isOrderPhoto(photo);
+  if (!nextName || (order && nextName !== UNIDENTIFIED_ORDER_NAME && !isValidOrderDigits(nextName))) {
+    throw new Error('Ingresá un código de pedido válido.');
+  }
+  if (file && order && !file.type?.startsWith('image/')) {
+    throw new Error('Elegí una imagen para reemplazar la foto del pedido.');
+  }
+
+  const storage = supabase.storage.from(BUCKET);
+  const folder = order
+    ? nextName === UNIDENTIFIED_ORDER_NAME && !aggregator
+      ? 'orders/no_code'
+      : `orders/${AGGREGATORS[aggregator] ? aggregator : 'sin_agregador'}`
+    : 'files';
+  const currentFolder = photo.file_path.slice(0, photo.file_path.lastIndexOf('/'));
+  let nextPath = photo.file_path;
+  let newObject = false;
+
+  if (file || folder !== currentFolder) {
+    const prepared = file && order ? await compressImageInWorker(file, EVIDENCE_IMAGE_OPTIONS) : file;
+    const extension = prepared
+      ? (prepared.name?.split('.').pop()?.toLowerCase() || 'jpg')
+      : getFileExtension(photo);
+    nextPath = `${folder}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+    let result = prepared
+      ? await storage.upload(nextPath, prepared, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: prepared.type || undefined,
+        })
+      : await storage.copy(photo.file_path, nextPath);
+    if (result.error && !prepared && photo.public_url) {
+      try {
+        const response = await fetch(photo.public_url);
+        if (response.ok) {
+          const original = await response.blob();
+          result = await storage.upload(nextPath, original, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: original.type || undefined,
+          });
+        }
+      } catch {
+        // Se informa el error original de la copia si tampoco se puede descargar.
+      }
+    }
+    if (result.error) throw result.error;
+    newObject = true;
+  }
+
+  const nextUrl = newObject ? storage.getPublicUrl(nextPath).data.publicUrl : photo.public_url;
+  const { data, error } = await supabase.from('photos')
+    .update({
+      name: nextName,
+      ...normalizePhotoMeta(meta),
+      file_path: nextPath,
+      public_url: nextUrl,
+    })
+    .eq('id', photo.id)
+    .select()
+    .single();
+
+  if (error) {
+    if (newObject) {
+      try {
+        await storage.remove([nextPath]);
+      } catch (cleanupError) {
+        console.warn('No se pudo borrar la nueva foto después de un error.', cleanupError);
+      }
+    }
+    throw error;
+  }
+  if (isValidOrderDigits(nextName)) {
+    try {
+      await deleteUnresolvedTicket(photo.id);
+    } catch (ticketError) {
+      console.error('No se pudo eliminar el ticket local ya resuelto.', ticketError);
+    }
+  }
+  return data;
+}
+
+export async function cleanupReplacedPhoto(previous, updated) {
+  if (!previous?.file_path || previous.file_path === updated?.file_path) return;
+  try {
+    const { error } = await supabase.storage.from(BUCKET).remove([previous.file_path]);
+    if (error) console.warn('No se pudo borrar la versión anterior de la foto.', error);
+  } catch (error) {
+    console.warn('No se pudo borrar la versión anterior de la foto.', error);
+  }
 }
 
 export async function bulkUpdateTakenBy(photos, takenBy) {

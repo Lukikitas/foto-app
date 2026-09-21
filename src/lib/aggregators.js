@@ -63,7 +63,9 @@ export function getPartnerPortal(aggregator) {
 }
 
 export function getComplaintAggregator(complaint, photo) {
-  if (complaint?.aggregator && AGGREGATORS[complaint.aggregator]) return complaint.aggregator;
+  if (complaint && Object.hasOwn(complaint, 'aggregator')) {
+    return AGGREGATORS[complaint.aggregator] ? complaint.aggregator : null;
+  }
   return detectAggregator(complaint?.orderCode) || getPhotoAggregator(photo) || null;
 }
 

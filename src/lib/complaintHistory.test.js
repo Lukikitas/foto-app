@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   attachPhotosToHistory,
+  attachHistoryToRows,
   clearHistoryItems,
   complaintHistoryId,
   COMPLAINT_STATUSES,
   deleteHistoryItem,
+  editHistoryItemInStore,
   emptyHistory,
   groupHistoryFlags,
   historyItemToRow,
@@ -292,4 +294,76 @@ test('parseHistory drops broken records and keeps a valid map', () => {
   });
   assert.equal(Object.keys(parsed.items).length, 1);
   assert.equal(Object.values(parsed.items)[0].status, COMPLAINT_STATUSES.refutado_rechazado);
+});
+
+test('editing a history entry changes code, aggregator and photo without losing its resolution', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const oldId = Object.keys(seeded.items)[0];
+  const marked = patchHistoryItem(seeded, oldId, { status: COMPLAINT_STATUSES.refutado_aceptado });
+  const next = editHistoryItemInStore(marked, oldId, {
+    orderCode: 'MPD48024738630',
+    aggregator: 'mercadopago',
+    photo: { id: 'photo-1', name: 'MPD48024738630', public_url: 'https://example.com/new.jpg' },
+  });
+  assert.equal(Object.keys(next.items).length, 1);
+  assert.equal(next.items[oldId], undefined);
+  const item = Object.values(next.items)[0];
+  assert.equal(item.orderCode, 'MPD48024738630');
+  assert.equal(item.aggregator, 'mercadopago');
+  assert.equal(item.photoId, 'photo-1');
+  assert.equal(item.photoUrl, 'https://example.com/new.jpg');
+  assert.equal(item.status, COMPLAINT_STATUSES.refutado_aceptado);
+  assert.equal(item.amount, 8990);
+  assert.equal(historyItemToRow(item).complaint.aggregator, 'mercadopago');
+});
+
+test('editing an attached gallery photo refreshes its history without making a duplicate', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const linked = attachPhotosToHistory(seeded, [{
+    complaint: complaint(),
+    photo: { id: 'photo-1', name: 'PEYA-2286878556', public_url: 'https://example.com/old.jpg' },
+  }]);
+  const updated = syncGalleryComplaintInStore(linked, {
+    id: 'photo-1',
+    name: 'RAPPI480195216',
+    file_path: 'orders/rappi/new.jpg',
+    public_url: 'https://example.com/new.jpg',
+    created_at: '2026-09-17T17:51:00.000-03:00',
+    has_complaint: false,
+  });
+  assert.equal(Object.keys(updated.items).length, 1);
+  const item = Object.values(updated.items)[0];
+  assert.equal(item.orderCode, 'RAPPI480195216');
+  assert.equal(item.aggregator, 'rappi');
+  assert.equal(item.photoUrl, 'https://example.com/new.jpg');
+  assert.equal(item.reason, 'Faltó producto');
+});
+
+test('editing a history code refuses a collision on the same day', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [
+    complaint(),
+    complaint({ orderCode: 'RAPPI480195216' }),
+  ]).store;
+  assert.throws(() => editHistoryItemInStore(seeded, complaintHistoryId(complaint()), {
+    orderCode: 'RAPPI480195216',
+    aggregator: 'rappi',
+  }), /Ya existe un reclamo/);
+});
+
+test('a later sheet import keeps a manually corrected history code and aggregator', () => {
+  const original = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const originalId = Object.keys(original.items)[0];
+  const corrected = editHistoryItemInStore(original, originalId, {
+    orderCode: 'MPD48024738630',
+    aggregator: 'mercadopago',
+  });
+  const imported = upsertHistoryItems(corrected, [complaint({ comment: 'Nuevo detalle' })]);
+  assert.equal(imported.added, 0);
+  assert.equal(imported.updated, 1);
+  assert.equal(Object.keys(imported.store.items).length, 1);
+  const item = Object.values(imported.store.items)[0];
+  assert.equal(item.orderCode, 'MPD48024738630');
+  assert.equal(item.aggregator, 'mercadopago');
+  assert.match(item.comment, /Nuevo detalle/);
+  assert.equal(attachHistoryToRows([{ complaint: complaint() }], imported.store)[0].history?.id, item.id);
 });

@@ -32,6 +32,11 @@ test('corrected no-code photos show their aggregator without moving the stored i
   assert.equal(getPhotoAggregator({ file_path: 'files/photo.jpg', name: 'MPD48024738630' }), null);
 });
 
+test('a manually cleared aggregator does not get inferred again from the code', () => {
+  assert.equal(getComplaintAggregator({ orderCode: 'PEYA-1234', aggregator: null }), null);
+  assert.equal(getComplaintAggregator({ orderCode: 'PEYA-1234' }), 'pedidosya');
+});
+
 function fakeWindow() {
   return {
     closed: false,

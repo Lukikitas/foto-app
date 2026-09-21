@@ -5,6 +5,7 @@ import {
   complaintHistoryId,
   COMPLAINT_STATUSES,
   deleteHistoryItem,
+  editHistoryItemInStore,
   emptyHistory,
   parseHistory,
   patchHistoryItem,
@@ -178,9 +179,9 @@ export function setHistoryResolutions(rows, { status, accepted, refutado } = {})
       if (!next.items[id]) {
         next = upsertHistoryItems(next, [complaint]).store;
       }
-      const current = next.items[id];
+      const current = next.items[id] || Object.values(next.items).find((item) => item.sourceId === id);
       if (!current) return;
-      next = patchHistoryItem(next, id, resolutionPatch(current, photo, { status, accepted, refutado }));
+      next = patchHistoryItem(next, current.id, resolutionPatch(current, photo, { status, accepted, refutado }));
     });
     return next;
   });
@@ -197,9 +198,9 @@ export function setHistoryPhoto(complaint, photo) {
     if (!next.items[id]) {
       next = upsertHistoryItems(next, [complaint]).store;
     }
-    const current = next.items[id];
+    const current = next.items[id] || Object.values(next.items).find((item) => item.sourceId === id);
     if (!current || !photo) return next;
-    return patchHistoryItem(next, id, {
+    return patchHistoryItem(next, current.id, {
       photoId: photo.id,
       photoName: photo.name,
       photoUrl: photo.public_url,
@@ -209,6 +210,10 @@ export function setHistoryPhoto(complaint, photo) {
 
 export function deleteHistoryItemById(id) {
   return mutateComplaintHistory((store) => deleteHistoryItem(store, id));
+}
+
+export function editHistoryItemById(id, changes) {
+  return mutateComplaintHistory((store) => editHistoryItemInStore(store, id, changes));
 }
 
 export function clearComplaintHistory() {

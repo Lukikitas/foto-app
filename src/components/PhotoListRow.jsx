@@ -9,6 +9,7 @@ import { syncGalleryComplaintToHistory } from '../lib/complaintHistoryStore';
 import { hasUnresolvedTicket } from '../lib/unresolvedTicketStore.js';
 import { retryUnresolvedTicket } from '../lib/unresolvedTicketReview.js';
 import {
+  cleanupReplacedPhoto,
   deletePhoto,
   downloadPhoto,
   getFileExtension,
@@ -20,6 +21,7 @@ import {
   isUnidentifiedOrder,
   isValidOrderDigits,
   updatePhoto,
+  updatePhotoDetails,
 } from '../lib/photos';
 
 function RowBadges({ photo }) {
@@ -106,7 +108,7 @@ export default function PhotoListRow({
   }
 
   async function handleEdit(form) {
-    if (isOrder && !isValidOrderDigits(form.name)) {
+    if (isOrder && form.name !== 'Código no encontrado' && !isValidOrderDigits(form.name)) {
       setError('Ingresá un código de pedido válido.');
       return;
     }
@@ -118,7 +120,7 @@ export default function PhotoListRow({
     setLoading(true);
     setError(null);
     try {
-      const updated = await updatePhoto(photo.id, form.name, {
+      const updated = await updatePhotoDetails(photo, {
         ...form,
         has_complaint: isOrder ? form.has_complaint : false,
         is_refutado: isOrder ? form.is_refutado : false,
@@ -133,6 +135,7 @@ export default function PhotoListRow({
           return;
         }
       }
+      await cleanupReplacedPhoto(photo, updated);
       onUpdated?.(updated);
       setEditing(false);
     } catch (err) {

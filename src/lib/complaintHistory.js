@@ -80,6 +80,7 @@ export function statusIsDisputed(status) {
 }
 
 function toAmount(value) {
+  if (value == null || value === '') return null;
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return null;
   return Math.round(number * 100) / 100;
@@ -110,11 +111,11 @@ export function normalizeHistoryItem(raw, fallback = {}) {
   const timeOfDay = raw?.timeOfDay || fallback.timeOfDay || null;
   const dateAssumed = Boolean(raw?.dateAssumed ?? fallback.dateAssumed);
   const day = raw?.day || complaintDay({ orderAtIso }) || fallback.day || '';
-  const aggregator =
-    raw?.aggregator ||
-    fallback.aggregator ||
-    detectAggregator(orderCode) ||
-    null;
+  const aggregator = raw?.aggregator !== undefined
+    ? raw.aggregator
+    : fallback.aggregator !== undefined
+      ? fallback.aggregator
+      : detectAggregator(orderCode) || null;
   const status = migrateComplaintStatus({
     status: raw?.status ?? fallback.status,
     accepted: raw?.accepted ?? fallback.accepted,
@@ -141,6 +142,8 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     photoId: raw?.photoId || fallback.photoId || null,
     photoName: raw?.photoName || fallback.photoName || null,
     photoUrl: raw?.photoUrl || fallback.photoUrl || null,
+    sourceId: raw?.sourceId || fallback.sourceId || null,
+    manualEdit: Boolean(raw?.manualEdit ?? fallback.manualEdit),
     importedAt: raw?.importedAt || fallback.importedAt || nowIso(),
     updatedAt: raw?.updatedAt || nowIso(),
   };
@@ -169,6 +172,8 @@ function mergeText(current, incoming) {
 
 function findHistoryForSheetComplaint(store, id, compact) {
   if (store.items[id]) return store.items[id];
+  const manuallyEdited = Object.values(store.items).find((item) => item.sourceId === id);
+  if (manuallyEdited) return manuallyEdited;
   if (!compact) return undefined;
   return Object.values(store.items).find(
     (item) => item.compact === compact && isPendingComplaintDetails(item.reason),
@@ -196,7 +201,11 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
     const incoming = normalizeHistoryItem(
       {
         ...complaint,
-        id,
+        id: existing?.manualEdit ? existing.id : id,
+        orderCode: existing?.manualEdit ? existing.orderCode : complaint.orderCode,
+        aggregator: existing?.manualEdit ? existing.aggregator : complaint.aggregator,
+        sourceId: existing?.sourceId,
+        manualEdit: existing?.manualEdit,
         importedAt: existing?.importedAt || stamp,
         updatedAt: stamp,
         status: existing?.status,
@@ -220,8 +229,8 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
       incoming.photoUrl = existing.photoUrl || incoming.photoUrl;
       incoming.importedAt = existing.importedAt;
       incoming.updatedAt = stamp;
-      if (existing.id !== id) delete next.items[existing.id];
-      next.items[id] = incoming;
+      if (existing.id !== incoming.id) delete next.items[existing.id];
+      next.items[incoming.id] = incoming;
       updated += 1;
     } else {
       incoming.importedAt = stamp;
@@ -269,6 +278,7 @@ export function clearHistoryItems(store) {
 function galleryComplaintFromPhoto(photo) {
   return {
     orderCode: photo?.name,
+    aggregator: getPhotoAggregator(photo),
     orderAtIso: photo?.created_at || null,
     reason: PENDING_COMPLAINT_DETAILS,
     comment: '',
@@ -349,8 +359,62 @@ export function syncGalleryComplaintInStore(store, photo) {
   if (!photo || !compactCode(photo.name) || photo.name === 'Código no encontrado') {
     return parseHistory(store);
   }
-  if (photo.has_complaint) return upsertGalleryComplaint(store, photo);
-  return removePendingGalleryComplaint(store, photo);
+  const next = syncEditedPhotoInStore(store, photo);
+  if (photo.has_complaint) return upsertGalleryComplaint(next, photo);
+  return removePendingGalleryComplaint(next, photo);
+}
+
+export function editHistoryItemInStore(store, id, { orderCode, aggregator, photo } = {}) {
+  const next = parseHistory(store);
+  const current = next.items[id];
+  if (!current) throw new Error('No se encontró el reclamo para editar.');
+  const code = String(orderCode || '').trim();
+  const compact = compactCode(code);
+  if (!compact) throw new Error('Ingresá un código de pedido válido.');
+  const nextId = complaintHistoryId({ orderCode: code, orderAtIso: current.orderAtIso });
+  if (nextId !== id && next.items[nextId]) {
+    throw new Error('Ya existe un reclamo con ese código en la misma fecha.');
+  }
+  const stamp = nowIso();
+  const updated = normalizeHistoryItem({
+    ...current,
+    id: nextId,
+    orderCode: code,
+    compact,
+    aggregator: aggregator || null,
+    sourceId: current.sourceId || id,
+    manualEdit: true,
+    photoId: photo?.id ?? current.photoId,
+    photoName: photo?.name ?? current.photoName,
+    photoUrl: photo?.public_url ?? current.photoUrl,
+    updatedAt: stamp,
+  });
+  if (nextId !== id) delete next.items[id];
+  next.items[nextId] = updated;
+  next.updatedAt = stamp;
+  return next;
+}
+
+export function syncEditedPhotoInStore(store, photo) {
+  const next = parseHistory(store);
+  const linked = Object.values(next.items).filter((item) => item.photoId === photo?.id);
+  for (const item of linked) {
+    const aggregator = getPhotoAggregator(photo);
+    const updated = item.orderCode === photo.name && item.aggregator === aggregator
+      ? patchHistoryItem(next, item.id, {
+          photoId: photo.id,
+          photoName: photo.name,
+          photoUrl: photo.public_url,
+        })
+      : editHistoryItemInStore(next, item.id, {
+          orderCode: photo.name,
+          aggregator,
+          photo,
+        });
+    next.items = updated.items;
+    next.updatedAt = updated.updatedAt;
+  }
+  return next;
 }
 
 export function attachPhotosToHistory(store, rows) {
@@ -480,7 +544,8 @@ export function attachHistoryToRows(rows, store) {
   const items = parseHistory(store).items;
   return rows.map((row) => ({
     ...row,
-    history: items[complaintHistoryId(row.complaint)] || null,
+    history: items[complaintHistoryId(row.complaint)] ||
+      Object.values(items).find((item) => item.sourceId === complaintHistoryId(row.complaint)) || null,
   }));
 }
 
@@ -507,6 +572,7 @@ export function historyItemToRow(item, photos = []) {
     complaint: {
       id: item.id,
       orderCode: item.orderCode,
+      aggregator: item.aggregator,
       orderAtIso: item.orderAtIso,
       timeOfDay: item.timeOfDay,
       dateAssumed: item.dateAssumed,

@@ -10,11 +10,14 @@ import {
   openPartnerPortal,
   PARTNER_PORTALS,
 } from '../lib/aggregators';
+import { EVIDENCE_IMAGE_OPTIONS } from '../lib/compressImage';
+import { compressImageInWorker } from '../lib/compressImageInWorker';
 import {
   attachHistoryToRows,
   COMPLAINT_STATUS_LABELS,
   COMPLAINT_STATUSES,
   historyItemToRow,
+  editHistoryItemInStore,
   listHistoryItems,
 } from '../lib/complaintHistory';
 import {
@@ -31,12 +34,14 @@ import { argentinaToday, formatMoney, PERIOD_PRESETS, resolvePeriod } from '../l
 import {
   cachedComplaintHistory,
   deleteHistoryItemById,
+  editHistoryItemById,
   importComplaintsToHistory,
   loadComplaintHistory,
   setHistoryPhoto,
   setHistoryResolution,
   setHistoryResolutions,
   subscribeComplaintHistory,
+  syncGalleryComplaintToHistory,
 } from '../lib/complaintHistoryStore';
 import {
   applyComplaintToPhoto,
@@ -62,11 +67,15 @@ import {
 } from '../lib/complaintSyncStore';
 import {
   cachedPhotoBlob,
+  cleanupReplacedPhoto,
   downloadPhoto,
   fetchPhotosByIds,
   isImagePhoto,
+  isValidOrderDigits,
   prefetchPhotoBlob,
   startPhotoDownload,
+  updatePhotoDetails,
+  uploadPhoto,
 } from '../lib/photos';
 import { getImportAggregator, getSavedSheetUrl, saveImportAggregator } from '../lib/storage';
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
@@ -528,6 +537,62 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       setNotice(`Se borró ${row.complaint.orderCode}.`);
     } catch (err) {
       setError(err.message || 'No se pudo borrar la queja.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function editRow(row, changes) {
+    const id = row.history?.id;
+    if (!id) return;
+    const orderCode = String(changes.orderCode || '').trim().toUpperCase();
+    if (!isValidOrderDigits(orderCode)) {
+      throw new Error('Ingresá un código de pedido válido.');
+    }
+    editHistoryItemInStore(historyStore, id, { orderCode, aggregator: changes.aggregator });
+    setLoading(true);
+    setError(null);
+    try {
+      let photo = row.photo?.file_path ? row.photo : null;
+      if (!photo && row.photo?.id) {
+        [photo] = await fetchPhotosByIds([row.photo.id]);
+      }
+      const previousPhoto = photo;
+      if (photo) {
+        photo = await updatePhotoDetails(photo, {
+          name: orderCode,
+          aggregator: changes.aggregator,
+          file: changes.file,
+          notes: photo.notes,
+          taken_by: photo.taken_by,
+          has_complaint: photo.has_complaint,
+          is_refutado: photo.is_refutado,
+        });
+      } else if (changes.file) {
+        if (!changes.file.type?.startsWith('image/')) throw new Error('Elegí una imagen.');
+        const prepared = await compressImageInWorker(changes.file, EVIDENCE_IMAGE_OPTIONS);
+        photo = await uploadPhoto(prepared, orderCode, { has_complaint: true }, changes.aggregator || 'sin_agregador');
+      }
+      const updated = await editHistoryItemById(id, {
+        orderCode,
+        aggregator: changes.aggregator,
+        photo,
+      });
+      if (photo) applyUpdatedPhotos([photo]);
+      setHistoryStore(historyFromResult(updated));
+      if (photo) {
+        try {
+          await syncGalleryComplaintToHistory(photo);
+          await cleanupReplacedPhoto(previousPhoto, photo);
+        } catch (syncError) {
+          setError('El pedido se guardó, pero no se pudieron actualizar todos los vínculos del historial.');
+          console.error('No se pudieron sincronizar las otras referencias de la foto.', syncError);
+        }
+      }
+      setNotice(`Pedido ${orderCode} actualizado en el historial.`);
+    } catch (err) {
+      setError(err.message || 'No se pudo editar el reclamo.');
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -1000,6 +1065,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                 onMarkStatus={(item, status) => markRow(item, { status })}
                 onUploadPhoto={uploadRowPhoto}
                 onDelete={deleteRow}
+                onEdit={inboxView === 'historial' ? editRow : undefined}
                 onOpenPhoto={(photo) => setLightboxPhoto(photo)}
               />
             ))}
@@ -1032,8 +1098,14 @@ function ComplaintCard({
   onMarkStatus,
   onUploadPhoto,
   onDelete,
+  onEdit,
   onOpenPhoto,
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState(null);
+  const [editCode, setEditCode] = useState(row.history?.orderCode || '');
+  const [editAggregator, setEditAggregator] = useState(row.history?.aggregator || '');
+  const [editFile, setEditFile] = useState(null);
   const status = complaintRowStatus(row);
   const photo = row.photo;
   const aggregator = getComplaintAggregator(row.complaint, photo) || row.history?.aggregator;
@@ -1114,6 +1186,17 @@ function ComplaintCard({
       )}
 
       <div className="complaint-card__actions">
+        {onEdit && !editing && (
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => {
+            setEditCode(row.history?.orderCode || '');
+            setEditAggregator(row.history?.aggregator || '');
+            setEditFile(null);
+            setEditError(null);
+            setEditing(true);
+          }} disabled={disabled}>
+            Editar
+          </button>
+        )}
         {(photo?.public_url || portal || code) && (
           <button
             type="button"
@@ -1206,6 +1289,37 @@ function ComplaintCard({
           </button>
         )}
       </div>
+      {editing && (
+        <form className="complaint-card__edit-form" onSubmit={async (event) => {
+          event.preventDefault();
+          setEditError(null);
+          try {
+            await onEdit(row, { orderCode: editCode, aggregator: editAggregator, file: editFile });
+            setEditing(false);
+          } catch (err) {
+            setEditError(err.message || 'No se pudieron guardar los cambios.');
+          }
+        }}>
+          <label>Código del pedido
+            <input value={editCode} onChange={(event) => setEditCode(event.target.value.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 32))} disabled={disabled} maxLength={32} />
+          </label>
+          <label>Agregador
+            <select value={editAggregator} onChange={(event) => setEditAggregator(event.target.value)} disabled={disabled}>
+              <option value="">Sin agregador</option>
+              {AGGREGATOR_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+          <label>{photo?.public_url ? 'Reemplazar foto' : 'Agregar foto'}
+            <input type="file" accept="image/*" onChange={(event) => setEditFile(event.target.files?.[0] || null)} disabled={disabled} />
+            {editFile && <small>Nueva foto: {editFile.name}</small>}
+          </label>
+          {editError && <p className="message message--error message--compact" role="alert">{editError}</p>}
+          <div className="photo-card__rename-actions">
+            <button type="submit" className="btn btn--primary btn--small" disabled={disabled || !isValidOrderDigits(editCode)}>Guardar</button>
+            <button type="button" className="btn btn--ghost btn--small" onClick={() => setEditing(false)} disabled={disabled}>Cancelar</button>
+          </div>
+        </form>
+      )}
     </article>
   );
 }
