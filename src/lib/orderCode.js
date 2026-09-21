@@ -59,8 +59,19 @@ function compactAlnum(value = '') {
   return value.replace(/[^A-Z0-9]/g, '');
 }
 
+function repairRepeatedMpd(value = '') {
+  return value.replace(/\b(?:[UW]PD|PD)\s*-\s*((?:\d[\s-]*){12,18})/g, (raw, printedDigits) => {
+    const digits = printedDigits.replace(/\D/g, '');
+    const main = digits.slice(0, -4);
+    const repeated = digits.slice(-4);
+    if (main.length < 8 || main.length > 12 || repeated.length !== 4) return raw;
+    const differences = [...repeated].filter((digit, index) => digit !== main.slice(-4)[index]).length;
+    return differences <= 1 ? `MPD-${main}` : raw;
+  });
+}
+
 function repairKnownPrefixes(value = '') {
-  return value
+  return repairRepeatedMpd(value)
     .replace(/R[A4]PPI[\s-]*T[\s-]*URB[O0](?=[A-Z0-9\s-]|$)/g, 'RAPPITURBO')
     .replace(/P[E3][\s-]*[VY][\s-]*[A4](?=[A-Z0-9\s-]|$)/g, 'PEYA')
     .replace(/P[E3][\s-]*Y[\s-]*[A8O](?=[A-Z0-9\s-]|$)/g, 'PEYA')
@@ -186,9 +197,10 @@ function parseCompactAggregator(text) {
 }
 
 function getCodeAfterLabel(line, nextLine = '', thirdLine = '') {
-  const afterLabel = repairKnownPrefixes(textAfterLabel(line));
+  const repairLabeledMpd = (value) => value.replace(/(^|\s)PD(?=[\s-]*\d{7,12}(?:\s*-\s*\d{4})?\b)/, '$1MPD');
+  const afterLabel = repairLabeledMpd(repairKnownPrefixes(textAfterLabel(line)));
   const extra = [nextLine, thirdLine].filter(Boolean).join(' ');
-  const combined = `${afterLabel} ${extra}`.trim();
+  const combined = repairLabeledMpd(`${afterLabel} ${extra}`.trim());
   return parseAggregatorCode(afterLabel) || parseAggregatorCode(combined);
 }
 

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   assignComplaintsAggregator,
   getComplaintAggregator,
+  getPhotoAggregator,
   openPartnerPortal,
   resetPartnerPortalWindows,
 } from './aggregators.js';
@@ -23,6 +24,12 @@ test('assignComplaintsAggregator leaves rows alone when no partner is chosen', (
   assert.equal(assignComplaintsAggregator(list, ''), list);
   assert.equal(assignComplaintsAggregator(list, 'unknown'), list);
   assert.equal(getComplaintAggregator(list[0]), 'pedidosya');
+});
+
+test('corrected no-code photos show their aggregator without moving the stored image', () => {
+  assert.equal(getPhotoAggregator({ file_path: 'orders/no_code/photo.jpg', name: 'MPD48024738630' }), 'mercadopago');
+  assert.equal(getPhotoAggregator({ file_path: 'orders/no_code/photo.jpg', name: 'Código no encontrado' }), null);
+  assert.equal(getPhotoAggregator({ file_path: 'files/photo.jpg', name: 'MPD48024738630' }), null);
 });
 
 function fakeWindow() {

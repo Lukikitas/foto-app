@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
@@ -6,6 +6,8 @@ import PhotoLightbox from './PhotoLightbox';
 import PhotoEditForm from './PhotoEditForm';
 import CompleteOrderCode from './CompleteOrderCode';
 import { syncGalleryComplaintToHistory } from '../lib/complaintHistoryStore';
+import { hasUnresolvedTicket } from '../lib/unresolvedTicketStore.js';
+import { retryUnresolvedTicket } from '../lib/unresolvedTicketReview.js';
 import {
   deletePhoto,
   downloadPhoto,
@@ -56,6 +58,7 @@ export default function PhotoCard({
   const [lightbox, setLightbox] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [ticketAvailable, setTicketAvailable] = useState(false);
 
   const timestamp = getPhotoTimestamp(photo);
   const title = getPhotoTitle(photo);
@@ -68,6 +71,34 @@ export default function PhotoCard({
     if (isImage) setLightbox(true);
     else window.open(photo.public_url, '_blank', 'noopener,noreferrer');
   });
+
+  useEffect(() => {
+    let active = true;
+    if (isUnidentified) {
+      hasUnresolvedTicket(photo.id)
+        .then((available) => { if (active) setTicketAvailable(available); })
+        .catch((lookupError) => console.error('No se pudo consultar el ticket local.', lookupError));
+    }
+    return () => { active = false; };
+  }, [isUnidentified, photo.id]);
+
+  async function handleRetryTicket() {
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await retryUnresolvedTicket(photo);
+      if (!updated) {
+        setError('Todavía no se pudo leer el código. Podés completar los últimos 4 dígitos.');
+        return;
+      }
+      setTicketAvailable(false);
+      onUpdated?.(updated);
+    } catch (err) {
+      setError(err.message || 'No se pudo reintentar la lectura.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleEdit(form) {
     if (isOrder && !isValidOrderDigits(form.name)) {
@@ -296,6 +327,16 @@ export default function PhotoCard({
               >
                 Descargar
               </button>
+              {isUnidentified && ticketAvailable && (
+                <button
+                  type="button"
+                  className="btn btn--small btn--ghost"
+                  onClick={handleRetryTicket}
+                  disabled={loading}
+                >
+                  {loading ? 'Leyendo ticket…' : 'Reintentar lectura'}
+                </button>
+              )}
               {isUnidentified && (
                 <button
                   type="button"

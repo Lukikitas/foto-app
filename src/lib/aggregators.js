@@ -36,7 +36,11 @@ export function aggregatorBadgeClass(aggregator) {
 export function getPhotoAggregator(photo) {
   const parts = photo?.file_path?.split('/') || [];
   const aggregator = parts[0] === 'orders' && parts.length > 2 ? parts[1] : null;
-  return AGGREGATORS[aggregator] ? aggregator : null;
+  if (AGGREGATORS[aggregator]) return aggregator;
+  if (parts[0] === 'orders' && aggregator === 'no_code') {
+    return detectAggregator(photo?.name);
+  }
+  return null;
 }
 
 export const PARTNER_PORTALS = {

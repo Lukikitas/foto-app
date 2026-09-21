@@ -152,6 +152,19 @@ test('strips the repeated last four digits from Mercado Pago codes', () => {
   });
 });
 
+test('repairs Mercado Pago ticket OCR when the M is read as W or dropped after CODIGO', () => {
+  const expected = {
+    displayCode: 'MPD48024738630',
+    aggregator: 'mercadopago',
+  };
+  assert.deepEqual(code('WPD-48024738630-8630\nTOTAL: 22620'), expected);
+  assert.deepEqual(code('UPD-48024 738630 8630\nTOTAL: 22620'), expected);
+  assert.deepEqual(code('PD-48024738630-5630\nTOTAL: 22620'), expected);
+  assert.deepEqual(code('CODIGO\nPD-48024738630-8630\nTOTAL: 22620'), expected);
+  assert.equal(code('PD-48024738630\nTOTAL: 22620'), null);
+  assert.equal(code('PD-48024738630-1234\nTOTAL: 22620'), null);
+});
+
 test('finds a code inside a compact OCR blob', () => {
   assert.deepEqual(code('PEDIDOSYACODIGOPEYA12345TOTAL1500'), {
     displayCode: 'PEYA12345',

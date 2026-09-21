@@ -74,12 +74,14 @@ function cloneCanvas(source) {
   return canvas;
 }
 
-function fastCodeCrop(source, top, height) {
-  const x = Math.round(source.width * 0.1);
+function fastCodeCrop(source, top, height, left = 0.1, relativeWidth = 0.8, requestedScale) {
+  const x = Math.round(source.width * left);
   const y = Math.round(source.height * top);
-  const width = Math.max(1, Math.round(source.width * 0.8));
+  const width = Math.max(1, Math.round(source.width * relativeWidth));
   const cropHeight = Math.max(1, Math.round(source.height * height));
-  const scale = Math.max(1, Math.min(2.5, 1600 / width));
+  const scale = requestedScale || (relativeWidth <= 0.55
+    ? 3
+    : Math.max(1, Math.min(2.5, 1600 / width)));
   const canvas = createDrawCanvas(Math.round(width * scale), Math.round(cropHeight * scale));
   const context = canvas.getContext('2d', { alpha: false });
   if (!context) fail();
@@ -93,13 +95,19 @@ export function fastCodeCropPlan(width, height) {
   const portrait = height >= width;
   if (portrait) {
     return [
+      { rotation: 0, top: 0.28, height: 0.1, left: 0.22, width: 0.56, scale: 3 },
+      { rotation: 0, top: 0.25, height: 0.15, left: 0.2, width: 0.6, scale: 3 },
       { rotation: 0, top: 0.2, height: 0.17 },
       { rotation: 0, top: 0.12, height: 0.3 },
       { rotation: 180, top: 0.2, height: 0.17 },
     ];
   }
   return [
+    { rotation: 270, top: 0.39, height: 0.1, left: 0.105, width: 0.55 },
+    { rotation: 270, top: 0.36, height: 0.16, left: 0.105, width: 0.55 },
     { rotation: 270, top: 0.25, height: 0.35 },
+    { rotation: 90, top: 0.39, height: 0.1, left: 0.105, width: 0.55 },
+    { rotation: 90, top: 0.36, height: 0.16, left: 0.105, width: 0.55 },
     { rotation: 90, top: 0.25, height: 0.35 },
     { rotation: 0, top: 0.2, height: 0.17 },
     { rotation: 0, top: 0.12, height: 0.3 },
@@ -437,13 +445,13 @@ async function collectGroup({ sources, rotations, psms, variants }, texts, signa
 async function readFastCode(bitmap, recognizeOcrData, signal, deadline) {
   const frame = canvasFromSource(bitmap, OCR_MAX_SIDE);
   const votes = new Map();
-  for (const { rotation, top, height } of fastCodeCropPlan(frame.width, frame.height)) {
+  for (const { rotation, top, height, left, width, scale } of fastCodeCropPlan(frame.width, frame.height)) {
     if (Date.now() >= deadline) return null;
     throwIfAborted(signal);
     let found;
     try {
       found = await recognizeTexts(
-        fastCodeCrop(rotatedCanvas(frame, rotation), top, height),
+        fastCodeCrop(rotatedCanvas(frame, rotation), top, height, left, width, scale),
         PSM.SINGLE_BLOCK,
         recognizeOcrData,
       );

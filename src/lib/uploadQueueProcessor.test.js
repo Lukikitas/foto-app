@@ -8,6 +8,7 @@ import {
   serializeQueueRecord,
   useQueueStoreForTests,
 } from './uploadQueueStore.js';
+import { deleteUnresolvedTicket, getUnresolvedTicket } from './unresolvedTicketStore.js';
 
 afterEach(() => {
   useQueueStoreForTests(null);
@@ -53,6 +54,7 @@ function mockDeps(overrides = {}) {
     },
     persist: async () => {},
     notify: () => {},
+    retainUnresolvedTicket: async () => {},
     ...overrides,
   };
 }
@@ -222,6 +224,7 @@ test('successful OCR while hidden keeps the code instead of failing', async () =
 test('OCR engine errors still save the important evidence in the no-code category', async () => {
   const item = sampleItem();
   let savedWithoutCode = false;
+  let retainedTicket = null;
   await processQueueItem(item, mockDeps({
     onOcrError: () => {},
     detectOrderFromPhoto: async () => {
@@ -231,11 +234,46 @@ test('OCR engine errors still save the important evidence in the no-code categor
       savedWithoutCode = true;
       return { id: 'no-code' };
     },
+    retainUnresolvedTicket: async (photoId, ticket) => {
+      retainedTicket = { photoId, ticket };
+    },
   }));
   assert.equal(savedWithoutCode, true);
+  assert.equal(retainedTicket.photoId, 'no-code');
+  assert.equal(retainedTicket.ticket.name, 'ticket.jpg');
   assert.equal(item.status, 'done');
   assert.equal(item.ticketFile, null);
   assert.match(item.storagePath, /^orders\/no_code\//);
+});
+
+test('the background worker retains an unread ticket after uploading its no-code evidence', async () => {
+  const store = createMemoryQueueStore();
+  useQueueStoreForTests(store);
+  await store.put(serializeQueueRecord(sampleItem({ id: 'unread-worker' })));
+  try {
+    await processStoredUploadQueue({
+      detectOrderFromPhoto: async () => null,
+      compressImage: async (file) => file,
+      uploadFile: async () => { throw new Error('no file'); },
+      uploadPhoto: async () => { throw new Error('no identified order'); },
+      uploadUnidentifiedOrder: async () => ({ id: 'unread-photo' }),
+    });
+    assert.equal((await store.list()).length, 0);
+    assert.equal((await getUnresolvedTicket('unread-photo'))?.name, 'ticket.jpg');
+  } finally {
+    await deleteUnresolvedTicket('unread-photo');
+  }
+});
+
+test('an unread ticket remains retryable if it cannot be archived locally', async () => {
+  const item = sampleItem();
+  await assert.rejects(processQueueItem(item, mockDeps({
+    detectOrderFromPhoto: async () => null,
+    uploadUnidentifiedOrder: async () => ({ id: 'unread-photo' }),
+    retainUnresolvedTicket: async () => { throw new Error('local storage full'); },
+  })), /local storage full/);
+  assert.equal(item.status, 'error');
+  assert.equal(item.ticketFile?.name, 'ticket.jpg');
 });
 
 test('the worker does not run OCR even if a reader is provided', async () => {

@@ -2,6 +2,7 @@ import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { AGGREGATORS, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
 import { downloadPhoto } from './photoDownload.js';
+import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
 
 export {
   cachedPhotoBlob,
@@ -140,7 +141,7 @@ export async function fetchPhotos({
   }
 
   if (aggregator && AGGREGATORS[aggregator]) {
-    query = query.like('file_path', `orders/${aggregator}/%`);
+    query = query.or(`file_path.like.orders/${aggregator}/%,file_path.like.orders/no_code/%`);
   }
 
   const trimmedTakenBy = takenBy?.trim();
@@ -357,7 +358,11 @@ export async function uploadPhoto(file, orderDigits, meta = {}, aggregator = 'si
   }
 
   const storageAggregator = AGGREGATORS[aggregator] ? aggregator : 'sin_agregador';
-  return insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`, filePath);
+  const photo = await insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`, filePath);
+  if (photo?.name === UNIDENTIFIED_ORDER_NAME) {
+    return updatePhoto(photo.id, orderDigits, meta);
+  }
+  return photo;
 }
 
 export async function uploadUnidentifiedOrder(file, meta = {}, filePath = '') {
@@ -399,6 +404,13 @@ export async function updatePhoto(id, name, meta = {}) {
     .single();
 
   if (error) throw error;
+  if (isValidOrderDigits(nextName)) {
+    try {
+      await deleteUnresolvedTicket(id);
+    } catch (ticketError) {
+      console.error('No se pudo eliminar el ticket local ya resuelto.', ticketError);
+    }
+  }
   return data;
 }
 
@@ -429,6 +441,11 @@ export async function deletePhoto(id, filePath) {
   const { error: dbError } = await supabase.from('photos').delete().eq('id', id);
 
   if (dbError) throw dbError;
+  try {
+    await deleteUnresolvedTicket(id);
+  } catch (ticketError) {
+    console.error('No se pudo eliminar el ticket local.', ticketError);
+  }
 }
 
 export async function bulkDeletePhotos(photos) {
@@ -444,6 +461,13 @@ export async function bulkDeletePhotos(photos) {
   const { error: dbError } = await supabase.from('photos').delete().in('id', ids);
 
   if (dbError) throw dbError;
+  await Promise.all(ids.map(async (id) => {
+    try {
+      await deleteUnresolvedTicket(id);
+    } catch (ticketError) {
+      console.error('No se pudo eliminar un ticket local.', ticketError);
+    }
+  }));
 }
 
 export async function downloadPhotos(photos) {

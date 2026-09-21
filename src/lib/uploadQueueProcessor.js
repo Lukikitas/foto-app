@@ -1,6 +1,7 @@
 import { isAbortError, OCR_ENGINE_ERROR } from './tesseractAssets.js';
 import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
 import { buildStoragePath, isDocumentHidden, itemNeedsOcr } from './uploadQueueProtocol.js';
+import { saveUnresolvedTicket } from './unresolvedTicketStore.js';
 
 function releaseTicket(item) {
   item.ticketFile = null;
@@ -24,6 +25,7 @@ export async function processQueueItem(item, options = {}) {
     shouldYield = () => false,
     onComplete,
     onOcrError = (error) => console.error('No se pudo completar el OCR; se guarda la evidencia sin código.', error),
+    retainUnresolvedTicket = saveUnresolvedTicket,
     signal,
     allowOcr = true,
   } = options;
@@ -129,6 +131,10 @@ export async function processQueueItem(item, options = {}) {
       photo = await uploadUnidentifiedOrder(preparedFile, item.meta, item.storagePath);
     }
 
+    if (item.ticketFile && !item.orderDigits && item.kind === 'order') {
+      if (!photo?.id) throw new Error('No se pudo conservar el ticket sin identificar.');
+      await retainUnresolvedTicket(photo.id, item.ticketFile);
+    }
     releaseTicket(item);
     item.status = 'done';
     item.error = null;
