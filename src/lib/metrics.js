@@ -268,6 +268,7 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator, history
   const awt = toCount(entered.awt);
   const rate = complaintRate(orders, complaints);
   const complaintAmount = Number(history.complaintAmount) || 0;
+  const recoveredAmount = Number(history.recoveredAmount) || 0;
   const undisputedAmount = Number(history.undisputedAmount) || 0;
   const inProgressAmount = Number(history.inProgressAmount) || 0;
   const confirmedLostAmount = Number(history.confirmedLostAmount) || 0;
