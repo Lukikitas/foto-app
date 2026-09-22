@@ -138,10 +138,15 @@ export default function ReportPdfModal({ report, onClose }) {
                   {formatPct(totals.recoveredPct)} de efectividad
                 </span>
               </div>
+              <div className="report-pdf-kpi report-pdf-kpi--dispute">
+                <span className="report-pdf-kpi__label">Dinero en Disputa</span>
+                <strong className="report-pdf-kpi__val">{formatMoney(totals.inProgressAmount ?? totals.disputedAmount)}</strong>
+                <span className="report-pdf-kpi__hint">Refutados en trámite</span>
+              </div>
               <div className="report-pdf-kpi report-pdf-kpi--bad">
                 <span className="report-pdf-kpi__label">$ Pérdida Neta</span>
                 <strong className="report-pdf-kpi__val">{formatMoney(totals.lostAmount)}</strong>
-                <span className="report-pdf-kpi__hint">Reclamos menos recuperos</span>
+                <span className="report-pdf-kpi__hint">Rechazados o sin refutar</span>
               </div>
               <div className="report-pdf-kpi report-pdf-kpi--count">
                 <span className="report-pdf-kpi__label">Pedidos con Reclamo</span>
@@ -222,6 +227,7 @@ export default function ReportPdfModal({ report, onClose }) {
                         <th className="report-pdf-col--num">% Recup.</th>
                         <th className="report-pdf-col--num">$ Reclamado</th>
                         <th className="report-pdf-col--num">$ Recuperado</th>
+                        <th className="report-pdf-col--num">$ En Disputa</th>
                         <th className="report-pdf-col--num">$ Pérdida Neta</th>
                       </tr>
                     </thead>
@@ -236,6 +242,7 @@ export default function ReportPdfModal({ report, onClose }) {
                           <td className="report-pdf-col--num">{formatPct(row.recoveredPct)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
+                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
                         </tr>
                       ))}
@@ -248,6 +255,7 @@ export default function ReportPdfModal({ report, onClose }) {
                         <td className="report-pdf-col--num">{formatPct(totals.recoveredPct)}</td>
                         <td className="report-pdf-col--num">{formatMoney(totals.complaintAmount)}</td>
                         <td className="report-pdf-col--num">{formatMoney(totals.recoveredAmount)}</td>
+                        <td className="report-pdf-col--num">{formatMoney(totals.inProgressAmount || 0)}</td>
                         <td className="report-pdf-col--num">{formatMoney(totals.lostAmount)}</td>
                       </tr>
                     </tfoot>
@@ -269,6 +277,7 @@ export default function ReportPdfModal({ report, onClose }) {
                         <th className="report-pdf-col--num">% del Total</th>
                         <th className="report-pdf-col--num">$ Reclamado</th>
                         <th className="report-pdf-col--num">$ Recuperado</th>
+                        <th className="report-pdf-col--num">$ En Disputa</th>
                         <th className="report-pdf-col--num">$ Pérdida Neta</th>
                       </tr>
                     </thead>
@@ -280,6 +289,7 @@ export default function ReportPdfModal({ report, onClose }) {
                           <td className="report-pdf-col--num">{formatPct(row.sharePct)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
+                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
                         </tr>
                       ))}
@@ -303,6 +313,7 @@ export default function ReportPdfModal({ report, onClose }) {
                         <th className="report-pdf-col--num">% Recup.</th>
                         <th className="report-pdf-col--num">$ Reclamado</th>
                         <th className="report-pdf-col--num">$ Recuperado</th>
+                        <th className="report-pdf-col--num">$ En Disputa</th>
                         <th className="report-pdf-col--num">$ Pérdida Neta</th>
                       </tr>
                     </thead>
@@ -317,6 +328,7 @@ export default function ReportPdfModal({ report, onClose }) {
                           <td className="report-pdf-col--num">{formatPct(row.recoveredPct)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
+                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
                         </tr>
                       ))}
@@ -339,6 +351,7 @@ export default function ReportPdfModal({ report, onClose }) {
                         <th className="report-pdf-col--num">% Recup.</th>
                         <th className="report-pdf-col--num">$ Reclamado</th>
                         <th className="report-pdf-col--num">$ Recuperado</th>
+                        <th className="report-pdf-col--num">$ En Disputa</th>
                         <th className="report-pdf-col--num">$ Pérdida Neta</th>
                       </tr>
                     </thead>
@@ -350,6 +363,7 @@ export default function ReportPdfModal({ report, onClose }) {
                           <td className="report-pdf-col--num">{formatPct(row.recoveredPct)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
+                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
                           <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
                         </tr>
                       ))}

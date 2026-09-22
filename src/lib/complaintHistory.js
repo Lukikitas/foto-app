@@ -43,6 +43,7 @@ export function emptyHistoryFlags() {
     lostAmount: 0,
     undisputedAmount: 0,
     inProgressAmount: 0,
+    disputedAmount: 0,
     confirmedLostAmount: 0,
   };
 }
@@ -564,7 +565,8 @@ export function addMoneyToFlags(flags, item) {
   else if (item.status === COMPLAINT_STATUSES.refutado) flags.inProgressAmount += amount;
   else if (item.status === COMPLAINT_STATUSES.refutado_rechazado) flags.confirmedLostAmount += amount;
   else flags.undisputedAmount += amount;
-  flags.lostAmount = flags.complaintAmount - flags.recoveredAmount;
+  flags.lostAmount = flags.confirmedLostAmount + flags.undisputedAmount;
+  flags.disputedAmount = flags.inProgressAmount;
   return flags;
 }
 

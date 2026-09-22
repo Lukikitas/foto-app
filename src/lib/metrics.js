@@ -255,6 +255,7 @@ function emptyResolution() {
     lostAmount: 0,
     undisputedAmount: 0,
     inProgressAmount: 0,
+    disputedAmount: 0,
     confirmedLostAmount: 0,
   };
 }
@@ -267,7 +268,10 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator, history
   const awt = toCount(entered.awt);
   const rate = complaintRate(orders, complaints);
   const complaintAmount = Number(history.complaintAmount) || 0;
-  const recoveredAmount = Number(history.recoveredAmount) || 0;
+  const undisputedAmount = Number(history.undisputedAmount) || 0;
+  const inProgressAmount = Number(history.inProgressAmount) || 0;
+  const confirmedLostAmount = Number(history.confirmedLostAmount) || 0;
+  const lostAmount = confirmedLostAmount + undisputedAmount;
 
   return {
     aggregator,
@@ -281,10 +285,11 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator, history
     refutadoRechazado: toCount(history.refutadoRechazado),
     complaintAmount,
     recoveredAmount,
-    lostAmount: complaintAmount - recoveredAmount,
-    undisputedAmount: Number(history.undisputedAmount) || 0,
-    inProgressAmount: Number(history.inProgressAmount) || 0,
-    confirmedLostAmount: Number(history.confirmedLostAmount) || 0,
+    lostAmount,
+    undisputedAmount,
+    inProgressAmount,
+    disputedAmount: inProgressAmount,
+    confirmedLostAmount,
     complaintPct: rate,
     awtPct: complaintRate(orders, awt),
     recoveredPctOfAmount: ratioPct(recoveredAmount, complaintAmount),
@@ -418,9 +423,10 @@ function rollupRows(id, rows) {
     refutadoRechazado,
     complaintAmount,
     recoveredAmount,
-    lostAmount: complaintAmount - recoveredAmount,
+    lostAmount: confirmedLostAmount + undisputedAmount,
     undisputedAmount,
     inProgressAmount,
+    disputedAmount: inProgressAmount,
     confirmedLostAmount,
     complaintPct: complaintRate(orders, complaints),
     awtPct: complaintRate(orders, awt),

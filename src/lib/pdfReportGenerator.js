@@ -176,8 +176,8 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
     /* KPI Cards */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
       margin-bottom: 18px;
     }
 
@@ -186,7 +186,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
       border: 1px solid #e2e8f0;
       border-top: 3.5px solid #64748b;
       border-radius: 6px;
-      padding: 12px 14px;
+      padding: 10px 12px;
       display: flex;
       flex-direction: column;
     }
@@ -199,6 +199,16 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
       border-top-color: #16a34a;
       background: #f0fdf4;
       border-color: #bbf7d0;
+    }
+
+    .kpi-card--dispute {
+      border-top-color: #2563eb;
+      background: #eff6ff;
+      border-color: #bfdbfe;
+    }
+
+    .kpi-card--dispute .kpi-val {
+      color: #1d4ed8;
     }
 
     .kpi-card--bad {
@@ -605,10 +615,16 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
         <span class="kpi-badge">${formatPct(totals.recoveredPct)} de efectividad</span>
       </div>
 
+      <div class="kpi-card kpi-card--dispute">
+        <span class="kpi-label">Dinero en Disputa</span>
+        <span class="kpi-val">${formatMoney(totals.inProgressAmount)}</span>
+        <span class="kpi-hint">Refutados en trámite</span>
+      </div>
+
       <div class="kpi-card kpi-card--bad">
         <span class="kpi-label">$ Pérdida Neta</span>
         <span class="kpi-val">${formatMoney(totals.lostAmount)}</span>
-        <span class="kpi-hint">Reclamos menos recuperos</span>
+        <span class="kpi-hint">Rechazados o sin refutar</span>
       </div>
 
       <div class="kpi-card kpi-card--count">
@@ -680,6 +696,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <th class="col-right">% Recupero</th>
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
+              <th class="col-right">$ En Disputa</th>
               <th class="col-right">$ Pérdida Neta</th>
             </tr>
           </thead>
@@ -692,6 +709,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <td class="col-right">${formatPct(row.recoveredPct)}</td>
               <td class="col-right">${formatMoney(row.complaintAmount)}</td>
               <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
               <td class="col-right">${formatMoney(row.lostAmount)}</td>
             </tr>
             `).join('')}
@@ -704,6 +722,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <td class="col-right">${formatPct(totals.recoveredPct)}</td>
               <td class="col-right">${formatMoney(totals.complaintAmount)}</td>
               <td class="col-right">${formatMoney(totals.recoveredAmount)}</td>
+              <td class="col-right">${formatMoney(totals.inProgressAmount || 0)}</td>
               <td class="col-right">${formatMoney(totals.lostAmount)}</td>
             </tr>
           </tfoot>
@@ -725,6 +744,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <th class="col-right">% del Total</th>
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
+              <th class="col-right">$ En Disputa</th>
               <th class="col-right">$ Pérdida Neta</th>
             </tr>
           </thead>
@@ -736,6 +756,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <td class="col-right">${formatPct(row.sharePct)}</td>
               <td class="col-right">${formatMoney(row.complaintAmount)}</td>
               <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
               <td class="col-right">${formatMoney(row.lostAmount)}</td>
             </tr>
             `).join('')}
@@ -759,22 +780,36 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <th class="col-right">% Recupero</th>
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
+              <th class="col-right">$ En Disputa</th>
               <th class="col-right">$ Pérdida Neta</th>
             </tr>
           </thead>
           <tbody>
             ${report.reasons.map((row) => `
             <tr>
-              <td>${escapeHtml(row.key)}</td>
+              <td><strong>${escapeHtml(row.key || 'Sin motivo')}</strong></td>
               <td class="col-right">${formatNumber(row.count)}</td>
               <td class="col-right">${formatPct(totals.count ? (row.count / totals.count) * 100 : 0)}</td>
               <td class="col-right">${formatPct(row.recoveredPct)}</td>
               <td class="col-right">${formatMoney(row.complaintAmount)}</td>
               <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
               <td class="col-right">${formatMoney(row.lostAmount)}</td>
             </tr>
             `).join('')}
           </tbody>
+          <tfoot>
+            <tr>
+              <td>Total General</td>
+              <td class="col-right">${formatNumber(totals.count)}</td>
+              <td class="col-right">100%</td>
+              <td class="col-right">${formatPct(totals.recoveredPct)}</td>
+              <td class="col-right">${formatMoney(totals.complaintAmount)}</td>
+              <td class="col-right">${formatMoney(totals.recoveredAmount)}</td>
+              <td class="col-right">${formatMoney(totals.inProgressAmount || 0)}</td>
+              <td class="col-right">${formatMoney(totals.lostAmount)}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </section>
@@ -793,6 +828,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <th class="col-right">% Recupero</th>
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
+              <th class="col-right">$ En Disputa</th>
               <th class="col-right">$ Pérdida Neta</th>
             </tr>
           </thead>
@@ -804,6 +840,7 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
               <td class="col-right">${formatPct(row.recoveredPct)}</td>
               <td class="col-right">${formatMoney(row.complaintAmount)}</td>
               <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
               <td class="col-right">${formatMoney(row.lostAmount)}</td>
             </tr>
             `).join('')}

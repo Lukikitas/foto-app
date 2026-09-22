@@ -1,10 +1,38 @@
-const IMAGE_EXTS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
+const MIME_TO_EXT = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+  'image/svg+xml': 'svg',
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/msword': 'doc',
+  'text/csv': 'csv',
+  'text/plain': 'txt',
+  'application/zip': 'zip',
+};
+
 const photoBlobCache = new Map();
 
-function fileExtensionFromName(value = '') {
-  const clean = String(value || '').split('?')[0];
-  const ext = clean.split('.').pop()?.toLowerCase();
-  return IMAGE_EXTS.has(ext) ? ext : '';
+export function fileExtensionFromName(value = '') {
+  const clean = String(value || '').split('?')[0].split('#')[0];
+  const parts = clean.split('.');
+  if (parts.length <= 1) return '';
+  const ext = parts.pop()?.toLowerCase().trim();
+  if (ext && /^[a-z0-9]{1,10}$/.test(ext)) {
+    return ext === 'jpeg' ? 'jpg' : ext;
+  }
+  return '';
+}
+
+export function extensionFromMime(mime = '') {
+  if (!mime) return '';
+  const clean = String(mime).toLowerCase().split(';')[0].trim();
+  return MIME_TO_EXT[clean] || '';
 }
 
 function later(fn, ms) {
@@ -37,19 +65,30 @@ export function uniqueDownloadFilename(filename, usedNames = new Set()) {
 }
 
 export function getDownloadFilename(photo, usedNames = new Set()) {
+  const rawName = String(photo?.name || 'archivo').trim();
+  const rawExt = fileExtensionFromName(rawName);
+
   const ext =
+    rawExt ||
     fileExtensionFromName(photo?.file_path) ||
     fileExtensionFromName(photo?.public_url) ||
+    extensionFromMime(photo?.mime_type) ||
     'jpg';
-  const baseName = String(photo?.name || 'archivo')
-    .trim()
+
+  let baseName = rawName;
+  if (rawExt) {
+    baseName = rawName.slice(0, -(rawExt.length + 1));
+  }
+
+  const safeBase = String(baseName || 'archivo')
     .replace(/[<>:"/\\|?*]/g, '-')
     .split('')
     .filter((char) => char.charCodeAt(0) >= 32)
     .join('')
     .replace(/\s+/g, ' ')
     .trim() || 'archivo';
-  return uniqueDownloadFilename(`${baseName}.${ext}`, usedNames);
+
+  return uniqueDownloadFilename(`${safeBase}.${ext}`, usedNames);
 }
 
 export function cachedPhotoBlob(url) {
@@ -110,22 +149,34 @@ export function triggerUrlDownload(url, filename) {
   return true;
 }
 
+function ensureExtensionFromBlob(filename, blob) {
+  if (!blob?.type) return filename;
+  const mimeExt = extensionFromMime(blob.type);
+  if (mimeExt && filename.endsWith('.jpg') && mimeExt !== 'jpg') {
+    return filename.slice(0, -4) + '.' + mimeExt;
+  }
+  return filename;
+}
+
 export function startPhotoDownload(photo, usedNames = new Set(), filenameOverride) {
   const url = photo?.public_url;
   if (!url) return false;
-  const filename = filenameOverride
+  let filename = filenameOverride
     ? uniqueDownloadFilename(filenameOverride, usedNames)
     : getDownloadFilename(photo, usedNames);
   const cached = photoBlobCache.get(url);
-  if (cached) return triggerBlobDownload(cached, filename);
+  if (cached) {
+    filename = ensureExtensionFromBlob(filename, cached);
+    return triggerBlobDownload(cached, filename);
+  }
   return triggerUrlDownload(url, filename);
 }
 
 export async function downloadPhoto(photo, usedNames = new Set(), filenameOverride) {
   const url = photo?.public_url;
-  if (!url) throw new Error('Esta queja no tiene foto para descargar.');
+  if (!url) throw new Error('Este registro no tiene archivo para descargar.');
 
-  const filename = filenameOverride
+  let filename = filenameOverride
     ? uniqueDownloadFilename(filenameOverride, usedNames)
     : getDownloadFilename(photo, usedNames);
 
@@ -133,10 +184,11 @@ export async function downloadPhoto(photo, usedNames = new Set(), filenameOverri
     const cached = photoBlobCache.get(url);
     const blob = cached || (await fetchPhotoBlob(url));
     if (!cached) photoBlobCache.set(url, blob);
+    filename = ensureExtensionFromBlob(filename, blob);
     triggerBlobDownload(blob, filename);
   } catch {
     if (!triggerUrlDownload(url, filename)) {
-      throw new Error('No se pudo descargar la foto');
+      throw new Error('No se pudo descargar el archivo');
     }
   }
 }

@@ -10,6 +10,7 @@ import {
   saveGalleryViewMode,
 } from '../lib/storage';
 import BulkActionBar from './BulkActionBar';
+import FileUploadCard from './FileUploadCard';
 import PhotoCard from './PhotoCard';
 import PhotoListRow from './PhotoListRow';
 
@@ -52,6 +53,7 @@ export default function PhotoGallery({
   const [viewMode, setViewMode] = useState(getGalleryViewMode);
   const [filtersOpen, setFiltersOpen] = useState(getFiltersOpen);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showUploader, setShowUploader] = useState(false);
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [liveNotice, setLiveNotice] = useState(null);
   const [pendingNewPhoto, setPendingNewPhoto] = useState(null);
@@ -427,6 +429,15 @@ export default function PhotoGallery({
               Listado
             </button>
           </div>
+          {kind === 'files' && (
+            <button
+              type="button"
+              className={`btn btn--small ${showUploader ? 'btn--primary' : 'btn--ghost'} gallery__upload-trigger`}
+              onClick={() => setShowUploader((prev) => !prev)}
+            >
+              {showUploader ? '✕ Ocultar' : '＋ Subir archivo'}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--ghost btn--small"
@@ -438,6 +449,15 @@ export default function PhotoGallery({
           </button>
         </div>
       </div>
+
+      {kind === 'files' && showUploader && (
+        <FileUploadCard
+          onUploaded={() => {
+            loadPhotos(appliedFiltersRef.current, { silent: false });
+          }}
+          onCancel={() => setShowUploader(false)}
+        />
+      )}
 
       {filtersOpen && (
         <form className="gallery__filters gallery__filters--compact" onSubmit={handleSearchSubmit}>
@@ -608,6 +628,16 @@ export default function PhotoGallery({
               ? `No hay ${itemLabel}s que coincidan con la busqueda.`
               : emptyMessage}
           </p>
+          {kind === 'files' && !showUploader && (
+            <button
+              type="button"
+              className="btn btn--primary btn--small"
+              onClick={() => setShowUploader(true)}
+              style={{ marginTop: '0.65rem' }}
+            >
+              ＋ Subir archivo
+            </button>
+          )}
         </div>
       )}
 

@@ -13,26 +13,15 @@ function getEmptyMeta() {
   };
 }
 
-const UPLOAD_MODES = {
-  order: 'order',
-  file: 'file',
-};
-
-function getFileTitle(file) {
-  return file?.name?.replace(/\.[^.]+$/, '') || '';
-}
-
 export default function PhotoUploader() {
   const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [uploadMode, setUploadMode] = useState(UPLOAD_MODES.order);
   const [orderDigits, setOrderDigits] = useState('');
   const [detectedOrder, setDetectedOrder] = useState(null);
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [orderCameraOpen, setOrderCameraOpen] = useState(false);
-  const [title, setTitle] = useState('');
   const [meta, setMeta] = useState(getEmptyMeta);
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [error, setError] = useState(null);
@@ -53,12 +42,6 @@ export default function PhotoUploader() {
     }
   }
 
-  function changeMode(mode) {
-    setUploadMode(mode);
-    setError(null);
-    setQueuedMessage(null);
-  }
-
   function handleDigitsChange(e) {
     const value = e.target.value.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 32);
     setOrderDigits(value);
@@ -74,21 +57,18 @@ export default function PhotoUploader() {
 
     if (!selected) return;
 
-    if (uploadMode === UPLOAD_MODES.order && !selected.type.startsWith('image/')) {
-      setError('Para pedidos solo se permiten imágenes.');
+    if (!selected.type.startsWith('image/')) {
+      setError('Para pedidos solo se permiten fotos/imágenes.');
       return;
     }
 
     setPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
-      return selected.type.startsWith('image/') ? URL.createObjectURL(selected) : null;
+      return URL.createObjectURL(selected);
     });
     setFile(selected);
-    setTitle((current) => current || getFileTitle(selected));
-    if (uploadMode === UPLOAD_MODES.order) {
-      setDetectedOrder(null);
-      setShowManualOrder(true);
-    }
+    setDetectedOrder(null);
+    setShowManualOrder(true);
   }
 
   function closeOrderCamera() {
@@ -156,15 +136,11 @@ export default function PhotoUploader() {
     setQueuedMessage(null);
 
     if (!file) {
-      setError(
-        uploadMode === UPLOAD_MODES.order
-          ? 'Sacá o elegí una foto primero.'
-          : 'Elegí un archivo primero.',
-      );
+      setError('Sacá o elegí una foto primero.');
       return;
     }
 
-    if (uploadMode === UPLOAD_MODES.order && !isValidOrderDigits(orderDigits)) {
+    if (!isValidOrderDigits(orderDigits)) {
       setError('Ingresá el código completo o los últimos 4 dígitos del pedido.');
       return;
     }
@@ -176,32 +152,27 @@ export default function PhotoUploader() {
 
       await enqueue({
         file,
-        kind: uploadMode,
+        kind: 'order',
         orderDigits,
-        title: title.trim() || getFileTitle(file) || file.name,
+        title: orderDigits,
         aggregator: 'sin_agregador',
         meta: {
           ...meta,
           has_complaint: false,
-          is_refutado: uploadMode === UPLOAD_MODES.order ? meta.is_refutado : false,
+          is_refutado: meta.is_refutado,
         },
       });
 
-      setQueuedMessage(
-        uploadMode === UPLOAD_MODES.order
-          ? `Pedido #${orderDigits} en cola. Podés seguir sacando fotos.`
-          : `${title.trim() || file.name} en cola. Podés seguir subiendo archivos.`,
-      );
+      setQueuedMessage(`Pedido #${orderDigits} en cola. Podés seguir sacando fotos.`);
       resetForm();
     } catch (err) {
       if (err.queueId) resetForm();
-      setError(err.message || 'Error al preparar el archivo.');
+      setError(err.message || 'Error al preparar el pedido.');
     } finally {
       setSaving(false);
     }
   }
 
-  const isOrderMode = uploadMode === UPLOAD_MODES.order;
   const photographerReady = Boolean(meta.taken_by.trim());
 
   return (
@@ -226,28 +197,6 @@ export default function PhotoUploader() {
           />
         </div>
 
-        {/* Pestañas de Modo (Pedido vs Archivo) */}
-        <div className="uploader__mode" role="tablist" aria-label="Tipo de carga">
-          <button
-            type="button"
-            className={`uploader__mode-btn${isOrderMode ? ' uploader__mode-btn--active' : ''}`}
-            onClick={() => changeMode(UPLOAD_MODES.order)}
-            role="tab"
-            aria-selected={isOrderMode}
-          >
-            Pedidos Delivery
-          </button>
-          <button
-            type="button"
-            className={`uploader__mode-btn${!isOrderMode ? ' uploader__mode-btn--active' : ''}`}
-            onClick={() => changeMode(UPLOAD_MODES.file)}
-            role="tab"
-            aria-selected={!isOrderMode}
-          >
-            Archivos Generales
-          </button>
-        </div>
-
         {/* Notificaciones y Mensajes de Estado */}
         {error && (
           <p className="message message--error uploader__message" role="alert">
@@ -260,29 +209,30 @@ export default function PhotoUploader() {
           </p>
         )}
 
-        {/* ZONA DE CAPTURA (Cuando no hay foto cargada todavía) */}
+        {/* ZONA DE CAPTURA RÁPIDA (Cuando no hay foto seleccionada) */}
         {!file && (
           <div className="uploader__capture-card">
-            {isOrderMode ? (
-              <button
-                type="button"
-                className="uploader__hero-camera-btn"
-                onClick={openOrderCamera}
-                title={photographerReady ? 'Abrir cámara de pedidos' : 'Elegí tu nombre primero'}
-              >
-                <div className="uploader__hero-icon-ring">
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                    <circle cx="12" cy="13" r="4"></circle>
-                  </svg>
-                </div>
-                <div className="uploader__hero-text">
-                  <strong>SACAR FOTO</strong>
-                  <span>Cámara rápida · 1. Ticket + 2. Bolsa</span>
-                </div>
-              </button>
-            ) : (
-              <label className="uploader__hero-camera-btn">
+            <button
+              type="button"
+              className="uploader__hero-camera-btn"
+              onClick={openOrderCamera}
+              title={photographerReady ? 'Abrir cámara de pedidos' : 'Elegí tu nombre primero'}
+            >
+              <div className="uploader__hero-icon-ring">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+              </div>
+              <div className="uploader__hero-text">
+                <strong>SACAR FOTO</strong>
+                <span>Cámara rápida · 1. Ticket + 2. Bolsa</span>
+              </div>
+            </button>
+
+            {/* Accesos rápidos secundarios (Cámara del cel / Galería) */}
+            <div className="uploader__quick-row">
+              <label className="uploader__quick-btn">
                 <input
                   ref={cameraInputRef}
                   type="file"
@@ -291,45 +241,19 @@ export default function PhotoUploader() {
                   onChange={handleFileChange}
                   className="uploader__file-input"
                 />
-                <div className="uploader__hero-icon-ring">
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                    <circle cx="12" cy="13" r="4"></circle>
-                  </svg>
-                </div>
-                <div className="uploader__hero-text">
-                  <strong>TOMAR FOTO</strong>
-                  <span>Archivo general</span>
-                </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                  <circle cx="12" cy="18" r="1"></circle>
+                  <circle cx="12" cy="8" r="2.5"></circle>
+                </svg>
+                <span>Cámara directa</span>
               </label>
-            )}
-
-            {/* Accesos rápidos secundarios (Cámara del cel / Galería) */}
-            <div className="uploader__quick-row">
-              {isOrderMode && (
-                <label className="uploader__quick-btn">
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
-                    className="uploader__file-input"
-                  />
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-                    <circle cx="12" cy="18" r="1"></circle>
-                    <circle cx="12" cy="8" r="2.5"></circle>
-                  </svg>
-                  <span>Cámara directa</span>
-                </label>
-              )}
 
               <label className="uploader__quick-btn">
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept={isOrderMode ? 'image/*' : undefined}
+                  accept="image/*"
                   onChange={handleFileChange}
                   className="uploader__file-input"
                 />
@@ -338,20 +262,18 @@ export default function PhotoUploader() {
                   <circle cx="8.5" cy="8.5" r="1.5"></circle>
                   <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
-                <span>{isOrderMode ? 'Elegir de galería' : 'Elegir archivo'}</span>
+                <span>Elegir de galería</span>
               </label>
             </div>
 
-            {isOrderMode && (
-              <p className="uploader__ocr-hint">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-                El código del pedido se lee automáticamente por OCR del ticket en segundo plano.
-              </p>
-            )}
+            <p className="uploader__ocr-hint">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              El código del pedido se lee automáticamente por OCR del ticket en segundo plano.
+            </p>
           </div>
         )}
 
@@ -375,15 +297,8 @@ export default function PhotoUploader() {
               </div>
             )}
 
-            {!preview && (
-              <div className="uploader__file-summary">
-                <strong>{file.name}</strong>
-                <span>{Math.ceil(file.size / 1024)} KB</span>
-              </div>
-            )}
-
             <div className="uploader__fields-panel">
-              {isOrderMode && detectedOrder && !showManualOrder && (
+              {detectedOrder && !showManualOrder && (
                 <div className="uploader__detected-order" role="status">
                   <span>
                     Código detectado: <strong>{detectedOrder.displayCode}</strong>
@@ -398,7 +313,7 @@ export default function PhotoUploader() {
                 </div>
               )}
 
-              {isOrderMode && (!detectedOrder || showManualOrder) ? (
+              {(!detectedOrder || showManualOrder) && (
                 <label className="uploader__name-label">
                   <span>Código del pedido</span>
                   <input
@@ -414,21 +329,6 @@ export default function PhotoUploader() {
                   />
                   <small className="uploader__input-hint">Últimos 4 dígitos o código completo de la app</small>
                 </label>
-              ) : (
-                <label className="uploader__name-label">
-                  <span>Nombre del archivo</span>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => {
-                      setTitle(e.target.value);
-                      setError(null);
-                      setQueuedMessage(null);
-                    }}
-                    placeholder={file ? getFileTitle(file) : 'Ej: remito, factura, evidencia'}
-                    maxLength={120}
-                  />
-                </label>
               )}
 
               <label className="uploader__name-label">
@@ -443,23 +343,21 @@ export default function PhotoUploader() {
                 />
               </label>
 
-              {isOrderMode && (
-                <div className="uploader__flags">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={meta.is_refutado}
-                      onChange={(e) => updateMeta('is_refutado', e.target.checked)}
-                    />
-                    <span>Marcar como evidencia de refutado</span>
-                  </label>
-                </div>
-              )}
+              <div className="uploader__flags">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={meta.is_refutado}
+                    onChange={(e) => updateMeta('is_refutado', e.target.checked)}
+                  />
+                  <span>Marcar como evidencia de refutado</span>
+                </label>
+              </div>
 
               <button
                 type="submit"
                 className="btn btn--primary btn--large uploader__save"
-                disabled={saving || (isOrderMode && !isValidOrderDigits(orderDigits))}
+                disabled={saving || !isValidOrderDigits(orderDigits)}
               >
                 {saving ? 'Guardando pedido...' : '✓ Guardar pedido y seguir'}
               </button>

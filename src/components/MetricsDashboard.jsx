@@ -252,9 +252,15 @@ export default function MetricsDashboard({
             tone={item.recoveredAmount > 0 ? 'good' : undefined}
           />
           <SheetStat
+            label="Dinero en disputa"
+            value={formatMoney(item.inProgressAmount)}
+            hint="Refutados pendientes"
+            tone={item.inProgressAmount > 0 ? 'neutral' : undefined}
+          />
+          <SheetStat
             label="$ perdido"
             value={formatMoney(item.lostAmount)}
-            hint="Quejas menos recuperado"
+            hint="Rechazados o sin refutar"
             tone={item.lostAmount > 0 ? 'bad' : item.complaintAmount ? 'good' : undefined}
           />
         </section>
@@ -323,6 +329,7 @@ export default function MetricsDashboard({
                 <th>%</th>
                 <th>$ quejas</th>
                 <th>$ recuperado</th>
+                <th>En disputa</th>
                 <th>$ perdido</th>
               </tr>
             </thead>
@@ -346,6 +353,7 @@ export default function MetricsDashboard({
                     </td>
                     <td>{formatMoney(row.complaintAmount)}</td>
                     <td>{formatMoney(row.recoveredAmount)}</td>
+                    <td>{formatMoney(row.inProgressAmount)}</td>
                     <td>{formatMoney(row.lostAmount)}</td>
                   </tr>
                 );

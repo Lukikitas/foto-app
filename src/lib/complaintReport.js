@@ -132,10 +132,10 @@ export function buildRegistryCsv(items) {
 }
 
 export function buildReportCsv(report) {
-  const lines = ['seccion,clave,quejas,$ quejas,$ recuperado,$ perdido,% quejas'];
+  const lines = ['seccion,clave,quejas,$ quejas,$ recuperado,$ en disputa,$ perdido,% quejas'];
   const push = (section, key, row, share) => {
     lines.push(
-      [section, key, row.count, row.complaintAmount, row.recoveredAmount, row.lostAmount, share ?? '']
+      [section, key, row.count, row.complaintAmount, row.recoveredAmount, row.inProgressAmount || 0, row.lostAmount, share ?? '']
         .map(csvEscape)
         .join(','),
     );
@@ -178,21 +178,19 @@ export function buildRegistryWorkbook(items, title = 'Detalle de Reclamos') {
         { value: item.reason || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: item.comment || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: Number(item.amount) || 0, style: CELL_STYLES.CURRENCY },
-        { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.CENTER },
+        { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.TEXT_BORDER },
         { value: item.photoUrl ? 'Sí' : 'No', style: CELL_STYLES.CENTER },
-        ...extras.map((key) => ({ value: item.fields?.[key] || '—', style: CELL_STYLES.TEXT_BORDER })),
+        ...extras.map((k) => ({ value: item.fields?.[k] ?? '', style: CELL_STYLES.TEXT_BORDER })),
       ],
     })),
   ];
 
-  const lastColLetter = colToLetter(header.length - 1);
   return {
     sheets: [
       {
-        name: title.slice(0, 31),
-        colWidths: [18, 14, 12, 18, 24, 26, 32, 16, 18, 10, ...extras.map(() => 18)],
-        autoFilter: `A1:${lastColLetter}${rows.length}`,
+        name: 'Registro Quejas',
         rows,
+        columnWidths: [16, 12, 10, 15, 24, 24, 30, 14, 16, 8, ...extras.map(() => 16)],
       },
     ],
   };
@@ -229,6 +227,7 @@ export function buildReportWorkbook(report) {
         { value: 'TOTAL QUEJAS', style: CELL_STYLES.KPI_TITLE },
         { value: '$ QUEJAS (TOTAL)', style: CELL_STYLES.KPI_TITLE },
         { value: '$ RECUPERADO', style: CELL_STYLES.KPI_TITLE },
+        { value: 'EN DISPUTA', style: CELL_STYLES.KPI_TITLE },
         { value: '$ PERDIDO (NETO)', style: CELL_STYLES.KPI_TITLE },
         { value: '% RECUPERO', style: CELL_STYLES.KPI_TITLE },
       ],
@@ -240,6 +239,7 @@ export function buildReportWorkbook(report) {
         { value: totals.count || 0, style: CELL_STYLES.KPI_VALUE },
         { value: totals.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: totals.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: totals.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: totals.lostAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: (totals.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
       ],
@@ -317,6 +317,7 @@ export function buildReportWorkbook(report) {
     { value: '% Recupero', style: CELL_STYLES.HEADER },
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
+    { value: '$ En Disputa', style: CELL_STYLES.HEADER },
     { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
   ];
   const aggRows = [
@@ -329,6 +330,7 @@ export function buildReportWorkbook(report) {
         { value: (row.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
         { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
       ],
     })),
@@ -340,6 +342,7 @@ export function buildReportWorkbook(report) {
         { value: (totals.recoveredPct || 0) / 100, style: CELL_STYLES.TOTAL_PERCENT },
         { value: totals.complaintAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
         { value: totals.recoveredAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
+        { value: totals.inProgressAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
         { value: totals.lostAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
       ],
     },
@@ -352,6 +355,7 @@ export function buildReportWorkbook(report) {
     { value: '% del Total', style: CELL_STYLES.HEADER },
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
+    { value: '$ En Disputa', style: CELL_STYLES.HEADER },
     { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
   ];
   const combosRows = [
@@ -363,6 +367,7 @@ export function buildReportWorkbook(report) {
         { value: (row.sharePct || 0) / 100, style: CELL_STYLES.PERCENT },
         { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
       ],
     })),
@@ -376,6 +381,7 @@ export function buildReportWorkbook(report) {
     { value: '% Recupero', style: CELL_STYLES.HEADER },
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
+    { value: '$ En Disputa', style: CELL_STYLES.HEADER },
     { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
   ];
   const reasonsRows = [
@@ -388,6 +394,7 @@ export function buildReportWorkbook(report) {
         { value: (row.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
         { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
       ],
     })),
@@ -400,6 +407,7 @@ export function buildReportWorkbook(report) {
     { value: '% Recupero', style: CELL_STYLES.HEADER },
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
+    { value: '$ En Disputa', style: CELL_STYLES.HEADER },
     { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
   ];
   const daysRows = [
@@ -411,6 +419,7 @@ export function buildReportWorkbook(report) {
         { value: (row.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
         { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
       ],
     })),

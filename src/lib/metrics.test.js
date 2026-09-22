@@ -112,7 +112,8 @@ test('resolution and money come from the complaints history, not typed metrics',
         refutadoRechazado: 0,
         complaintAmount: 9000,
         recoveredAmount: 4000,
-        lostAmount: 5000,
+        lostAmount: 2000,
+        disputedAmount: 3000,
         undisputedAmount: 2000,
         inProgressAmount: 3000,
         confirmedLostAmount: 0,
@@ -126,7 +127,8 @@ test('resolution and money come from the complaints history, not typed metrics',
   assert.equal(row.refutadoAceptado, 1);
   assert.equal(row.complaintAmount, 9000);
   assert.equal(row.recoveredAmount, 4000);
-  assert.equal(row.lostAmount, 5000);
+  assert.equal(row.disputedAmount, 3000);
+  assert.equal(row.lostAmount, 2000);
 });
 
 test('period totals include complaint money even without an aggregator prefix', () => {

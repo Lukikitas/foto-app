@@ -28,6 +28,7 @@ function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
               <th>{pctLabel}</th>
               <th>$ quejas</th>
               <th>$ recuperado</th>
+              <th>En disputa</th>
               <th>$ perdido</th>
             </tr>
           </thead>
@@ -39,6 +40,7 @@ function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
                 <td>{formatPct(row.sharePct ?? row.recoveredPct)}</td>
                 <td>{formatMoney(row.complaintAmount)}</td>
                 <td>{formatMoney(row.recoveredAmount)}</td>
+                <td>{formatMoney(row.inProgressAmount)}</td>
                 <td>{formatMoney(row.lostAmount)}</td>
               </tr>
             ))}
@@ -80,6 +82,11 @@ export default function MetricsReport({ history, range, aggregator }) {
               <strong>{formatMoney(totals.recoveredAmount)}</strong>
               <span>Volvió con Ref. aceptado</span>
             </article>
+            <article className="metrics-kpi">
+              <p>Dinero en disputa</p>
+              <strong>{formatMoney(totals.inProgressAmount)}</strong>
+              <span>Refutados pendientes</span>
+            </article>
             <article
               className={`metrics-kpi${
                 totals.lostAmount > 0 ? ' metrics-kpi--bad' : totals.complaintAmount ? ' metrics-kpi--good' : ''
@@ -87,7 +94,7 @@ export default function MetricsReport({ history, range, aggregator }) {
             >
               <p>$ perdido</p>
               <strong>{formatMoney(totals.lostAmount)}</strong>
-              <span>Quejas menos recuperado</span>
+              <span>Rechazados o sin refutar</span>
             </article>
           </div>
           <p className="metrics-money-split">

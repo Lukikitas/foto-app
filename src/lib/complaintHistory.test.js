@@ -132,7 +132,8 @@ test('groups statuses and recovered money by day and aggregator', () => {
   assert.equal(peya.refutadoAceptado, 1);
   assert.equal(peya.complaintAmount, 11990);
   assert.equal(peya.recoveredAmount, 2000);
-  assert.equal(peya.lostAmount, 9990);
+  assert.equal(peya.disputedAmount, 1000);
+  assert.equal(peya.lostAmount, 8990);
 });
 
 test('groups money from complaints without a known aggregator', () => {
