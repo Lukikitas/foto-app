@@ -16,7 +16,7 @@ export function buildRecognitionPasses({
       sources: firstSources,
       rotations: [0],
       psms: [PSM.SINGLE_BLOCK],
-      variants: ['plain', 'binary'],
+      variants: ['plain', 'adaptive', 'binary'],
     },
     {
       sources: firstSources,

@@ -73,24 +73,31 @@ function canvasToFile(canvas, name, type, quality) {
   });
 }
 
-async function captureFrameOrPhoto(video, track, name, timeoutMs = 1200) {
+function makePhoto(video, name) {
+  if (!video?.videoWidth || !video?.videoHeight) {
+    return Promise.reject(new Error('La cámara todavía no está lista.'));
+  }
+
+  const canvas = document.createElement('canvas');
+  drawFrame(video, canvas);
+  return canvasToFile(canvas, name, 'image/jpeg', 0.95);
+}
+
+async function makeEvidencePhoto(video, track, name) {
   if (!video?.videoWidth || !video?.videoHeight) {
     throw new Error('La cámara todavía no está lista.');
   }
 
   // Freeze the video frame at the shutter as a fast fallback; supported phones
-  // can supply a full still image with their own camera autofocus and processing.
+  // can supply a full still image with their own camera processing.
   const fallback = document.createElement('canvas');
   drawFrame(video, fallback);
-
   if (typeof ImageCapture === 'function' && track?.readyState === 'live') {
     try {
       const capture = new ImageCapture(track);
       const blob = await Promise.race([
         capture.takePhoto(),
-        new Promise((_, reject) =>
-          window.setTimeout(() => reject(new Error('Timeout de foto')), timeoutMs)
-        ),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error('La foto tardó demasiado.')), 1500)),
       ]);
       if (blob?.size && blob.type?.startsWith('image/')) {
         const extension = blob.type === 'image/png' ? 'png' : 'jpg';
@@ -100,19 +107,10 @@ async function captureFrameOrPhoto(video, track, name, timeoutMs = 1200) {
         });
       }
     } catch {
-      // Fallback cleanly to video frame on low-end devices or when takePhoto times out
+      // A video frame still keeps the two-photo flow working on unsupported devices.
     }
   }
-
   return canvasToFile(fallback, name, 'image/jpeg', 0.95);
-}
-
-function makeTicketPhoto(video, track, name) {
-  return captureFrameOrPhoto(video, track, name, 1200);
-}
-
-function makeEvidencePhoto(video, track, name) {
-  return captureFrameOrPhoto(video, track, name, 1200);
 }
 
 function getLiveTrack(stream) {
@@ -283,12 +281,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       if (navigator.vibrate) navigator.vibrate(25);
 
       if (step === STEPS.ticket) {
-        ticketFileRef.current = await makeTicketPhoto(
-          videoRef.current,
-          getLiveTrack(streamRef.current),
-          `ticket-${Date.now()}.jpg`,
-        );
-        if (navigator.vibrate) navigator.vibrate(35);
+        ticketFileRef.current = await makePhoto(videoRef.current, `ticket-${Date.now()}.jpg`);
         setStep(STEPS.evidence);
         setError(null);
         setTakingPhoto(false);
@@ -307,7 +300,6 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       }
 
       await onCapturePair({ ticketFile, evidenceFile });
-      if (navigator.vibrate) navigator.vibrate([35, 50, 45]);
       setQueuedPairs((count) => count + 1);
       setError(null);
       setStep(STEPS.ticket);
@@ -347,7 +339,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         </div>
       </div>
 
-      <header className="order-camera__top">
+  <header className="order-camera__top">
         <button
           type="button"
           className="order-camera__icon-btn"

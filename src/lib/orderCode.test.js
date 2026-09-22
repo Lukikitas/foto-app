@@ -233,3 +233,34 @@ test('a labeled or repeated reading is confident enough to stop early', () => {
   const weak = inspectOrderFromOcrTexts(['ticket PEYA12345']);
   assert.equal(isConfidentOrderMatch(weak), false);
 });
+
+test('handles # prefix and ORDEN/PEDIDO labels', () => {
+  assert.deepEqual(code('CODIGO: #PEYA-2286878556'), {
+    displayCode: 'PEYA2286878556',
+    aggregator: 'pedidosya',
+  });
+  assert.deepEqual(code('ORDEN: PEYA12345'), {
+    displayCode: 'PEYA12345',
+    aggregator: 'pedidosya',
+  });
+  assert.deepEqual(code('PEDIDO # RAPPI-998877'), {
+    displayCode: 'RAPPI998877',
+    aggregator: 'rappi',
+  });
+});
+
+test('repairs thermal digit lookalikes in order codes', () => {
+  // S / $ -> 5, B -> 8, Z -> 2, I/L -> 1, O -> 0
+  assert.deepEqual(code('CODIGO: PEYA-2286878S56'), {
+    displayCode: 'PEYA2286878556',
+    aggregator: 'pedidosya',
+  });
+  assert.deepEqual(code('CODIGO: RAPPI-99BB77'), {
+    displayCode: 'RAPPI998877',
+    aggregator: 'rappi',
+  });
+  assert.deepEqual(code('CODIGO: PEYA-12Z45'), {
+    displayCode: 'PEYA12245',
+    aggregator: 'pedidosya',
+  });
+});

@@ -1,5 +1,5 @@
 export const OCR_ENGINE_ERROR = 'No se pudo leer el ticket.';
-export const OCR_CHAR_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-: ';
+export const OCR_CHAR_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-: #';
 
 export const PSM = {
   OSD_ONLY: '0',

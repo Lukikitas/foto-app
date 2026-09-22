@@ -1,7 +1,7 @@
 import { detectAggregator, getAggregatorLabel } from './aggregators.js';
 
 const CODIGO_LABEL =
-  /(?:C\s*[O0]\s*D(?:\s*[I1L]\s*G\s*[O0](?:\s+PED(?:IDO)?)?|\s+PED(?:IDO)?)|\b(?:ORDEN|PEDIDO))\s*[:.;#-]?\s*/;
+  /C\s*[O0]\s*D(?:\s*[I1L]\s*G\s*[O0](?:\s+PED(?:IDO)?)?|\s+PED(?:IDO)?)\s*[:.;#-]?\s*/;
 
 const AGGREGATOR_PREFIX = /\b(RAPPITURBO|PEYA|RAPPI|MPD)(?=[\s-]?[A-Z0-9])/;
 
@@ -72,7 +72,6 @@ function repairRepeatedMpd(value = '') {
 
 function repairKnownPrefixes(value = '') {
   return repairRepeatedMpd(value)
-    .replace(/#\s*/g, ' ')
     .replace(/R[A4]PPI[\s-]*T[\s-]*URB[O0](?=[A-Z0-9\s-]|$)/g, 'RAPPITURBO')
     .replace(/P[E3][\s-]*[VY][\s-]*[A4](?=[A-Z0-9\s-]|$)/g, 'PEYA')
     .replace(/P[E3][\s-]*Y[\s-]*[A8O](?=[A-Z0-9\s-]|$)/g, 'PEYA')
@@ -99,12 +98,7 @@ function stripTrailingJunk(value = '') {
 }
 
 function mapDigitLookalikes(value = '') {
-  return value
-    .replace(/O/g, '0')
-    .replace(/[IL|]/g, '1')
-    .replace(/Z/g, '2')
-    .replace(/[S$]/g, '5')
-    .replace(/B/g, '8');
+  return value.replace(/O/g, '0').replace(/[IL]/g, '1');
 }
 
 function digitsFromToken(token) {

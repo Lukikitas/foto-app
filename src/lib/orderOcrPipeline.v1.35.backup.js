@@ -195,65 +195,6 @@ function thresholdInPlace(canvas, cutoff) {
   context.putImageData(imageData, 0, 0);
 }
 
-function adaptiveThresholdInPlace(canvas, radius = 14, delta = 8) {
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) return;
-  const { width, height } = canvas;
-  if (width <= 0 || height <= 0) return;
-  const imageData = context.getImageData(0, 0, width, height);
-  const { data } = imageData;
-
-  // Compute grayscale and 32-bit Integral Image
-  const stride = width + 1;
-  const integral = new Uint32Array(stride * (height + 1));
-
-  for (let y = 0; y < height; y += 1) {
-    let rowSum = 0;
-    const srcRow = y * width * 4;
-    const intRow = (y + 1) * stride;
-    const prevIntRow = y * stride;
-
-    for (let x = 0; x < width; x += 1) {
-      const srcIdx = srcRow + x * 4;
-      const gray = Math.round(0.299 * data[srcIdx] + 0.587 * data[srcIdx + 1] + 0.114 * data[srcIdx + 2]);
-      data[srcIdx] = gray;
-      rowSum += gray;
-      integral[intRow + (x + 1)] = integral[prevIntRow + (x + 1)] + rowSum;
-    }
-  }
-
-  // Threshold each pixel against its local window average
-  for (let y = 0; y < height; y += 1) {
-    const y1 = Math.max(0, y - radius);
-    const y2 = Math.min(height, y + radius + 1);
-    const countY = y2 - y1;
-    const rowOffset = y * width * 4;
-
-    for (let x = 0; x < width; x += 1) {
-      const x1 = Math.max(0, x - radius);
-      const x2 = Math.min(width, x + radius + 1);
-      const count = (x2 - x1) * countY;
-
-      const sum =
-        integral[y2 * stride + x2] -
-        integral[y1 * stride + x2] -
-        integral[y2 * stride + x1] +
-        integral[y1 * stride + x1];
-
-      const avg = sum / count;
-      const gray = data[rowOffset + x * 4];
-      const val = gray <= avg - delta ? 0 : 255;
-
-      const idx = rowOffset + x * 4;
-      data[idx] = val;
-      data[idx + 1] = val;
-      data[idx + 2] = val;
-    }
-  }
-
-  context.putImageData(imageData, 0, 0);
-}
-
 function invertInPlace(canvas) {
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) fail();
@@ -463,13 +404,6 @@ function prepareTicketViews(bitmap) {
 function applyPassVariants(sources, variants) {
   const out = [];
   if (variants.includes('plain')) out.push(...sources);
-  if (variants.includes('adaptive')) {
-    for (const source of sources) {
-      const adaptive = cloneCanvas(source);
-      adaptiveThresholdInPlace(adaptive);
-      out.push(adaptive);
-    }
-  }
   if (variants.includes('binary')) {
     for (const source of sources) {
       const binary = cloneCanvas(source);
@@ -508,57 +442,25 @@ async function collectGroup({ sources, rotations, psms, variants }, texts, signa
   return true;
 }
 
-function isInstantFastMatch(inspection) {
-  if (!inspection?.order) return false;
-  const { displayCode, aggregator } = inspection.order;
-  const digits = displayCode.replace(/\D/g, '');
-
-  // Labeled code with healthy digit count
-  if (inspection.labeled > 0 && digits.length >= 4) return true;
-
-  // Platform standard complete code length
-  if (aggregator === 'pedidosya' && digits.length === 10) return true;
-  if (aggregator === 'rappi' && (digits.length === 9 || digits.length >= 6)) return true;
-  if (aggregator === 'rappi_turbo' && digits.length >= 4) return true;
-  if (aggregator === 'mercadopago' && digits.length >= 6) return true;
-
-  return false;
-}
-
 async function readFastCode(bitmap, recognizeOcrData, signal, deadline) {
   const frame = canvasFromSource(bitmap, OCR_MAX_SIDE);
   const votes = new Map();
   for (const { rotation, top, height, left, width, scale } of fastCodeCropPlan(frame.width, frame.height)) {
     if (Date.now() >= deadline) return null;
     throwIfAborted(signal);
-    const crop = fastCodeCrop(rotatedCanvas(frame, rotation), top, height, left, width, scale);
     let found;
     try {
-      found = await recognizeTexts(crop, PSM.SINGLE_BLOCK, recognizeOcrData);
+      found = await recognizeTexts(
+        fastCodeCrop(rotatedCanvas(frame, rotation), top, height, left, width, scale),
+        PSM.SINGLE_BLOCK,
+        recognizeOcrData,
+      );
     } catch (error) {
       if (isAbortError(error)) throw error;
       fail(error);
     }
-    let inspection = inspectOrderFromOcrTexts(found);
-
-    // If plain crop didn't find a code, try adaptive threshold on this crop
-    if (!inspection?.order) {
-      adaptiveThresholdInPlace(crop);
-      try {
-        const adaptiveFound = await recognizeTexts(crop, PSM.SINGLE_BLOCK, recognizeOcrData);
-        inspection = inspectOrderFromOcrTexts(adaptiveFound);
-      } catch (error) {
-        if (isAbortError(error)) throw error;
-      }
-    }
-
+    const inspection = inspectOrderFromOcrTexts(found);
     if (!inspection?.order) continue;
-
-    // Early exit if confident match
-    if (isInstantFastMatch(inspection)) {
-      return inspection.order;
-    }
-
     const key = inspection.order.displayCode.replace(/[^A-Z0-9]/g, '');
     const count = (votes.get(key)?.count || 0) + 1;
     votes.set(key, { order: inspection.order, count });
