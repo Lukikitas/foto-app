@@ -102,6 +102,14 @@ const PORTAL_LINKS = [PARTNER_PORTALS.pedidosya, PARTNER_PORTALS.rappi];
 const HISTORY_AGGREGATORS = [{ id: 'all', label: 'Todos' }, ...AGGREGATOR_OPTIONS];
 const IMPORT_AGGREGATORS = [{ id: '', label: 'Por código' }, ...AGGREGATOR_OPTIONS];
 
+const SORT_OPTIONS = [
+  { id: 'date_desc', label: 'Más recientes' },
+  { id: 'date_asc', label: 'Más antiguos' },
+  { id: 'amount_desc', label: 'Mayor monto ($)' },
+  { id: 'amount_asc', label: 'Menor monto ($)' },
+  { id: 'code_asc', label: 'Código A-Z' },
+];
+
 function formatComplaintWhen(complaint) {
   if (complaint.orderAtIso) return formatDateTime(complaint.orderAtIso);
   if (complaint.timeOfDay) {
@@ -175,6 +183,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     const saved = getImportAggregator();
     return AGGREGATOR_OPTIONS.some((item) => item.id === saved) ? saved : '';
   });
+  const [historySort, setHistorySort] = useState('date_desc');
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
@@ -183,7 +192,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   useEffect(() => {
     setSelectedIds(new Set());
     setLastClickedIndex(null);
-  }, [inboxView, filter, historyPreset, historyAggregator]);
+  }, [inboxView, filter, historyPreset, historyAggregator, historySort]);
 
   const rematch = useCallback((nextComplaints, nextPicks, nextPhotos) => {
     const matched = matchComplaintsToPhotos(nextComplaints, nextPhotos, nextPicks);
@@ -319,6 +328,41 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     [historyBaseRows, filter],
   );
 
+  const sortedHistoryRows = useMemo(() => {
+    const list = [...historyRows];
+    switch (historySort) {
+      case 'date_asc':
+        return list.sort((a, b) =>
+          (a.complaint.orderAtIso || a.complaint.day || '').localeCompare(
+            b.complaint.orderAtIso || b.complaint.day || '',
+          ),
+        );
+      case 'amount_desc':
+        return list.sort((a, b) => {
+          const amtA = Number(a.history?.amount ?? a.complaint?.amount) || 0;
+          const amtB = Number(b.history?.amount ?? b.complaint?.amount) || 0;
+          return amtB - amtA;
+        });
+      case 'amount_asc':
+        return list.sort((a, b) => {
+          const amtA = Number(a.history?.amount ?? a.complaint?.amount) || 0;
+          const amtB = Number(b.history?.amount ?? b.complaint?.amount) || 0;
+          return amtA - amtB;
+        });
+      case 'code_asc':
+        return list.sort((a, b) =>
+          String(a.complaint.orderCode || '').localeCompare(String(b.complaint.orderCode || '')),
+        );
+      case 'date_desc':
+      default:
+        return list.sort((a, b) =>
+          (b.complaint.orderAtIso || b.complaint.day || '').localeCompare(
+            a.complaint.orderAtIso || a.complaint.day || '',
+          ),
+        );
+    }
+  }, [historyRows, historySort]);
+
   useEffect(() => {
     if (inboxView !== 'historial') return undefined;
     const ids = listHistoryItems(historyStore, {
@@ -351,7 +395,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     });
   }, [historyBaseRows]);
 
-  const activeRows = inboxView === 'historial' ? historyRows : visibleRows;
+  const activeRows = inboxView === 'historial' ? sortedHistoryRows : visibleRows;
 
   const selectedRows = useMemo(() => {
     if (selectedIds.size === 0) return [];
@@ -1196,6 +1240,21 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                 ))}
               </div>
             </div>
+            <div className="filter-cluster complaints__sort-cluster">
+              <span className="filter-cluster__label">Ordenar por</span>
+              <select
+                className="complaints__sort-select"
+                value={historySort}
+                onChange={(e) => setHistorySort(e.target.value)}
+                aria-label="Ordenar reclamos"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <label className="complaints__field complaints__search">
               <span className="visually-hidden">Buscar en el historial</span>
               <input
@@ -1414,6 +1473,7 @@ function ComplaintCard({
   const [editAggregator, setEditAggregator] = useState(row.history?.aggregator || '');
   const [editFile, setEditFile] = useState(null);
   const status = complaintRowStatus(row);
+  const isRefutedOrResolved = status !== COMPLAINT_STATUSES.queja;
   const photo = row.photo;
   const aggregator = getComplaintAggregator(row.complaint, photo) || row.history?.aggregator;
   const amount = row.history?.amount ?? row.complaint.amount;
@@ -1467,7 +1527,11 @@ function ComplaintCard({
               <span className={aggregatorBadgeClass(aggregator)}>{getAggregatorLabel(aggregator)}</span>
             )}
             <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
-            {amount != null && <span className="badge badge--amount">{formatMoney(amount)}</span>}
+            {amount != null && (
+              <span className={`badge badge--amount${isRefutedOrResolved ? ' badge--amount-green' : ''}`}>
+                {formatMoney(amount)}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -1524,7 +1588,7 @@ function ComplaintCard({
             Editar
           </button>
         )}
-        {(photo?.public_url || portal || code) && (
+        {!isRefutedOrResolved && (photo?.public_url || portal || code) && (
           <button
             type="button"
             className={`btn btn--small ${status === COMPLAINT_STATUSES.queja ? 'btn--primary' : 'btn--ghost'}`}
@@ -1564,7 +1628,7 @@ function ComplaintCard({
             </button>
           </>
         )}
-        {!photo?.public_url && (
+        {!isRefutedOrResolved && !photo?.public_url && (
           <ComplaintEvidenceUpload disabled={disabled} onFile={(file) => onUploadPhoto(row, file)} />
         )}
         {portal && (

@@ -214,212 +214,257 @@ export default function PhotoUploader() {
           onCancel={closeOrderCamera}
         />
       )}
-      <form className="uploader__form" onSubmit={handleSubmit}>
-        <PhotographerPicker
-          value={meta.taken_by}
-          history={takenByHistory}
-          onChange={handlePhotographerChange}
-          autoFocus={!photographerReady && !orderCameraOpen}
-        />
 
-        <div className="uploader__mode" role="group" aria-label="Tipo de carga">
+      <form className="uploader__form" onSubmit={handleSubmit}>
+        {/* Selector de Fotógrafo */}
+        <div className="uploader__photographer-card">
+          <PhotographerPicker
+            value={meta.taken_by}
+            history={takenByHistory}
+            onChange={handlePhotographerChange}
+            autoFocus={!photographerReady && !orderCameraOpen}
+          />
+        </div>
+
+        {/* Pestañas de Modo (Pedido vs Archivo) */}
+        <div className="uploader__mode" role="tablist" aria-label="Tipo de carga">
           <button
             type="button"
             className={`uploader__mode-btn${isOrderMode ? ' uploader__mode-btn--active' : ''}`}
             onClick={() => changeMode(UPLOAD_MODES.order)}
-            aria-pressed={isOrderMode}
+            role="tab"
+            aria-selected={isOrderMode}
           >
-            Pedido
+            Pedidos Delivery
           </button>
           <button
             type="button"
             className={`uploader__mode-btn${!isOrderMode ? ' uploader__mode-btn--active' : ''}`}
             onClick={() => changeMode(UPLOAD_MODES.file)}
-            aria-pressed={!isOrderMode}
+            role="tab"
+            aria-selected={!isOrderMode}
           >
-            Archivo
+            Archivos Generales
           </button>
         </div>
 
-        <div className="uploader__workspace">
-        <div className="uploader__media">
-        <div className="uploader__file-actions">
-          <div className="uploader__file-hero">
-            {isOrderMode ? (
-              <button
-                type="button"
-                className="uploader__file-btn uploader__mobile-camera uploader__file-btn--camera"
-                onClick={openOrderCamera}
-              >
-                Sacar foto
-              </button>
-            ) : (
-              <label className="uploader__file-label uploader__mobile-camera">
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFileChange}
-                  className="uploader__file-input"
-                />
-                <span className="uploader__file-btn uploader__file-btn--camera">Sacar foto</span>
-              </label>
-            )}
-          </div>
-
-          <div className="uploader__file-secondary">
-            {isOrderMode && (
-              <label className="uploader__file-label uploader__mobile-camera">
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFileChange}
-                  className="uploader__file-input"
-                />
-                <span className="uploader__file-btn uploader__file-btn--secondary">
-                  Foto sin lectura
-                </span>
-              </label>
-            )}
-
-            <label className="uploader__file-label">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={isOrderMode ? 'image/*' : undefined}
-                onChange={handleFileChange}
-                className="uploader__file-input"
-              />
-              <span className="uploader__file-btn uploader__file-btn--secondary uploader__file-btn--pick">
-                {isOrderMode ? 'Elegir de galería' : 'Elegir archivo'}
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {!preview && !file && (
-          <div className="uploader__preview uploader__preview--empty">
-            Elegí un archivo para verlo acá
-          </div>
-        )}
-
-        {preview && (
-          <div className="uploader__preview">
-            <img src={preview} alt="Vista previa" />
-            <button
-              type="button"
-              className="btn btn--ghost btn--small uploader__change-photo"
-              onClick={resetForm}
-            >
-              Quitar archivo
-            </button>
-          </div>
-        )}
-
-        {!preview && file && (
-          <div className="uploader__file-summary">
-            <strong>{file.name}</strong>
-            <span>{Math.ceil(file.size / 1024)} KB</span>
-          </div>
-        )}
-        </div>
-
-        <div className="uploader__fields">
-
-        {isOrderMode && detectedOrder && !showManualOrder && (
-          <div className="uploader__detected-order" role="status">
-            <span>
-              Código detectado: <strong>{detectedOrder.displayCode}</strong>
-              {' · '}se guardará con este código
-            </span>
-            <button
-              type="button"
-              className="btn btn--ghost btn--small"
-              onClick={() => setShowManualOrder(true)}
-            >
-              Corregir
-            </button>
-          </div>
-        )}
-
-        {isOrderMode && (!detectedOrder || showManualOrder) ? (
-          <label className="uploader__name-label">
-            Código de pedido
-            <input
-              type="text"
-              pattern="(?:\d{4,12}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})"
-              value={orderDigits}
-              onChange={handleDigitsChange}
-              placeholder="Ej: PEYA12345"
-              maxLength={32}
-              className="uploader__digits-input"
-              autoComplete="off"
-            />
-          </label>
-        ) : (
-          <label className="uploader__name-label">
-            Nombre del archivo
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setError(null);
-                setQueuedMessage(null);
-              }}
-              placeholder={file ? getFileTitle(file) : 'Ej: remito, factura, evidencia'}
-              maxLength={120}
-            />
-          </label>
-        )}
-
-        <label className="uploader__name-label">
-          Anotaciones
-          <textarea
-            value={meta.notes}
-            onChange={(e) => updateMeta('notes', e.target.value)}
-            placeholder="Detalles, observaciones, etc."
-            maxLength={500}
-            rows={3}
-            className="uploader__textarea"
-          />
-        </label>
-
-        {isOrderMode && (
-          <div className="uploader__flags">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={meta.is_refutado}
-                onChange={(e) => updateMeta('is_refutado', e.target.checked)}
-              />
-              <span>Es un refutado</span>
-            </label>
-          </div>
-        )}
-
-        <button
-          type="submit"
-          className="btn btn--primary btn--large uploader__save"
-          disabled={saving || !file || (isOrderMode && !isValidOrderDigits(orderDigits))}
-        >
-          {saving ? 'Preparando...' : 'Guardar y seguir'}
-        </button>
-        </div>
-        </div>
-
+        {/* Notificaciones y Mensajes de Estado */}
         {error && (
-          <p className="message message--error" role="alert">
-            {error}
+          <p className="message message--error uploader__message" role="alert">
+            <span aria-hidden="true">⚠️</span> {error}
           </p>
         )}
         {queuedMessage && (
-          <p className="message message--success" role="status">
-            {queuedMessage}
+          <p className="message message--success uploader__message" role="status">
+            <span aria-hidden="true">✓</span> {queuedMessage}
           </p>
+        )}
+
+        {/* ZONA DE CAPTURA (Cuando no hay foto cargada todavía) */}
+        {!file && (
+          <div className="uploader__capture-card">
+            {isOrderMode ? (
+              <button
+                type="button"
+                className="uploader__hero-camera-btn"
+                onClick={openOrderCamera}
+                title={photographerReady ? 'Abrir cámara de pedidos' : 'Elegí tu nombre primero'}
+              >
+                <div className="uploader__hero-icon-ring">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                  </svg>
+                </div>
+                <div className="uploader__hero-text">
+                  <strong>SACAR FOTO</strong>
+                  <span>Cámara rápida · 1. Ticket + 2. Bolsa</span>
+                </div>
+              </button>
+            ) : (
+              <label className="uploader__hero-camera-btn">
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="uploader__file-input"
+                />
+                <div className="uploader__hero-icon-ring">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                  </svg>
+                </div>
+                <div className="uploader__hero-text">
+                  <strong>TOMAR FOTO</strong>
+                  <span>Archivo general</span>
+                </div>
+              </label>
+            )}
+
+            {/* Accesos rápidos secundarios (Cámara del cel / Galería) */}
+            <div className="uploader__quick-row">
+              {isOrderMode && (
+                <label className="uploader__quick-btn">
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileChange}
+                    className="uploader__file-input"
+                  />
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                    <circle cx="12" cy="18" r="1"></circle>
+                    <circle cx="12" cy="8" r="2.5"></circle>
+                  </svg>
+                  <span>Cámara directa</span>
+                </label>
+              )}
+
+              <label className="uploader__quick-btn">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={isOrderMode ? 'image/*' : undefined}
+                  onChange={handleFileChange}
+                  className="uploader__file-input"
+                />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                <span>{isOrderMode ? 'Elegir de galería' : 'Elegir archivo'}</span>
+              </label>
+            </div>
+
+            {isOrderMode && (
+              <p className="uploader__ocr-hint">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                El código del pedido se lee automáticamente por OCR del ticket en segundo plano.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ZONA DE REVISIÓN Y GUARDADO (Cuando ya se tomó o eligió una foto) */}
+        {file && (
+          <div className="uploader__review-card">
+            <div className="uploader__preview-header">
+              <span className="uploader__preview-badge">✓ Foto seleccionada</span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--small uploader__change-photo"
+                onClick={resetForm}
+              >
+                ✕ Descartar foto
+              </button>
+            </div>
+
+            {preview && (
+              <div className="uploader__preview-wrap">
+                <img src={preview} alt="Vista previa del pedido" className="uploader__preview-img" />
+              </div>
+            )}
+
+            {!preview && (
+              <div className="uploader__file-summary">
+                <strong>{file.name}</strong>
+                <span>{Math.ceil(file.size / 1024)} KB</span>
+              </div>
+            )}
+
+            <div className="uploader__fields-panel">
+              {isOrderMode && detectedOrder && !showManualOrder && (
+                <div className="uploader__detected-order" role="status">
+                  <span>
+                    Código detectado: <strong>{detectedOrder.displayCode}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--small"
+                    onClick={() => setShowManualOrder(true)}
+                  >
+                    Corregir
+                  </button>
+                </div>
+              )}
+
+              {isOrderMode && (!detectedOrder || showManualOrder) ? (
+                <label className="uploader__name-label">
+                  <span>Código del pedido</span>
+                  <input
+                    type="text"
+                    pattern="(?:\d{4,12}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})"
+                    value={orderDigits}
+                    onChange={handleDigitsChange}
+                    placeholder="Ej: PEYA12345 o 4696"
+                    maxLength={32}
+                    className="uploader__digits-input"
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <small className="uploader__input-hint">Últimos 4 dígitos o código completo de la app</small>
+                </label>
+              ) : (
+                <label className="uploader__name-label">
+                  <span>Nombre del archivo</span>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      setError(null);
+                      setQueuedMessage(null);
+                    }}
+                    placeholder={file ? getFileTitle(file) : 'Ej: remito, factura, evidencia'}
+                    maxLength={120}
+                  />
+                </label>
+              )}
+
+              <label className="uploader__name-label">
+                <span>Anotaciones (opcional)</span>
+                <textarea
+                  value={meta.notes}
+                  onChange={(e) => updateMeta('notes', e.target.value)}
+                  placeholder="Detalles, aclaraciones sobre el pedido..."
+                  maxLength={500}
+                  rows={2}
+                  className="uploader__textarea"
+                />
+              </label>
+
+              {isOrderMode && (
+                <div className="uploader__flags">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={meta.is_refutado}
+                      onChange={(e) => updateMeta('is_refutado', e.target.checked)}
+                    />
+                    <span>Marcar como evidencia de refutado</span>
+                  </label>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="btn btn--primary btn--large uploader__save"
+                disabled={saving || (isOrderMode && !isValidOrderDigits(orderDigits))}
+              >
+                {saving ? 'Guardando pedido...' : '✓ Guardar pedido y seguir'}
+              </button>
+            </div>
+          </div>
         )}
       </form>
     </section>
