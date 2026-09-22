@@ -100,7 +100,7 @@ export default function PhotoUploader() {
     await enqueue({
       file: evidenceFile,
       ticketFile,
-      kind: UPLOAD_MODES.order,
+      kind: 'order',
       meta: {
         ...meta,
         has_complaint: false,
@@ -124,7 +124,6 @@ export default function PhotoUploader() {
     setDetectedOrder(null);
     setShowManualOrder(false);
     setOrderCameraOpen(false);
-    setTitle('');
     setMeta(getEmptyMeta());
     setTakenByHistory(getTakenByHistory());
     clearInputs();
