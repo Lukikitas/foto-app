@@ -9,7 +9,7 @@ const STEPS = {
   evidence: 'evidence',
 };
 
-function drawFrame(video, canvas, maxWidth = 2560) {
+function drawFrame(video, canvas, maxWidth = 2560, zoom = 1) {
   const sourceWidth = video.videoWidth;
   const sourceHeight = video.videoHeight;
   const scale = Math.min(1, maxWidth / Math.max(sourceWidth, sourceHeight));
@@ -21,7 +21,19 @@ function drawFrame(video, canvas, maxWidth = 2560) {
   const context = canvas.getContext('2d', { alpha: false });
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
-  context.drawImage(video, 0, 0, width, height);
+  const cropWidth = sourceWidth / zoom;
+  const cropHeight = sourceHeight / zoom;
+  context.drawImage(
+    video,
+    (sourceWidth - cropWidth) / 2,
+    (sourceHeight - cropHeight) / 2,
+    cropWidth,
+    cropHeight,
+    0,
+    0,
+    width,
+    height,
+  );
 }
 
 function waitForVideo(video) {
@@ -73,7 +85,7 @@ function canvasToFile(canvas, name, type, quality) {
   });
 }
 
-async function captureFrameOrPhoto(video, track, name, timeoutMs = 1200) {
+async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = false, timeoutMs = 1200) {
   if (!video?.videoWidth || !video?.videoHeight) {
     throw new Error('La cámara todavía no está lista.');
   }
@@ -81,9 +93,9 @@ async function captureFrameOrPhoto(video, track, name, timeoutMs = 1200) {
   // Freeze the video frame at the shutter as a fast fallback; supported phones
   // can supply a full still image with their own camera autofocus and processing.
   const fallback = document.createElement('canvas');
-  drawFrame(video, fallback);
+  drawFrame(video, fallback, 2560, softwareZoom ? zoom : 1);
 
-  if (typeof ImageCapture === 'function' && track?.readyState === 'live') {
+  if (!softwareZoom && typeof ImageCapture === 'function' && track?.readyState === 'live') {
     try {
       const capture = new ImageCapture(track);
       const blob = await Promise.race([
@@ -107,16 +119,33 @@ async function captureFrameOrPhoto(video, track, name, timeoutMs = 1200) {
   return canvasToFile(fallback, name, 'image/jpeg', 0.95);
 }
 
-function makeTicketPhoto(video, track, name) {
-  return captureFrameOrPhoto(video, track, name, 1200);
+function makeTicketPhoto(video, track, name, zoom, softwareZoom) {
+  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, 1200);
 }
 
-function makeEvidencePhoto(video, track, name) {
-  return captureFrameOrPhoto(video, track, name, 1200);
+function makeEvidencePhoto(video, track, name, zoom, softwareZoom) {
+  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, 1200);
 }
 
 function getLiveTrack(stream) {
   return stream?.getVideoTracks?.()[0] || null;
+}
+
+function getHardwareZoomRange(track) {
+  const range = track?.getCapabilities?.().zoom;
+  if (!range || !Number.isFinite(range.min) || !Number.isFinite(range.max) || range.max <= 1) {
+    return null;
+  }
+  return { min: range.min, max: Math.min(range.max, Math.max(4, range.min)), step: range.step };
+}
+
+function nextHardwareZoom(current, direction, range) {
+  const step = Number.isFinite(range.step) && range.step > 0 ? range.step : 0;
+  const desired = current + direction * Math.max(0.5, step);
+  const snapped = step
+    ? range.min + Math.round((desired - range.min) / step) * step
+    : desired;
+  return Math.max(1, range.min, Math.min(range.max, Number(snapped.toFixed(2))));
 }
 
 export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, onCancel }) {
@@ -132,6 +161,11 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   const [pendingTasks, setPendingTasks] = useState(0);
   const [flashOn, setFlashOn] = useState(getCameraFlash);
   const [flashSupported, setFlashSupported] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [minZoom, setMinZoom] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(3);
+  const [hardwareZoom, setHardwareZoom] = useState(false);
+  const [zoomBusy, setZoomBusy] = useState(false);
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [whoOpen, setWhoOpen] = useState(() => !takenBy?.trim());
 
@@ -177,8 +211,22 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         await videoRef.current.play();
         await waitForVideo(videoRef.current);
         if (!active) return;
+        const track = getLiveTrack(stream);
+        const zoomRange = getHardwareZoomRange(track);
+        if (zoomRange) {
+          try {
+            await track.applyConstraints({ advanced: [{ zoom: Math.max(1, zoomRange.min) }] });
+            if (!active) return;
+            setHardwareZoom(true);
+            setMinZoom(Math.max(1, zoomRange.min));
+            setMaxZoom(zoomRange.max);
+            setZoom(track.getSettings?.().zoom ?? 1);
+          } catch {
+            // Some browsers report zoom support but reject zoom constraints.
+          }
+        }
         setStatus('ready');
-        await applyFlash(getLiveTrack(stream));
+        await applyFlash(track);
       } catch (startError) {
         if (active) {
           setError(startError.message || 'No se pudo abrir la cámara.');
@@ -262,6 +310,32 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     setError(null);
   }
 
+  async function handleZoom(direction) {
+    if (status !== 'ready' || zoomBusy || takingPhoto) return;
+
+    const track = getLiveTrack(streamRef.current);
+    const range = hardwareZoom ? getHardwareZoomRange(track) : null;
+    const next = range
+      ? nextHardwareZoom(zoom, direction, range)
+      : Math.max(1, Math.min(maxZoom, Math.round((zoom + direction * 0.5) * 10) / 10));
+    if (next === zoom) return;
+
+    if (hardwareZoom) {
+      setZoomBusy(true);
+      try {
+        await track.applyConstraints({ advanced: [{ zoom: next }] });
+        setZoom(track.getSettings?.().zoom ?? next);
+        setError(null);
+      } catch {
+        setError('No se pudo ajustar el zoom de esta cámara.');
+      } finally {
+        setZoomBusy(false);
+      }
+    } else {
+      setZoom(next);
+    }
+  }
+
   async function handleCapture() {
     if (status !== 'ready' || takingPhoto) return;
 
@@ -287,6 +361,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           videoRef.current,
           getLiveTrack(streamRef.current),
           `ticket-${Date.now()}.jpg`,
+          zoom,
+          !hardwareZoom && zoom > 1,
         );
         if (navigator.vibrate) navigator.vibrate(35);
         setStep(STEPS.evidence);
@@ -299,6 +375,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         videoRef.current,
         getLiveTrack(streamRef.current),
         `evidencia-${Date.now()}.jpg`,
+        zoom,
+        !hardwareZoom && zoom > 1,
       );
       const ticketFile = ticketFileRef.current;
       ticketFileRef.current = null;
@@ -337,7 +415,14 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   return (
     <section className={`order-camera${whoOpen ? ' order-camera--who-open' : ''}`} aria-label="Cámara rápida de pedidos">
       <div className="order-camera__viewport">
-        <video ref={videoRef} className="order-camera__video" autoPlay muted playsInline />
+        <video
+          ref={videoRef}
+          className="order-camera__video"
+          style={!hardwareZoom && zoom > 1 ? { transform: `scale(${zoom})` } : undefined}
+          autoPlay
+          muted
+          playsInline
+        />
         <div
           className={`order-camera__guide order-camera__guide--${step}`}
           aria-hidden="true"
@@ -406,6 +491,11 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       {error && <p className="message message--error">{error}</p>}
 
       <div className="order-camera__actions">
+        <div className="order-camera__zoom" aria-label="Zoom de cámara">
+          <button type="button" onClick={() => handleZoom(-1)} disabled={status !== 'ready' || zoomBusy || takingPhoto || zoom <= minZoom} aria-label="Disminuir zoom">−</button>
+          <output aria-live="polite">{Number(zoom.toFixed(1))}×</output>
+          <button type="button" onClick={() => handleZoom(1)} disabled={status !== 'ready' || zoomBusy || takingPhoto || zoom >= maxZoom} aria-label="Aumentar zoom">+</button>
+        </div>
         {step === STEPS.evidence && (
           <div className="order-camera__shutter-side">
             <button type="button" className="btn btn--ghost order-camera__repeat" onClick={resetToTicket}>
