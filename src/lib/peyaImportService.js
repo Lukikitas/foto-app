@@ -1,3 +1,4 @@
+import { beginWorkbookImport } from './workbookImportEvents.js';
 import { executePeyaImport } from './peyaImportFlow.js';
 import { mergePeyaHistory } from './peyaWorkbook.js';
 import { loadComplaintHistory, mutateComplaintHistory } from './complaintHistoryStore.js';
@@ -6,13 +7,10 @@ import { fetchPhotosForComplaints, saveComplaintBatch } from './complaints.js';
 import { matchComplaintsToPhotos } from './complaintMatch.js';
 import { getPhotoAggregator } from './aggregators.js';
 
-const listeners = new Set();
-let importing = false;
-export function subscribePeyaImport(listener) { listeners.add(listener); return () => listeners.delete(listener); }
-function announce(result) { for (const listener of listeners) { try { listener(result); } catch { /* subscriber cannot invalidate a saved import */ } } }
+import { announceWorkbookImport as announce } from './workbookImportEvents.js';
+export { subscribeWorkbookImport as subscribePeyaImport } from './workbookImportEvents.js';
 export async function importPeyaReport(report) {
-  if (importing) throw new Error('Ya hay una importación de PedidosYa en curso.');
-  importing = true;
+  const release = beginWorkbookImport();
   const deps = {
     loadMetrics: () => loadMetricsStore({ strict: true }),
     validateHistory: async () => mergePeyaHistory(await loadComplaintHistory({ force: true, strict: true }), report),
@@ -31,5 +29,5 @@ export async function importPeyaReport(report) {
       announce(error.result);
     }
     throw error;
-  } finally { importing = false; }
+  } finally { release(); }
 }

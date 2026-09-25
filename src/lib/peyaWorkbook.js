@@ -154,3 +154,5 @@ export function mergePeyaHistory(store, report, rows = []) {
   }
   return { ...result, complaints };
 }
+
+export { date as parseWorkbookDate };

@@ -9,3 +9,6 @@
 .peya-import caption { text-align: left; padding-bottom: .5rem; }
 .peya-import summary { cursor: pointer; padding: .5rem 0; }
 .peya-import__actions { display: flex; gap: .75rem; margin-top: 1rem; }
+
+.rappi-import__account { display: flex; flex-direction: column; gap: .4rem; }
+.rappi-import__account select { padding: .5rem; color: inherit; background: var(--bg, #202020); border: 1px solid var(--border, #8885); border-radius: 6px; }

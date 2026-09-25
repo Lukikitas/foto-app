@@ -1,3 +1,5 @@
+import { toArgentinaDate } from './metrics.js';
+import { getPhotoAggregator } from './aggregators.js';
 const UNIDENTIFIED_ORDER_NAME = 'Código no encontrado';
 
 function isOrderPhoto(photo) {
@@ -136,6 +138,8 @@ function timeAcceptable(photo, complaint, score) {
   const photoAt = new Date(photo.created_at);
   if (Number.isNaN(photoAt.getTime())) return false;
 
+  if (complaint.day && !complaint.orderAtIso) return toArgentinaDate(photo.created_at) === complaint.day;
+
   if (complaint.orderAtIso && !complaint.dateAssumed) {
     const orderAt = new Date(complaint.orderAtIso);
     if (Number.isNaN(orderAt.getTime())) return score >= 70;
@@ -171,6 +175,7 @@ function sortRanked(ranked, complaint) {
 function rankPhotos(complaint, photos) {
   const ranked = photos
     .filter((photo) => isOrderPhoto(photo) && !isUnidentifiedOrder(photo))
+    .filter((photo) => !complaint.day || complaint.orderAtIso || !['rappi', 'rappi_turbo'].includes(complaint.aggregator) || getPhotoAggregator(photo) === complaint.aggregator)
     .map((photo) => ({
       photo,
       score: codeMatchScore(complaint.orderCode, photo.name),
@@ -183,7 +188,7 @@ function rankPhotos(complaint, photos) {
   const timed = ranked.filter((item) => timeAcceptable(item.photo, complaint, item.score));
   if (timed.length > 0) return sortRanked(timed, complaint);
 
-  if (ranked.length === 1) return ranked;
+  if (ranked.length === 1 && !(complaint.day && !complaint.orderAtIso)) return ranked;
   return [];
 }
 

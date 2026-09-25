@@ -1,3 +1,4 @@
+import RappiExcelImport from './RappiExcelImport';
 import PeyaExcelImport from './PeyaExcelImport';
 import { subscribePeyaImport } from '../lib/peyaImportService';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -114,6 +115,7 @@ const SORT_OPTIONS = [
 
 function formatComplaintWhen(complaint) {
   if (complaint.orderAtIso) return formatDateTime(complaint.orderAtIso);
+  if (complaint.day) return complaint.day.split('-').reverse().join('/') + ' · sin hora';
   if (complaint.timeOfDay) {
     return complaint.dateAssumed ? `${complaint.timeOfDay} · sin fecha` : complaint.timeOfDay;
   }
@@ -1113,6 +1115,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       {inboxView === 'cruzar' && (
         <>
         <PeyaExcelImport disabled={loading} onBusy={setLoading} />
+      <RappiExcelImport disabled={loading} onBusy={setLoading} />
         <form className="complaints__import" onSubmit={handleSubmit}>
           <div className="complaints__import-meta">
             <div className="filter-row" role="group" aria-label="Agregador de esta lista">

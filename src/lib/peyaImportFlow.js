@@ -12,12 +12,12 @@ export async function executePeyaImport(report, deps) {
     result.history = await deps.saveHistory(report, rows);
     result.historySaved = true;
     const metrics = await deps.loadMetrics();
-    result.metrics = await deps.saveMetrics(mergePeyaMetrics(metrics, report));
+    result.metrics = await deps.saveMetrics((deps.mergeMetrics || mergePeyaMetrics)(metrics, report));
     result.metricsSaved = true;
     return result;
   } catch (cause) {
     const error = new Error((result.historySaved
-      ? 'Los reclamos se guardaron; los pedidos y AWT no se pudieron guardar. Reintentá la importación: no se duplicarán los reclamos. '
+      ? 'Los reclamos se guardaron; las métricas diarias no se pudieron guardar. Reintentá la importación: no se duplicarán los reclamos. '
       : 'No se guardó la importación. ') + cause.message);
     error.result = result;
     throw error;

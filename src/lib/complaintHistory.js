@@ -50,7 +50,7 @@ export function emptyHistoryFlags() {
 
 export function complaintDay(complaint) {
   if (complaint?.orderAtIso) return toArgentinaDate(complaint.orderAtIso);
-  return '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(complaint?.day || '') ? complaint.day : '';
 }
 
 export function complaintHistoryId(complaint) {
@@ -126,7 +126,7 @@ export function normalizeHistoryItem(raw, fallback = {}) {
   const combo = String(raw?.combo || fallback.combo || '').trim();
 
   return {
-    id: raw?.id || complaintHistoryId({ orderCode, orderAtIso }),
+    id: raw?.id || complaintHistoryId({ orderCode, orderAtIso, day }),
     orderCode,
     compact,
     aggregator,
@@ -432,7 +432,7 @@ export function editHistoryItemInStore(store, id, { orderCode, aggregator, photo
   const code = String(orderCode || '').trim();
   const compact = compactCode(code);
   if (!compact) throw new Error('Ingresá un código de pedido válido.');
-  const nextId = complaintHistoryId({ orderCode: code, orderAtIso: current.orderAtIso });
+  const nextId = complaintHistoryId({ orderCode: code, orderAtIso: current.orderAtIso, day: current.day });
   if (nextId !== id && next.items[nextId]) {
     throw new Error('Ya existe un reclamo con ese código en la misma fecha.');
   }
@@ -548,7 +548,7 @@ export function listHistoryItems(
       return Object.values(item.fields || {}).some((value) => String(value).toLowerCase().includes(raw));
     })
     .sort((left, right) =>
-      String(right.orderAtIso || right.updatedAt).localeCompare(String(left.orderAtIso || left.updatedAt)),
+      String(right.orderAtIso || right.day || right.updatedAt).localeCompare(String(left.orderAtIso || left.day || left.updatedAt)),
     );
 }
 
@@ -636,6 +636,7 @@ export function historyItemToRow(item, photos = []) {
       orderCode: item.orderCode,
       aggregator: item.aggregator,
       orderAtIso: item.orderAtIso,
+      day: item.day,
       timeOfDay: item.timeOfDay,
       dateAssumed: item.dateAssumed,
       reason: item.reason,

@@ -13,7 +13,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/sw.js', 'src/lib/peyaWorkbookWorker.js'],
+    files: ['src/sw.js', 'src/lib/peyaWorkbookWorker.js', 'src/lib/rappiWorkbookWorker.js'],
     languageOptions: {
       globals: {
         ...globals.serviceworker,

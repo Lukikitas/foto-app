@@ -21,7 +21,7 @@ export function getEvidenceFilename(complaint, photo) {
 
 export function complaintDateRange(complaints) {
   const timestamps = complaints
-    .map((complaint) => complaint.orderAtIso)
+    .map((complaint) => complaint.orderAtIso || (complaint.day ? complaint.day + 'T00:00:00-03:00' : null))
     .filter(Boolean)
     .map((iso) => new Date(iso).getTime())
     .filter((value) => Number.isFinite(value));
@@ -190,7 +190,7 @@ export function buildComplaintExport(rows) {
     lines.push(
       [
         row.complaint.orderCode,
-        row.complaint.orderAtIso || row.complaint.timeOfDay || '',
+        row.complaint.orderAtIso || row.complaint.day || row.complaint.timeOfDay || '',
         row.complaint.combo || row.history?.combo || '',
         row.complaint.reason,
         row.complaint.comment,
