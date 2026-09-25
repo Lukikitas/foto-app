@@ -75,9 +75,12 @@ export function subscribeComplaintHistory(listener) {
   };
 }
 
-export async function loadComplaintHistory({ force = false } = {}) {
+export async function loadComplaintHistory({ force = false, strict = false } = {}) {
   if (memoryStore && !force) return memoryStore;
-  if (loadPromise) return loadPromise;
+  if (loadPromise) {
+    if (!strict) return loadPromise;
+    await loadPromise;
+  }
 
   loadPromise = (async () => {
     const { data, error } = await supabase.storage.from(BUCKET).download(FILE_PATH);
@@ -85,6 +88,7 @@ export async function loadComplaintHistory({ force = false } = {}) {
       if (isMissingObject(error)) {
         return remember(emptyHistory());
       }
+      if (strict) throw new Error(error.message || 'No se pudo leer el historial actual.');
       const cached = readCache();
       if (cached) {
         return remember(cached);
@@ -96,6 +100,7 @@ export async function loadComplaintHistory({ force = false } = {}) {
     try {
       parsed = parseHistory(JSON.parse(await data.text()));
     } catch {
+      if (strict) throw new Error('No se pudo interpretar el historial actual.');
       parsed = emptyHistory();
     }
     if (

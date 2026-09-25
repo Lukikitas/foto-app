@@ -1,0 +1,11 @@
+.peya-import { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #8885); border-radius: 12px; }
+.peya-import__heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.peya-import h3, .peya-import h4 { margin: 0 0 .5rem; }
+.peya-import p { margin: .5rem 0; }
+.peya-import__preview { margin-top: 1rem; overflow-wrap: anywhere; }
+.peya-import__table { overflow-x: auto; margin: 1rem 0; }
+.peya-import table { border-collapse: collapse; width: 100%; font-size: .875rem; }
+.peya-import th, .peya-import td { padding: .6rem; text-align: left; border-bottom: 1px solid var(--border, #8885); min-width: 6rem; }
+.peya-import caption { text-align: left; padding-bottom: .5rem; }
+.peya-import summary { cursor: pointer; padding: .5rem 0; }
+.peya-import__actions { display: flex; gap: .75rem; margin-top: 1rem; }

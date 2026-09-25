@@ -1,3 +1,5 @@
+import PeyaExcelImport from './PeyaExcelImport';
+import { subscribePeyaImport } from '../lib/peyaImportService';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import {
@@ -210,6 +212,15 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   );
 
   useEffect(() => subscribeComplaintHistory(setHistoryStore), []);
+  useEffect(() => subscribePeyaImport((result) => {
+    if (!result.historySaved) return;
+    const incoming = result.history.complaints;
+    setComplaints(incoming);
+    setPickedPhotoIds({});
+    setSkipped(0);
+    setFilter('all');
+    loadAndMatch(incoming, {}).catch(() => setError('Los reclamos se guardaron, pero no se pudieron cargar las fotos.'));
+  }), [loadAndMatch]);
 
   const historyPeriod = useMemo(
     () => resolvePeriod(historyPreset, argentinaToday(), historyCustomFrom, historyCustomTo),
@@ -1100,6 +1111,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       </header>
 
       {inboxView === 'cruzar' && (
+        <>
+        <PeyaExcelImport disabled={loading} onBusy={setLoading} />
         <form className="complaints__import" onSubmit={handleSubmit}>
           <div className="complaints__import-meta">
             <div className="filter-row" role="group" aria-label="Agregador de esta lista">
@@ -1165,6 +1178,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             </div>
           </div>
         </form>
+        </>
       )}
 
       {error && (

@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'public/tesseract']),
+  globalIgnores(['dist', 'public/tesseract', 'src/vendor']),
   {
     files: ['vite.config.js', '**/*.test.js'],
     languageOptions: {
@@ -13,7 +13,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/sw.js'],
+    files: ['src/sw.js', 'src/lib/peyaWorkbookWorker.js'],
     languageOptions: {
       globals: {
         ...globals.serviceworker,

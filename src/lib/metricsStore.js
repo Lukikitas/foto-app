@@ -33,7 +33,7 @@ function writeCache(store) {
   }
 }
 
-export async function loadMetricsStore() {
+export async function loadMetricsStore({ strict = false } = {}) {
   const { data, error } = await supabase.storage.from(BUCKET).download(FILE_PATH);
 
   if (error) {
@@ -42,6 +42,7 @@ export async function loadMetricsStore() {
       writeCache(empty);
       return empty;
     }
+    if (strict) throw new Error(error.message || 'No se pudieron leer las métricas actuales.');
     const cached = readCache();
     if (cached) return cached;
     throw new Error(error.message || 'No se pudieron leer las métricas.');
@@ -52,6 +53,7 @@ export async function loadMetricsStore() {
     writeCache(parsed);
     return parsed;
   } catch {
+    if (strict) throw new Error('No se pudieron interpretar las métricas actuales.');
     const empty = emptyStore();
     writeCache(empty);
     return empty;

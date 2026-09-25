@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { subscribePeyaImport } from '../lib/peyaImportService';
+import PeyaExcelImport from './PeyaExcelImport';
+import { useEffect, useMemo, useState } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import {
   AWT_AGGREGATOR,
@@ -27,10 +29,13 @@ function fieldsFromStats(stats = emptyDayStats()) {
   };
 }
 
-export default function MetricsEntry({ store, saving, onSave }) {
+export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
   const today = argentinaToday();
   const [day, setDay] = useState(today);
   const [drafts, setDrafts] = useState({});
+  useEffect(() => subscribePeyaImport(result => {
+    if (result.metricsSaved) setDrafts({});
+  }), []);
 
   const fields = drafts[day] || Object.fromEntries(
     METRIC_AGGREGATORS.map((id) => [id, fieldsFromStats(store.days?.[day]?.[id])]),
@@ -88,6 +93,7 @@ export default function MetricsEntry({ store, saving, onSave }) {
 
   return (
     <div className="metrics-entry-wrap">
+      <PeyaExcelImport disabled={saving} onBusy={onImportBusy} />
       <MetricsListPaste store={store} saving={saving} onSave={onSave} />
       <form className="metrics-entry" onSubmit={handleSubmit}>
         <div className="metrics-entry__top">

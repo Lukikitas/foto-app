@@ -1,3 +1,4 @@
+import { subscribePeyaImport } from '../lib/peyaImportService';
 import { useEffect, useMemo, useState } from 'react';
 import {
   cachedComplaintHistory,
@@ -78,6 +79,9 @@ export default function MetricsPage() {
   const hasData = useMemo(() => Object.keys(store.days || {}).length > 0, [store]);
 
   useEffect(() => subscribeComplaintHistory(setHistory), []);
+  useEffect(() => subscribePeyaImport(result => {
+    if (result.metricsSaved) setStore(result.metrics);
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,7 +205,7 @@ export default function MetricsPage() {
             />
           )}
           {view === 'entry' ? (
-            <MetricsEntry store={store} saving={saving} onSave={persist} />
+            <MetricsEntry store={store} saving={saving} onSave={persist} onImportBusy={setSaving} />
           ) : view === 'complaints' ? (
             <MetricsComplaintsList
               history={history}
