@@ -44,3 +44,7 @@ El período se toma de C5 y F5. Se reemplaza solo la cantidad diaria de quejas d
 Las fechas se almacenan como día calendario sin crear una hora ni un timestamp ficticio; el historial muestra “sin hora”. Los códigos nuevos llevan el prefijo RAPPI o RAPPITURBO para evitar colisiones. Se reutilizan los registros anteriores de la misma cuenta y fecha, y se conservan refutaciones, evidencias y correcciones. El símbolo $ sin cifras equivale a cero según la definición del reporte; una celda completamente vacía se informa como monto faltante. No se usa la compensación pagada por Rappi de la columna L.
 
 Verificado con el archivo de referencia: 24 reclamos, 11 con monto cero y $208.085,42 de compensación del restaurante, del 01/09/2026 al 23/09/2026. El Excel original no se incluye en el repositorio.
+
+### Reintegros de PedidosYa
+
+Desde Reclamos o Métricas → Carga, «Importar refutados aceptados» admite .xls/.xlsx. Lee únicamente Reintegros: B (pedido), D (DS) y E (KFC - La Plata, nombre completo normalizado). SI/NO y otros locales se ignoran. La vista previa no escribe; confirmar cambia solo el estado de quejas existentes de PedidosYa a refutado_aceptado, preservando fechas, montos, fotos y correcciones. Los pedidos ausentes o con varias coincidencias se informan y no se crean ni modifican. Reimportar no duplica; ante un error puede reintentarse. No modifica métricas ni el lote de cruce con fotos.

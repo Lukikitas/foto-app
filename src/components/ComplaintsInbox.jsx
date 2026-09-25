@@ -1,4 +1,5 @@
 import RappiExcelImport from './RappiExcelImport';
+import PeyaRefundsImport from './PeyaRefundsImport';
 import PeyaExcelImport from './PeyaExcelImport';
 import { subscribePeyaImport } from '../lib/peyaImportService';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1116,6 +1117,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         <>
         <PeyaExcelImport disabled={loading} onBusy={setLoading} />
       <RappiExcelImport disabled={loading} onBusy={setLoading} />
+      <PeyaRefundsImport disabled={loading} onBusy={setLoading} />
         <form className="complaints__import" onSubmit={handleSubmit}>
           <div className="complaints__import-meta">
             <div className="filter-row" role="group" aria-label="Agregador de esta lista">

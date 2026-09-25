@@ -1,4 +1,5 @@
 import RappiExcelImport from './RappiExcelImport';
+import PeyaRefundsImport from './PeyaRefundsImport';
 import { subscribePeyaImport } from '../lib/peyaImportService';
 import PeyaExcelImport from './PeyaExcelImport';
 import { useEffect, useMemo, useState } from 'react';
@@ -96,6 +97,7 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
     <div className="metrics-entry-wrap">
       <PeyaExcelImport disabled={saving} onBusy={onImportBusy} />
       <RappiExcelImport disabled={saving} onBusy={onImportBusy} />
+      <PeyaRefundsImport disabled={saving} onBusy={onImportBusy} />
       <MetricsListPaste store={store} saving={saving} onSave={onSave} />
       <form className="metrics-entry" onSubmit={handleSubmit}>
         <div className="metrics-entry__top">
