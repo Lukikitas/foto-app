@@ -164,6 +164,8 @@ function historyFromResult(result) {
 export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory } = {}) {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+  const [importMethod, setImportMethod] = useState('peya');
   const [sync, setSync] = useState(cachedComplaintSync);
   const [sheetUrl, setSheetUrl] = useState(() => cachedComplaintSync().sheetUrl || getSavedSheetUrl());
   const [complaints, setComplaints] = useState(storedBatch.complaints);
@@ -1085,7 +1087,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             role="tab"
             aria-selected={inboxView === 'cruzar'}
           >
-            Cruzar
+            Gestionar
           </button>
           <button
             type="button"
@@ -1098,6 +1100,9 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             {historyCount ? <span className="filter-row__count">{historyCount}</span> : null}
           </button>
         </div>
+        {inboxView === 'cruzar' && <button type="button" className="btn btn--primary btn--small complaints__load-toggle" aria-expanded={importOpen} aria-controls="complaints-load-panel" onClick={() => setImportOpen(!importOpen)}>
+          {importOpen ? 'Cerrar carga' : 'Cargar datos'} <span aria-hidden="true">{importOpen ? '▴' : '▾'}</span>
+        </button>}
         <div className="complaints__portals">
           {PORTAL_LINKS.map((portal) => (
             <a
@@ -1114,10 +1119,14 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       </header>
 
       {inboxView === 'cruzar' && (
-        <>
-        <PeyaExcelImport disabled={loading} onBusy={setLoading} />
-      <RappiExcelImport disabled={loading} onBusy={setLoading} />
-      <PeyaRefundsImport disabled={loading} onBusy={setLoading} />
+        <div id="complaints-load-panel" className="complaints__load-panel" hidden={!importOpen}>
+          <div className="complaints__load-methods" role="group" aria-label="Método de carga">
+            {[['peya', 'Excel PedidosYa'], ['rappi', 'Excel Rappi / Turbo'], ['refunds', 'Refutados aceptados'], ['manual', 'Texto, CSV o Sheets']].map(([id, label]) => <button key={id} type="button" className={`btn btn--small ${importMethod === id ? 'btn--primary' : 'btn--ghost'}`} aria-pressed={importMethod === id} disabled={loading} onClick={() => setImportMethod(id)}>{label}</button>)}
+          </div>
+          <div hidden={importMethod !== 'peya'}><PeyaExcelImport disabled={loading} onBusy={setLoading} /></div>
+          <div hidden={importMethod !== 'rappi'}><RappiExcelImport disabled={loading} onBusy={setLoading} /></div>
+          <div hidden={importMethod !== 'refunds'}><PeyaRefundsImport disabled={loading} onBusy={setLoading} /></div>
+          <div hidden={importMethod !== 'manual'}>
         <form className="complaints__import" onSubmit={handleSubmit}>
           <div className="complaints__import-meta">
             <div className="filter-row" role="group" aria-label="Agregador de esta lista">
@@ -1183,7 +1192,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             </div>
           </div>
         </form>
-        </>
+          </div>
+        </div>
       )}
 
       {error && (
@@ -1199,7 +1209,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
 
       {inboxView === 'cruzar' && !showCruzarList && !loading && (
         <div className="gallery__state gallery__state--empty complaints__empty">
-          <p>Pegá las celdas o leé el Sheet. Si la lista no trae el prefijo en el código, elegí el agregador arriba.</p>
+          <p>Usá «Cargar datos» para importar un Excel, pegar una lista o leer Google Sheets. Los reclamos cargados aparecerán acá para gestionarlos.</p>
         </div>
       )}
 

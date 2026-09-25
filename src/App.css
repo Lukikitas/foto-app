@@ -5994,3 +5994,19 @@ button.metrics-agg:focus-visible {
 
 
 
+
+/* Keep loading tools compact so the complaint list owns the workspace. */
+.complaints__load-panel { flex: 0 1 auto; min-height: 0; max-height: 55vh; overflow: auto; padding: .65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.complaints__load-panel[hidden], .complaints__load-panel [hidden] { display: none !important; }
+.complaints__load-methods { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+.complaints__load-panel .peya-import { margin: 0; padding: .6rem; background: var(--bg); }
+.complaints__load-panel .peya-import h3 { font-size: .95rem; margin-bottom: .25rem; }
+.complaints__load-panel .peya-import p { font-size: .85rem; margin: .3rem 0; }
+.complaints__load-panel .peya-import__heading { gap: .6rem; }
+.complaints__load-toggle { margin-left: auto; }
+.complaints__load-toggle + .complaints__portals { margin-left: 0; }
+@media (max-width: 600px) {
+  .complaints__load-panel { max-height: 55dvh; padding: .5rem; }
+  .complaints__load-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .complaints__load-methods .btn { white-space: normal; }
+}
