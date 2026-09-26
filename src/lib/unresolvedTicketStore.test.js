@@ -4,6 +4,7 @@ import {
   deleteUnresolvedTicket,
   getUnresolvedTicket,
   hasUnresolvedTicket,
+  purgeExpiredUnresolvedTickets,
   saveUnresolvedTicket,
 } from './unresolvedTicketStore.js';
 
@@ -17,4 +18,12 @@ test('keeps an unresolved ticket until it is corrected or deleted', async () => 
   await deleteUnresolvedTicket('photo-test');
   assert.equal(await hasUnresolvedTicket('photo-test'), false);
   assert.equal(await getUnresolvedTicket('photo-test'), null);
+});
+
+test('tickets are unavailable after the 72 hour retention window', async () => {
+  const ticket = new File(['ticket image'], 'ticket.jpg', { type: 'image/jpeg' });
+  await saveUnresolvedTicket('photo-expired', ticket);
+  await purgeExpiredUnresolvedTickets(Date.now() + 72 * 60 * 60 * 1000 + 1);
+  assert.equal(await hasUnresolvedTicket('photo-expired'), false);
+  assert.equal(await getUnresolvedTicket('photo-expired'), null);
 });

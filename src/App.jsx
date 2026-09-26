@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { startDailyImportScheduler } from './lib/complaintDailyImport';
 import { restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
-import { getTheme, toggleTheme } from './lib/theme';
+import { getTheme, saveTheme } from './lib/theme';
 import { getNavCollapsed, saveNavCollapsed } from './lib/storage';
 import { isPhoneViewport } from './lib/viewport';
 import { APP_VERSION } from './lib/version';
+import { purgeExpiredUnresolvedTickets } from './lib/unresolvedTicketStore';
 import ComplaintsInbox from './components/ComplaintsInbox';
 import InstallPrompt from './components/InstallPrompt';
 import MetricsPage from './components/MetricsPage';
@@ -16,6 +17,8 @@ import PhotoUploader from './components/PhotoUploader';
 import UploadQueueStatus from './components/UploadQueueStatus';
 import './App.css';
 
+const SettingsPage = lazy(() => import('./components/SettingsPage'));
+
 const TABS = {
   capture: 'capture',
   orders: 'orders',
@@ -23,6 +26,7 @@ const TABS = {
   history: 'history',
   files: 'files',
   metrics: 'metrics',
+  settings: 'settings',
 };
 
 const NAV_ITEMS = [
@@ -32,12 +36,15 @@ const NAV_ITEMS = [
   { id: TABS.complaints, label: 'Reclamos', short: 'Reclamos', icon: 'complaints' },
   { id: TABS.history, label: 'Historial', short: 'Historial', icon: 'history' },
   { id: TABS.files, label: 'Archivos', short: 'Archivos', icon: 'files' },
+  { id: TABS.settings, label: 'Ajustes', short: 'Ajustes', icon: 'settings' },
 ];
 
 export default function App() {
   const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
+  const [sessionAuthor, setSessionAuthor] = useState('');
+  const [metricsRefreshKey, setMetricsRefreshKey] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(getNavCollapsed);
 
   useEffect(() => {
@@ -49,8 +56,21 @@ export default function App() {
 
   useEffect(() => startDailyImportScheduler(), []);
 
-  function handleThemeToggle() {
-    setTheme(toggleTheme(theme));
+  useEffect(() => {
+    let lastPurge = 0;
+    const purge = () => {
+      if (document.visibilityState === 'hidden' || Date.now() - lastPurge < 60 * 60 * 1000) return;
+      lastPurge = Date.now();
+      void purgeExpiredUnresolvedTickets().catch(console.warn);
+    };
+    purge();
+    document.addEventListener('visibilitychange', purge);
+    return () => document.removeEventListener('visibilitychange', purge);
+  }, []);
+
+  function handleThemeChange(nextTheme) {
+    saveTheme(nextTheme);
+    setTheme(nextTheme);
   }
 
   function handleNavCollapse() {
@@ -102,15 +122,6 @@ export default function App() {
         </div>
 
         <div className="app-nav__end">
-          <button
-            type="button"
-            className="app-nav__theme"
-            onClick={handleThemeToggle}
-            aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-          >
-            <span className="app-nav__theme-label">{theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}</span>
-          </button>
           <span className="app__version">v{APP_VERSION}</span>
         </div>
       </nav>
@@ -122,7 +133,7 @@ export default function App() {
         <main className={`app__main${tab === TABS.capture ? ' app__main--capture' : ''}`}>
           <UploadQueueStatus />
           {tab === TABS.capture && (
-            <PhotoUploader />
+            <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
           )}
           {tab === TABS.orders && (
             <PhotoGallery
@@ -144,8 +155,14 @@ export default function App() {
             />
           </div>
           <div hidden={tab !== TABS.metrics}>
-            <MetricsPage />
+            <MetricsPage key={metricsRefreshKey} />
           </div>
+          {tab === TABS.settings && (
+            <Suspense fallback={<p className="gallery__state">Cargando ajustes…</p>}>
+              <SettingsPage theme={theme} onThemeChange={handleThemeChange}
+                onTargetsSaved={() => setMetricsRefreshKey((value) => value + 1)} />
+            </Suspense>
+          )}
           {tab === TABS.files && (
             <PhotoGallery
               key="files-gallery"

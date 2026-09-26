@@ -34,6 +34,9 @@ export function aggregatorBadgeClass(aggregator) {
 }
 
 export function getPhotoAggregator(photo) {
+  if (photo && Object.hasOwn(photo, 'aggregator')) {
+    return AGGREGATORS[photo.aggregator] ? photo.aggregator : null;
+  }
   const parts = photo?.file_path?.split('/') || [];
   const aggregator = parts[0] === 'orders' && parts.length > 2 ? parts[1] : null;
   if (AGGREGATORS[aggregator]) return aggregator;

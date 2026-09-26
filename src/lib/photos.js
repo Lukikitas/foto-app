@@ -1,5 +1,5 @@
 import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
-import { AGGREGATORS, getPhotoAggregator } from './aggregators';
+import { AGGREGATORS, detectAggregator, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
 import { releaseCloudTicket } from './cloudOrderRecovery';
 import { downloadPhoto } from './photoDownload.js';
@@ -22,7 +22,7 @@ const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 export const UNIDENTIFIED_ORDER_NAME = 'Código no encontrado';
 
 export const PHOTO_COLUMNS =
-  'id,name,file_path,public_url,created_at,notes,has_complaint,is_refutado,taken_by';
+  'id,name,file_path,public_url,created_at,notes,has_complaint,is_refutado,taken_by,aggregator';
 
 export const PHOTO_GALLERY_KINDS = {
   orders: 'orders',
@@ -96,15 +96,13 @@ export async function fetchPhotosByIds(ids = []) {
   return photos;
 }
 
-export async function fetchUnidentifiedPhotosPage({ offset = 0, limit = 50, asOf } = {}) {
-  let query = supabase.from('photos')
-    .select(PHOTO_COLUMNS)
-    .eq('name', UNIDENTIFIED_ORDER_NAME)
-    .like('file_path', 'orders/%')
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-  if (asOf) query = query.lte('created_at', asOf);
-  const { data, error } = await query;
+export async function fetchUnidentifiedPhotosPage({ cursor = null, limit = 50, asOf } = {}) {
+  const { data, error } = await supabase.rpc('list_unidentified_photos_page', {
+    p_as_of: asOf || new Date().toISOString(),
+    p_cursor_created_at: cursor?.created_at || null,
+    p_cursor_id: cursor?.id || null,
+    p_limit: limit,
+  });
   if (error) throw error;
   return data || [];
 }
@@ -157,7 +155,7 @@ export async function fetchPhotos({
   }
 
   if (aggregator && AGGREGATORS[aggregator]) {
-    query = query.or(`file_path.like.orders/${aggregator}/%,file_path.like.orders/no_code/%`);
+    query = query.or(`aggregator.eq.${aggregator},file_path.like.orders/${aggregator}/%,file_path.like.orders/no_code/%`);
   }
 
   const trimmedTakenBy = takenBy?.trim();
@@ -349,6 +347,7 @@ async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '
       name,
       file_path: resolvedPath,
       public_url: urlData.publicUrl,
+      aggregator: AGGREGATORS[folder.split('/')[1]] ? folder.split('/')[1] : null,
       ...photoMeta,
     })
     .select()
@@ -376,7 +375,7 @@ export async function uploadPhoto(file, orderDigits, meta = {}, aggregator = 'si
   const storageAggregator = AGGREGATORS[aggregator] ? aggregator : 'sin_agregador';
   const photo = await insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`, filePath);
   if (photo?.name === UNIDENTIFIED_ORDER_NAME) {
-    return updatePhoto(photo.id, orderDigits, meta);
+    return updatePhoto(photo.id, orderDigits, meta, storageAggregator);
   }
   return photo;
 }
@@ -401,7 +400,7 @@ export async function uploadFile(file, title, meta = {}, filePath = '') {
   );
 }
 
-export async function updatePhoto(id, name, meta = {}) {
+export async function updatePhoto(id, name, meta = {}, chosenAggregator = null) {
   const nextName = normalizePhotoName(name, '');
   if (!nextName) {
     throw new Error('Ingresá un nombre.');
@@ -413,6 +412,11 @@ export async function updatePhoto(id, name, meta = {}) {
     .from('photos')
     .update({
       name: nextName,
+      ...(nextName === UNIDENTIFIED_ORDER_NAME
+        ? { aggregator: null }
+        : AGGREGATORS[chosenAggregator || detectAggregator(nextName)]
+          ? { aggregator: chosenAggregator || detectAggregator(nextName) }
+          : {}),
       ...photoMeta,
     })
     .eq('id', id)
@@ -493,6 +497,8 @@ export async function updatePhotoDetails(photo, { name, aggregator, file, ...met
       ...normalizePhotoMeta(meta),
       file_path: nextPath,
       public_url: nextUrl,
+      aggregator: nextName === UNIDENTIFIED_ORDER_NAME ? null
+        : AGGREGATORS[aggregator] ? aggregator : detectAggregator(nextName),
     })
     .eq('id', photo.id)
     .select()

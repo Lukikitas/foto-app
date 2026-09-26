@@ -111,9 +111,10 @@
 
 .app-nav__buttons {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(3rem, 1fr));
   gap: 0.1rem;
   width: 100%;
+  overflow-x: auto;
 }
 
 .app-nav__btn {
@@ -143,6 +144,114 @@
 .app-nav__btn--complaints { --nav-order: 4; }
 .app-nav__btn--history { --nav-order: 5; }
 .app-nav__btn--files { --nav-order: 6; }
+.app-nav__btn--settings { --nav-order: 7; }
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings__header h2,
+.settings__card h3 {
+  margin: 0 0 0.4rem;
+  color: var(--text-h);
+}
+
+.settings__header p,
+.settings__card p {
+  color: var(--text-muted);
+}
+
+.settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0.8rem;
+}
+
+.settings__card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.settings__card form,
+.settings__card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.settings__card form {
+  gap: 0.9rem;
+}
+
+.settings__card input:not([type='checkbox']),
+.settings__card select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+}
+
+.settings__card .settings__check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.settings__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.settings__results {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.settings__result {
+  display: grid;
+  grid-template-columns: minmax(6rem, 9rem) 1fr;
+  gap: 0.8rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.settings__result img {
+  width: 100%;
+  max-height: 12rem;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.settings__result small {
+  display: block;
+  margin: 0.25rem 0 0.6rem;
+  color: var(--text-muted);
+}
+
+.settings__result button {
+  margin: 0.6rem 0.4rem 0 0;
+}
+
+.uploader__hero-camera-btn:disabled,
+.uploader__quick-btn:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .settings__result { grid-template-columns: 1fr; }
+}
 
 .app-nav__btn--capture {
   color: #fff;

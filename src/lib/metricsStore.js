@@ -82,7 +82,7 @@ export async function fetchPhotoFlags(dateFrom, dateTo) {
     kind: PHOTO_GALLERY_KINDS.orders,
     dateFrom,
     dateTo,
-    columns: 'id,file_path,created_at,has_complaint,is_refutado',
+    columns: 'id,file_path,created_at,has_complaint,is_refutado,aggregator',
   });
   return groupPhotoFlags(photos);
 }

@@ -185,8 +185,6 @@ export default function MetricsPage() {
         <>
           {view !== 'entry' && (
             <MetricsPeriodBar
-              store={store}
-              saving={saving}
               preset={periodState.preset}
               customFrom={periodState.customFrom}
               customTo={periodState.customTo}
@@ -201,7 +199,6 @@ export default function MetricsPage() {
               onCustomTo={periodState.changeCustomTo}
               onAggregator={setAggregator}
               onClearDay={() => setFocusDay('')}
-              onSave={persist}
             />
           )}
           {view === 'entry' ? (

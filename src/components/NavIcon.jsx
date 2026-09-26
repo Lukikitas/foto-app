@@ -35,6 +35,13 @@ const ICONS = {
       <path d="M5 3.2h6.4L15.2 7v9.6H5V3.2z" />
     </svg>
   ),
+  settings: (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10" cy="10" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 2.5v2m0 11v2M2.5 10h2m11 0h2M4.7 4.7l1.4 1.4m7.8 7.8 1.4 1.4m0-10.6-1.4 1.4m-7.8 7.8-1.4 1.4"
+        fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
   collapse: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <path d="M12.4 4.4 6.8 10l5.6 5.6" fill="none" stroke="currentColor" strokeWidth="1.8" />

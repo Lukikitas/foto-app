@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { AGGREGATOR_OPTIONS, detectAggregator } from '../lib/aggregators';
 import {
   fetchPhotosByIds,
   fetchUnidentifiedPhotosPage,
   isUnidentifiedOrder,
   isValidOrderDigits,
-  updatePhoto,
 } from '../lib/photos';
 import { suggestUnresolvedOrderCode } from '../lib/unresolvedTicketReview';
+import { confirmRecoveredCode } from '../lib/recoverySettings';
 
 const STORE_KEY = 'foto-app-code-recovery-v1';
 const PAGE_SIZE = 20;
@@ -14,7 +15,9 @@ const PAGE_SIZE = 20;
 function readSavedJob() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
-    if (saved?.asOf && Number.isInteger(saved.offset) && Array.isArray(saved.results)) return saved;
+    if (saved?.asOf && Number.isInteger(saved.offset) && Array.isArray(saved.results)) {
+      return { ...saved, cursor: saved.cursor || null };
+    }
   } catch { /* Ignore an invalid local checkpoint. */ }
   return null;
 }
@@ -100,14 +103,14 @@ export default function CodeRecoveryPanel({ onUpdated }) {
     setRunning(true);
     setError('');
     let current = job?.done
-      ? { asOf: new Date().toISOString(), offset: 0, results: job.results, done: false }
+      ? { asOf: new Date().toISOString(), offset: 0, cursor: null, results: job.results, done: false }
       : job;
-    if (!current) current = { asOf: new Date().toISOString(), offset: 0, results: [], done: false };
+    if (!current) current = { asOf: new Date().toISOString(), offset: 0, cursor: null, results: [], done: false };
     save(current);
     try {
       while (!controller.signal.aborted) {
         const page = await fetchUnidentifiedPhotosPage({
-          offset: current.offset,
+          cursor: current.cursor,
           limit: PAGE_SIZE,
           asOf: current.asOf,
         });
@@ -119,7 +122,10 @@ export default function CodeRecoveryPanel({ onUpdated }) {
         for (const photo of page) {
           if (controller.signal.aborted) break;
           if (current.results.some((item) => item.photo.id === photo.id)) {
-            current = { ...current, offset: current.offset + 1 };
+            current = {
+              ...current, offset: current.offset + 1,
+              cursor: { created_at: photo.created_at, id: photo.id },
+            };
             save(current);
             continue;
           }
@@ -138,8 +144,10 @@ export default function CodeRecoveryPanel({ onUpdated }) {
           current = {
             ...current,
             offset: current.offset + 1,
+            cursor: { created_at: photo.created_at, id: photo.id },
             results: [...current.results, {
-              photo: { id: photo.id, public_url: photo.public_url }, code, preview, issue, selected: Boolean(code),
+              photo: { id: photo.id, public_url: photo.public_url }, code,
+              aggregator: detectAggregator(code) || '', preview, issue, selected: Boolean(code),
             }],
           };
           save(current);
@@ -171,7 +179,8 @@ export default function CodeRecoveryPanel({ onUpdated }) {
   }
 
   async function confirmSelected() {
-    const chosen = job.results.filter((item) => item.selected && isValidOrderDigits(item.code));
+    const chosen = job.results.filter((item) => item.selected &&
+      isValidOrderDigits(item.code) && (item.aggregator || detectAggregator(item.code)));
     if (!chosen.length) return;
     setSaving(true);
     setError('');
@@ -186,12 +195,8 @@ export default function CodeRecoveryPanel({ onUpdated }) {
           continue;
         }
         try {
-          const updated = await updatePhoto(photo.id, item.code, {
-            notes: photo.notes || '',
-            has_complaint: Boolean(photo.has_complaint),
-            taken_by: photo.taken_by || '',
-            is_refutado: Boolean(photo.is_refutado),
-          });
+          const updated = await confirmRecoveredCode(photo.id, photo.name, item.code,
+            item.aggregator || detectAggregator(item.code), { source: 'manual-review' });
           savedIds.add(photo.id);
           onUpdated(updated);
         } catch (failure) {
@@ -206,7 +211,8 @@ export default function CodeRecoveryPanel({ onUpdated }) {
     }
   }
 
-  const reviewable = job?.results.filter((item) => item.selected && isValidOrderDigits(item.code)).length || 0;
+  const reviewable = job?.results.filter((item) => item.selected &&
+    isValidOrderDigits(item.code) && (item.aggregator || detectAggregator(item.code))).length || 0;
 
   return (
     <section className="code-recovery" aria-label="Recuperar códigos pendientes">
@@ -231,7 +237,19 @@ export default function CodeRecoveryPanel({ onUpdated }) {
                 <RecoveryPreview url={item.photo.public_url} preview={item.preview} />
                 <label>
                   <span>{item.code ? 'Código propuesto: comprobalo en la foto' : 'Sin propuesta: podés completarlo manualmente'}</span>
-                  <input value={item.code} onChange={(event) => editResult(item.photo.id, { code: event.target.value })} placeholder="Código del pedido" />
+                  <input value={item.code} onChange={(event) => editResult(item.photo.id, {
+                    code: event.target.value.toUpperCase(),
+                    aggregator: detectAggregator(event.target.value) || item.aggregator || '',
+                  })} placeholder="Código del pedido" />
+                </label>
+                <label>
+                  <span>Agregador</span>
+                  <select value={item.aggregator || detectAggregator(item.code) || ''}
+                    onChange={(event) => editResult(item.photo.id, { aggregator: event.target.value })}>
+                    <option value="">Elegir agregador</option>
+                    {AGGREGATOR_OPTIONS.map((agg) =>
+                      <option key={agg.id} value={agg.id}>{agg.label}</option>)}
+                  </select>
                 </label>
                 <input type="checkbox" checked={item.selected} onChange={(event) => editResult(item.photo.id, { selected: event.target.checked })} aria-label="Seleccionar para confirmar" />
                 {item.issue && <small>{item.issue}</small>}

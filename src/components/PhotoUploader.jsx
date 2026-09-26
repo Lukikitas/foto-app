@@ -2,18 +2,18 @@ import { useRef, useState } from 'react';
 import OrderCamera from './OrderCamera';
 import PhotographerPicker from './PhotographerPicker';
 import { isValidOrderDigits } from '../lib/photos';
-import { getLastTakenBy, getTakenByHistory, saveLastTakenBy } from '../lib/storage';
+import { getTakenByHistory, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
 
-function getEmptyMeta() {
+function getEmptyMeta(author = '') {
   return {
     notes: '',
-    taken_by: getLastTakenBy(),
+    taken_by: author,
     is_refutado: false,
   };
 }
 
-export default function PhotoUploader() {
+export default function PhotoUploader({ author, onAuthorChange }) {
   const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
@@ -22,7 +22,7 @@ export default function PhotoUploader() {
   const [detectedOrder, setDetectedOrder] = useState(null);
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [orderCameraOpen, setOrderCameraOpen] = useState(false);
-  const [meta, setMeta] = useState(getEmptyMeta);
+  const [meta, setMeta] = useState(() => getEmptyMeta(author));
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [error, setError] = useState(null);
   const [queuedMessage, setQueuedMessage] = useState(null);
@@ -30,6 +30,7 @@ export default function PhotoUploader() {
 
   function updateMeta(key, value) {
     setMeta((prev) => ({ ...prev, [key]: value }));
+    if (key === 'taken_by') onAuthorChange(value);
     setError(null);
     setQueuedMessage(null);
   }
@@ -51,6 +52,11 @@ export default function PhotoUploader() {
   }
 
   function handleFileChange(e) {
+    if (!meta.taken_by.trim()) {
+      e.target.value = '';
+      setError('Poné quién está sacando la foto.');
+      return;
+    }
     const selected = e.target.files?.[0];
     setError(null);
     setQueuedMessage(null);
@@ -73,10 +79,6 @@ export default function PhotoUploader() {
 
   function closeOrderCamera() {
     setTakenByHistory(getTakenByHistory());
-    setMeta((prev) => ({
-      ...prev,
-      taken_by: getLastTakenBy() || prev.taken_by,
-    }));
     setOrderCameraOpen(false);
   }
 
@@ -124,7 +126,7 @@ export default function PhotoUploader() {
     setDetectedOrder(null);
     setShowManualOrder(false);
     setOrderCameraOpen(false);
-    setMeta(getEmptyMeta());
+    setMeta((prev) => getEmptyMeta(prev.taken_by));
     setTakenByHistory(getTakenByHistory());
     clearInputs();
   }
@@ -133,6 +135,11 @@ export default function PhotoUploader() {
     e.preventDefault();
     setError(null);
     setQueuedMessage(null);
+
+    if (!meta.taken_by.trim()) {
+      setError('Poné quién está sacando la foto.');
+      return;
+    }
 
     if (!file) {
       setError('Sacá o elegí una foto primero.');
@@ -179,7 +186,10 @@ export default function PhotoUploader() {
       {orderCameraOpen && (
         <OrderCamera
           takenBy={meta.taken_by}
-          onTakenByChange={(name) => updateMeta('taken_by', name)}
+          onTakenByChange={(name) => {
+            updateMeta('taken_by', name);
+            if (!name.trim()) setOrderCameraOpen(false);
+          }}
           onCapturePair={handleOrderCapture}
           onCancel={closeOrderCamera}
         />
@@ -192,6 +202,7 @@ export default function PhotoUploader() {
             value={meta.taken_by}
             history={takenByHistory}
             onChange={handlePhotographerChange}
+            autoComplete="off"
             autoFocus={!photographerReady && !orderCameraOpen}
           />
         </div>
@@ -215,6 +226,7 @@ export default function PhotoUploader() {
               type="button"
               className="uploader__hero-camera-btn"
               onClick={openOrderCamera}
+              disabled={!photographerReady}
               title={photographerReady ? 'Abrir cámara de pedidos' : 'Elegí tu nombre primero'}
             >
               <div className="uploader__hero-icon-ring">
@@ -238,6 +250,7 @@ export default function PhotoUploader() {
                   accept="image/*"
                   capture="environment"
                   onChange={handleFileChange}
+                  disabled={!photographerReady}
                   className="uploader__file-input"
                 />
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -254,6 +267,7 @@ export default function PhotoUploader() {
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
+                  disabled={!photographerReady}
                   className="uploader__file-input"
                 />
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -356,7 +370,7 @@ export default function PhotoUploader() {
               <button
                 type="submit"
                 className="btn btn--primary btn--large uploader__save"
-                disabled={saving || !isValidOrderDigits(orderDigits)}
+                disabled={saving || !photographerReady || !isValidOrderDigits(orderDigits)}
               >
                 {saving ? 'Guardando pedido...' : '✓ Guardar pedido y seguir'}
               </button>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import { groupHistoryFlags } from '../lib/complaintHistory';
 import {
@@ -12,8 +12,6 @@ import {
   formatPct,
   isOutOfTarget,
   previousPeriod,
-  setTargetAwtPct,
-  setTargetComplaintPct,
   summarizeRange,
 } from '../lib/metrics';
 function formatDelta(value, { pct = false, money = false } = {}) {
@@ -35,8 +33,6 @@ function SheetStat({ label, value, hint, tone }) {
 }
 
 export function MetricsPeriodBar({
-  store,
-  saving,
   preset,
   customFrom,
   customTo,
@@ -48,22 +44,7 @@ export function MetricsPeriodBar({
   onCustomTo,
   onAggregator,
   onClearDay,
-  onSave,
 }) {
-  const [complaintDraft, setComplaintDraft] = useState(null);
-  const [awtDraft, setAwtDraft] = useState(null);
-  const complaintValue = complaintDraft ?? String(store.targetComplaintPct);
-  const awtValue = awtDraft ?? String(store.targetAwtPct);
-
-  function handleSaveTargets(event) {
-    event.preventDefault();
-    let next = setTargetComplaintPct(store, complaintValue);
-    next = setTargetAwtPct(next, awtValue);
-    onSave(next, 'Objetivos actualizados.');
-    setComplaintDraft(null);
-    setAwtDraft(null);
-  }
-
   return (
     <div className="metrics-toolbar">
       <div className="filter-cluster">
@@ -116,41 +97,6 @@ export function MetricsPeriodBar({
           ))}
         </div>
       </div>
-      <form className="metrics-target" onSubmit={handleSaveTargets}>
-        <label>
-          Objetivo quejas
-          <span>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
-              value={complaintValue}
-              onChange={(e) => setComplaintDraft(e.target.value)}
-              inputMode="decimal"
-            />
-            <span>%</span>
-          </span>
-        </label>
-        <label>
-          Objetivo AWT
-          <span>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
-              value={awtValue}
-              onChange={(e) => setAwtDraft(e.target.value)}
-              inputMode="decimal"
-            />
-            <span>%</span>
-          </span>
-        </label>
-        <button type="submit" className="btn btn--ghost btn--small" disabled={saving}>
-          Guardar
-        </button>
-      </form>
       <p className="metrics-period-label">
         {focusDay ? (
           <>

@@ -555,6 +555,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
             value={takenBy}
             history={takenByHistory}
             onChange={handlePhotographerChange}
+            autoComplete="off"
             compact
             autoFocus={!photographerReady}
           />

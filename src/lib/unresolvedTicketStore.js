@@ -1,5 +1,8 @@
 const DB_NAME = 'foto-app-unresolved-tickets';
 const STORE_NAME = 'tickets';
+const TICKET_TTL_MS = 72 * 60 * 60 * 1000;
+const isExpired = (record, now = Date.now()) =>
+  !Number.isFinite(record?.savedAt) || now - record.savedAt >= TICKET_TTL_MS;
 const memoryTickets = new Map();
 let dbPromise = null;
 
@@ -66,16 +69,25 @@ export async function saveUnresolvedTicket(photoId, ticketFile) {
 
 export async function hasUnresolvedTicket(photoId) {
   if (!photoId) return false;
-  if (typeof indexedDB === 'undefined') return memoryTickets.has(String(photoId));
+  if (typeof indexedDB === 'undefined') {
+    const record = memoryTickets.get(String(photoId));
+    if (record && isExpired(record)) {
+      memoryTickets.delete(String(photoId));
+      return false;
+    }
+    return Boolean(record);
+  }
   const db = await openDb();
   const tx = db.transaction(STORE_NAME, 'readonly');
   const done = completeTransaction(tx);
   const store = tx.objectStore(STORE_NAME);
-  const record = await requestResult(
-    typeof store.getKey === 'function' ? store.getKey(String(photoId)) : store.get(String(photoId)),
-  );
+  const record = await requestResult(store.get(String(photoId)));
   await done;
-  return record !== undefined;
+  if (record && isExpired(record)) {
+    await deleteUnresolvedTicket(photoId);
+    return false;
+  }
+  return Boolean(record);
 }
 
 export async function getUnresolvedTicket(photoId) {
@@ -91,6 +103,10 @@ export async function getUnresolvedTicket(photoId) {
     await done;
   }
   if (!record?.ticket) return null;
+  if (isExpired(record)) {
+    await deleteUnresolvedTicket(photoId);
+    return null;
+  }
   if (typeof File === 'function') {
     return new File([record.ticket], record.name, { type: record.type });
   }
@@ -107,5 +123,23 @@ export async function deleteUnresolvedTicket(photoId) {
   const tx = db.transaction(STORE_NAME, 'readwrite');
   const done = completeTransaction(tx);
   tx.objectStore(STORE_NAME).delete(String(photoId));
+  await done;
+}
+
+export async function purgeExpiredUnresolvedTickets(now = Date.now()) {
+  if (typeof indexedDB === 'undefined') {
+    for (const [id, record] of memoryTickets) {
+      if (isExpired(record, now)) memoryTickets.delete(id);
+    }
+    return;
+  }
+  const db = await openDb();
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  const done = completeTransaction(tx);
+  const store = tx.objectStore(STORE_NAME);
+  const records = await requestResult(store.getAll());
+  for (const record of records) {
+    if (isExpired(record, now)) store.delete(record.id);
+  }
   await done;
 }

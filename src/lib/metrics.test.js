@@ -131,6 +131,20 @@ test('resolution and money come from the complaints history, not typed metrics',
   assert.equal(row.lostAmount, 2000);
 });
 
+test('photo indicators use the saved aggregator after code recovery', () => {
+  const day = '2026-09-17';
+  const flags = groupPhotoFlags([{
+    file_path: 'orders/no_code/evidence.jpg',
+    name: '4696',
+    aggregator: 'rappi_turbo',
+    created_at: '2026-09-17T18:00:00.000-03:00',
+    has_complaint: true,
+    is_refutado: false,
+  }]);
+  assert.equal(flags[day].rappi_turbo.complaintPhotos, 1);
+  assert.equal(flags[day].pedidosya, undefined);
+});
+
 test('period totals include complaint money even without an aggregator prefix', () => {
   const store = upsertDayStats(emptyStore(), '2026-09-17', 'pedidosya', {
     orders: 50,

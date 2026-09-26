@@ -32,6 +32,18 @@ test('corrected no-code photos show their aggregator without moving the stored i
   assert.equal(getPhotoAggregator({ file_path: 'files/photo.jpg', name: 'MPD48024738630' }), null);
 });
 
+test('the saved aggregator classifies recovered numeric codes and later corrections', () => {
+  assert.equal(getPhotoAggregator({
+    file_path: 'orders/no_code/photo.jpg', name: '4696', aggregator: 'pedidosya',
+  }), 'pedidosya');
+  assert.equal(getPhotoAggregator({
+    file_path: 'orders/pedidosya/photo.jpg', name: 'RAPPI123456789', aggregator: 'rappi',
+  }), 'rappi');
+  assert.equal(getPhotoAggregator({
+    file_path: 'orders/no_code/photo.jpg', name: 'Código no encontrado', aggregator: null,
+  }), null);
+});
+
 test('a manually cleared aggregator does not get inferred again from the code', () => {
   assert.equal(getComplaintAggregator({ orderCode: 'PEYA-1234', aggregator: null }), null);
   assert.equal(getComplaintAggregator({ orderCode: 'PEYA-1234' }), 'pedidosya');

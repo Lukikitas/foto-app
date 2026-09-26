@@ -4,6 +4,7 @@ export default function PhotographerPicker({
   onChange,
   compact = false,
   autoFocus = false,
+  autoComplete = 'name',
 }) {
   const trimmedValue = value?.trim() || '';
 
@@ -43,7 +44,7 @@ export default function PhotographerPicker({
           }}
           placeholder="Tu nombre"
           maxLength={80}
-          autoComplete="name"
+          autoComplete={autoComplete}
           autoCapitalize="words"
           enterKeyHint="done"
           autoFocus={autoFocus}
