@@ -1869,6 +1869,13 @@
   box-shadow: none;
 }
 
+.complete-code__input--full {
+  width: 100%;
+  max-width: 22rem;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
 .complete-code__actions {
   display: flex;
   flex-wrap: wrap;

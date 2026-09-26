@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
@@ -6,8 +6,7 @@ import PhotoLightbox from './PhotoLightbox';
 import PhotoEditForm from './PhotoEditForm';
 import CompleteOrderCode from './CompleteOrderCode';
 import { syncGalleryComplaintToHistory } from '../lib/complaintHistoryStore';
-import { hasUnresolvedTicket } from '../lib/unresolvedTicketStore.js';
-import { retryUnresolvedTicket } from '../lib/unresolvedTicketReview.js';
+import { suggestUnresolvedOrderCode } from '../lib/unresolvedTicketReview.js';
 import {
   cleanupReplacedPhoto,
   deletePhoto,
@@ -56,23 +55,13 @@ export default function PhotoListRow({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [ticketAvailable, setTicketAvailable] = useState(false);
+  const [suggestedCode, setSuggestedCode] = useState(null);
   const timestamp = getPhotoTimestamp(photo);
   const title = getPhotoTitle(photo);
   const isOrder = isOrderPhoto(photo);
   const isImage = isImagePhoto(photo);
   const isUnidentified = isUnidentifiedOrder(photo);
   const extension = getFileExtension(photo).toUpperCase() || 'FILE';
-
-  useEffect(() => {
-    let active = true;
-    if (isUnidentified) {
-      hasUnresolvedTicket(photo.id)
-        .then((available) => { if (active) setTicketAvailable(available); })
-        .catch((lookupError) => console.error('No se pudo consultar el ticket local.', lookupError));
-    }
-    return () => { active = false; };
-  }, [isUnidentified, photo.id]);
 
   const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
 
@@ -173,13 +162,12 @@ export default function PhotoListRow({
     setLoading(true);
     setError(null);
     try {
-      const updated = await retryUnresolvedTicket(photo);
-      if (!updated) {
-        setError('Todavía no se pudo leer el código. Podés completar los últimos 4 dígitos.');
+      const code = await suggestUnresolvedOrderCode(photo);
+      if (!code) {
+        setError('No se pudo leer el código de estas fotos. Podés completarlo manualmente.');
         return;
       }
-      setTicketAvailable(false);
-      onUpdated?.(updated);
+      setSuggestedCode(code);
     } catch (err) {
       setError(err.message || 'No se pudo reintentar la lectura.');
     } finally {
@@ -187,8 +175,32 @@ export default function PhotoListRow({
     }
   }
 
+  async function saveSuggestedCode(event) {
+    event.preventDefault();
+    if (!isValidOrderDigits(suggestedCode)) {
+      setError('Ingresá un código de pedido válido.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await updatePhoto(photo.id, suggestedCode, {
+        notes: photo.notes || '',
+        has_complaint: Boolean(photo.has_complaint),
+        taken_by: photo.taken_by || '',
+        is_refutado: Boolean(photo.is_refutado),
+      });
+      setSuggestedCode(null);
+      onUpdated?.(updated);
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar el código.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const pressHandlers = longPress.bind(openItem);
-  const busy = editing || completing || confirmDelete;
+  const busy = editing || completing || confirmDelete || suggestedCode !== null;
 
   return (
     <>
@@ -260,14 +272,14 @@ export default function PhotoListRow({
             >
               Descargar
             </button>
-            {isUnidentified && ticketAvailable && (
+            {isUnidentified && (
               <button
                 type="button"
                 className="btn btn--small btn--ghost"
                 onClick={handleRetryTicket}
                 disabled={loading}
               >
-                {loading ? 'Leyendo ticket…' : 'Reintentar lectura'}
+                {loading ? 'Leyendo fotos…' : 'Buscar código en fotos'}
               </button>
             )}
             {isUnidentified && (
@@ -323,6 +335,33 @@ export default function PhotoListRow({
                 setError(null);
               }}
             />
+          </div>
+        )}
+
+        {suggestedCode !== null && (
+          <div className="photo-row__panel">
+            <form className="complete-code" onSubmit={saveSuggestedCode}>
+              <label className="complete-code__label">
+                Código sugerido · revisalo en la foto
+                <input
+                  type="text"
+                  className="complete-code__input complete-code__input--full"
+                  value={suggestedCode}
+                  onChange={(event) => setSuggestedCode(event.target.value.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 32))}
+                  disabled={loading}
+                  maxLength={32}
+                  autoFocus
+                />
+              </label>
+              <div className="complete-code__actions">
+                <button type="submit" className="btn btn--small btn--primary" disabled={loading || !isValidOrderDigits(suggestedCode)}>
+                  {loading ? 'Guardando…' : 'Confirmar código'}
+                </button>
+                <button type="button" className="btn btn--small btn--ghost" onClick={() => setSuggestedCode(null)} disabled={loading}>
+                  Descartar
+                </button>
+              </div>
+            </form>
           </div>
         )}
 

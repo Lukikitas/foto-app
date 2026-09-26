@@ -61,9 +61,17 @@ function mockDeps(overrides = {}) {
 
 test('processQueueItem reads the ticket and then uploads with a stable path', async () => {
   const item = sampleItem();
-  const deps = mockDeps();
+  let fallbackFile;
+  const deps = mockDeps({
+    detectOrderFromPhoto: async (ticket, options) => {
+      assert.equal(ticket, item.ticketFile);
+      fallbackFile = options.fallbackFiles[0];
+      return { displayCode: 'PEYA12345', aggregator: 'pedidosya' };
+    },
+  });
   const result = await processQueueItem(item, deps);
 
+  assert.equal(fallbackFile, item.file);
   assert.equal(item.status, 'done');
   assert.equal(item.orderDigits, 'PEYA12345');
   assert.equal(item.ticketFile, null);

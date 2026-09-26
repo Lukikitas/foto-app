@@ -51,6 +51,17 @@ export function buildRecognitionPasses({
   ].filter((pass) => pass.sources.length && pass.psms.length);
 }
 
+export function buildEvidencePasses({ enhancedFull, regionCrops = [], evidenceCrops = [], PSM }) {
+  return [...regionCrops.slice(0, 2), ...evidenceCrops, enhancedFull]
+    .filter(Boolean)
+    .map((source) => ({
+      sources: [source],
+      rotations: [90, 270],
+      psms: [PSM.SPARSE_TEXT],
+      variants: ['plain'],
+    }));
+}
+
 export function countRecognitionJobs(passes) {
   return passes.reduce((total, pass) => {
     let sourceCount = 0;

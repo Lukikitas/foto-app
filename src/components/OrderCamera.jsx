@@ -403,7 +403,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   const photographerReady = Boolean(takenBy?.trim());
   const stepLabel = isTicketStep ? '1 de 2 · Ticket' : '2 de 2 · Pedido';
   const guideText = isTicketStep
-    ? 'Acercá la parte de arriba del ticket, donde dice CODIGO:'
+    ? 'CÓDIGO: dentro del recuadro, enfocado y con buena luz'
     : 'Bolsa, contenido y ticket a la vista';
   const captureLabel = takingPhoto
     ? 'Tomando foto…'

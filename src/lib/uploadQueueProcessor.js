@@ -72,6 +72,7 @@ export async function processQueueItem(item, options = {}) {
       try {
         detectedOrder = await detectOrderFromPhoto(item.ticketFile, {
           signal,
+          fallbackFiles: item.file?.type?.startsWith('image/') ? [item.file] : [],
         });
       } catch (error) {
         if (isInterrupted(error, shouldYield, signal) || isDocumentHidden()) {

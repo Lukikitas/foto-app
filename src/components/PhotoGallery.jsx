@@ -262,6 +262,12 @@ export default function PhotoGallery({
     loadPhotos(next);
   }
 
+  function toggleUnidentified() {
+    const next = appliedFilters.codeNotFound ? baseFilters : { ...baseFilters, codeNotFound: true };
+    setFilters(next);
+    loadPhotos(next);
+  }
+
   function clearFilters() {
     setFilters(baseFilters);
     loadPhotos(baseFilters);
@@ -411,6 +417,16 @@ export default function PhotoGallery({
         </div>
 
         <div className="gallery__header-actions">
+          {kind === 'orders' && (
+            <button
+              type="button"
+              className={`btn btn--small ${appliedFilters.codeNotFound ? 'btn--primary' : 'btn--ghost'}`}
+              onClick={toggleUnidentified}
+              aria-pressed={appliedFilters.codeNotFound}
+            >
+              Sin código
+            </button>
+          )}
           <div className="tab-bar" role="group" aria-label="Modo de vista">
             <button
               type="button"

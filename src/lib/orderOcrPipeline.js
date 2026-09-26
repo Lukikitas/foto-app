@@ -4,6 +4,7 @@ import {
   isConfidentOrderMatch,
 } from './orderCode.js';
 import {
+  buildEvidencePasses,
   buildRecognitionPasses,
   OCR_MAX_SIDE,
   TICKET_TARGET_SIDE,
@@ -97,6 +98,8 @@ export function fastCodeCropPlan(width, height) {
     return [
       { rotation: 0, top: 0.28, height: 0.1, left: 0.22, width: 0.56, scale: 3 },
       { rotation: 0, top: 0.25, height: 0.15, left: 0.2, width: 0.6, scale: 3 },
+      { rotation: 90, top: 0.12, height: 0.38 },
+      { rotation: 270, top: 0.12, height: 0.38 },
       { rotation: 0, top: 0.2, height: 0.17 },
       { rotation: 0, top: 0.12, height: 0.3 },
       { rotation: 180, top: 0.2, height: 0.17 },
@@ -444,7 +447,7 @@ function rotatedCanvas(source, rotation) {
   return canvas;
 }
 
-function prepareTicketViews(bitmap) {
+function prepareTicketViews(bitmap, { evidence = false } = {}) {
   const original = canvasFromSource(bitmap, OCR_MAX_SIDE);
   const enhancedFull = cloneCanvas(original);
   enhanceInPlace(enhancedFull);
@@ -452,12 +455,15 @@ function prepareTicketViews(bitmap) {
   const regionCrops = findTicketRegions(enhancedFull).map((region) =>
     cropRegion(original, region, TICKET_TARGET_SIDE),
   );
-  const extraBands = [
+  const extraBands = evidence ? [] : [
     cropBand(original, { height: 0.4 }),
     cropBand(original, { top: 0.04, left: 0.04, width: 0.92, height: 0.32 }),
   ].filter(Boolean);
 
-  return { enhancedFull, regionCrops, extraBands };
+  const evidenceCrops = evidence
+    ? [cropBand(original, { left: 0.42, top: 0.15, width: 0.58, height: 0.7 })].filter(Boolean)
+    : [];
+  return { enhancedFull, regionCrops, extraBands, evidenceCrops };
 }
 
 function applyPassVariants(sources, variants) {
@@ -575,7 +581,18 @@ async function readBitmap(file) {
   }
 }
 
-async function readOrderFromFile(file, { thorough = true, signal, recognizeOcrData, deadline } = {}) {
+export function isCompleteEvidenceCode(inspection) {
+  if (!inspection?.labeled || !inspection.order) return false;
+  const length = inspection.order.displayCode.replace(/\D/g, '').length;
+  return {
+    pedidosya: [10],
+    rappi: [9, 10],
+    rappi_turbo: [9, 10],
+    mercadopago: [11],
+  }[inspection.order.aggregator]?.includes(length) || false;
+}
+
+async function readOrderFromFile(file, { thorough = true, evidence = false, requireStrong = false, signal, recognizeOcrData, deadline } = {}) {
   throwIfAborted(signal);
   let bitmap;
   try {
@@ -585,22 +602,28 @@ async function readOrderFromFile(file, { thorough = true, signal, recognizeOcrDa
   }
 
   try {
-    const fast = await readFastCode(bitmap, recognizeOcrData, signal, deadline);
-    if (fast) return fast;
-    if (Date.now() >= deadline) return null;
+    if (!evidence) {
+      const fast = await readFastCode(bitmap, recognizeOcrData, signal, deadline);
+      if (fast) return fast;
+      if (Date.now() >= deadline) return null;
+    }
 
     const texts = [];
-    const views = prepareTicketViews(bitmap);
-    const passes = buildRecognitionPasses({ ...views, PSM, thorough });
+    const views = prepareTicketViews(bitmap, { evidence });
+    const passes = evidence
+      ? buildEvidencePasses({ ...views, PSM })
+      : buildRecognitionPasses({ ...views, PSM, thorough });
 
     for (const pass of passes) {
       const completed = await collectGroup(pass, texts, signal, recognizeOcrData, deadline);
       const inspection = inspectOrderFromOcrTexts(texts);
-      if (isConfidentOrderMatch(inspection)) return inspection.order;
-      if (!completed) return null;
+      if (evidence ? isCompleteEvidenceCode(inspection) : isConfidentOrderMatch(inspection)) {
+        return inspection.order;
+      }
+      if (!completed) return evidence && !requireStrong ? chooseOrderFromOcrTexts(texts) : null;
     }
 
-    return chooseOrderFromOcrTexts(texts);
+    return requireStrong ? null : chooseOrderFromOcrTexts(texts);
   } finally {
     bitmap.close();
   }
@@ -612,22 +635,30 @@ export function createOrderDetector(recognizeOcrData) {
     if (!file) fail();
     throwIfAborted(options.signal);
 
+    const fallbackFiles = (options.fallbackFiles || []).filter((extra) => extra && extra !== file);
     const deadline = Date.now() + OCR_BUDGET_MS;
-    const found = await readOrderFromFile(file, {
-      thorough: true,
-      signal: options.signal,
-      recognizeOcrData,
-      deadline,
-    });
-    if (found) return found;
-
-    for (const extra of options.fallbackFiles || []) {
-      if (!extra || extra === file) continue;
-      const fallback = await readOrderFromFile(extra, {
-        thorough: false,
+    let found;
+    try {
+      found = await readOrderFromFile(file, {
+        thorough: true,
+        evidence: Boolean(options.evidence),
         signal: options.signal,
         recognizeOcrData,
         deadline,
+      });
+    } catch (error) {
+      if (isAbortError(error) || !fallbackFiles.length) throw error;
+    }
+    if (found) return found;
+
+    for (const extra of fallbackFiles) {
+      const fallback = await readOrderFromFile(extra, {
+        thorough: false,
+        evidence: true,
+        requireStrong: true,
+        signal: options.signal,
+        recognizeOcrData,
+        deadline: Date.now() + 10_000,
       });
       if (fallback) return fallback;
     }
