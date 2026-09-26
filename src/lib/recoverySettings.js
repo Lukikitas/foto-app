@@ -28,8 +28,8 @@ export async function loadRecoveryProgress() {
     ).in('status', ['proposed', 'confirmed', 'manual_override'])
       .order('analyzed_at', { ascending: false }).limit(100),
     supabase.rpc('current_order_ocr_usage'),
-    supabase.from('order_recovery_items').select('photo_id', { count: 'exact', head: true })
-      .in('status', ['pending', 'processing']),
+    supabase.from('photos').select('id', { count: 'exact', head: true })
+      .eq('name', 'Código no encontrado').like('file_path', 'orders/%'),
   ]);
   for (const result of [runs, items, usage, pending]) if (result.error) throw result.error;
   return {

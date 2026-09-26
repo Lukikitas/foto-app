@@ -206,7 +206,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           <>
             <p>Google Vision: {progress.usage.toLocaleString('es-AR')} / 6.000 imágenes este mes UTC.
               La tarea automática se detiene en 5.500.</p>
-            <p>{progress.pending} pedidos en cola ·
+            <p>{progress.pending} pedidos todavía sin código ·
               {' '}{progress.proposals.filter((item) => item.status === 'proposed').length} propuestas recientes pendientes.</p>
             {progress.runs.length ? progress.runs.map((run) => (
               <p key={run.day}>{run.day} · {RUN_STATUS[run.status] || run.status} · {run.analyzed} analizados ·
