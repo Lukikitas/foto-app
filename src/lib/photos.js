@@ -1,6 +1,7 @@
 import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { AGGREGATORS, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
+import { releaseCloudTicket } from './cloudOrderRecovery';
 import { downloadPhoto } from './photoDownload.js';
 import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
 import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
@@ -93,6 +94,19 @@ export async function fetchPhotosByIds(ids = []) {
     photos.push(...(data ?? []));
   }
   return photos;
+}
+
+export async function fetchUnidentifiedPhotosPage({ offset = 0, limit = 50, asOf } = {}) {
+  let query = supabase.from('photos')
+    .select(PHOTO_COLUMNS)
+    .eq('name', UNIDENTIFIED_ORDER_NAME)
+    .like('file_path', 'orders/%')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (asOf) query = query.lte('created_at', asOf);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 }
 
 export async function fetchPhotos({
@@ -412,6 +426,9 @@ export async function updatePhoto(id, name, meta = {}) {
     } catch (ticketError) {
       console.error('No se pudo eliminar el ticket local ya resuelto.', ticketError);
     }
+    void releaseCloudTicket(id).catch((ticketError) => {
+      console.warn('El ticket remoto se eliminará en la limpieza programada.', ticketError);
+    });
   }
   return data;
 }

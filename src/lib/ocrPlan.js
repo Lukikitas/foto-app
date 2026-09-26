@@ -52,14 +52,22 @@ export function buildRecognitionPasses({
 }
 
 export function buildEvidencePasses({ enhancedFull, regionCrops = [], evidenceCrops = [], PSM }) {
-  return [...regionCrops.slice(0, 2), ...evidenceCrops, enhancedFull]
-    .filter(Boolean)
-    .map((source) => ({
+  const primary = [evidenceCrops[0], regionCrops[0], enhancedFull, ...evidenceCrops.slice(1), ...regionCrops.slice(1)]
+    .filter(Boolean);
+  return [
+    ...primary.map((source) => ({
       sources: [source],
       rotations: [90, 270],
-      psms: [PSM.SPARSE_TEXT],
+      psms: [PSM.AUTO],
       variants: ['plain'],
-    }));
+    })),
+    ...primary.map((source) => ({
+      sources: [source],
+      rotations: [0, 180],
+      psms: [PSM.SPARSE_TEXT],
+      variants: ['plain', 'adaptive'],
+    })),
+  ];
 }
 
 export function countRecognitionJobs(passes) {

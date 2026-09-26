@@ -43,7 +43,7 @@ test('first thorough pass is a short SINGLE_BLOCK read of the best views', () =>
   assert.ok(countRecognitionJobs(passes) >= 10);
 });
 
-test('fallback evidence photos use a lighter plan', () => {
+test('fallback evidence checks the likely paper edge first, then all four rotations', () => {
   const passes = buildEvidencePasses({
     enhancedFull: fakeCanvas('full'),
     regionCrops: [fakeCanvas('region')],
@@ -52,9 +52,10 @@ test('fallback evidence photos use a lighter plan', () => {
   });
 
   assert.deepEqual(passes[0].rotations, [90, 270]);
-  assert.equal(passes[0].sources[0].id, 'region');
-  assert.equal(passes[1].sources[0].id, 'right');
-  assert.ok(countRecognitionJobs(passes) <= 8);
+  assert.equal(passes[0].sources[0].id, 'right');
+  assert.equal(passes[1].sources[0].id, 'region');
+  assert.ok(passes.some((pass) => pass.rotations.includes(0) && pass.rotations.includes(180)));
+  assert.ok(countRecognitionJobs(passes) <= 12);
 });
 
 test('evidence only auto-assigns labeled codes with complete platform length', () => {

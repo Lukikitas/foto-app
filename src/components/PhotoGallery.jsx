@@ -10,6 +10,7 @@ import {
   saveGalleryViewMode,
 } from '../lib/storage';
 import BulkActionBar from './BulkActionBar';
+import CodeRecoveryPanel from './CodeRecoveryPanel';
 import FileUploadCard from './FileUploadCard';
 import PhotoCard from './PhotoCard';
 import PhotoListRow from './PhotoListRow';
@@ -473,6 +474,10 @@ export default function PhotoGallery({
           }}
           onCancel={() => setShowUploader(false)}
         />
+      )}
+
+      {kind === 'orders' && appliedFilters.codeNotFound && (
+        <CodeRecoveryPanel onUpdated={handleUpdated} />
       )}
 
       {filtersOpen && (

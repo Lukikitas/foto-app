@@ -254,6 +254,47 @@ test('OCR engine errors still save the important evidence in the no-code categor
   assert.match(item.storagePath, /^orders\/no_code\//);
 });
 
+test('a reliable cloud fallback identifies an uploaded no-code order after local OCR fails', async () => {
+  const item = sampleItem();
+  const calls = [];
+  const result = await processQueueItem(item, mockDeps({
+    detectOrderFromPhoto: async () => null,
+    uploadUnidentifiedOrder: async () => ({ id: 'unread-photo', name: 'Código no encontrado' }),
+    keepTicketForRecovery: async (id, ticket) => {
+      calls.push(['keep', id, ticket.name]);
+      return true;
+    },
+    recoverOrderCodeInCloud: async (id) => {
+      calls.push(['cloud', id]);
+      return { displayCode: 'PEYA2298878868', aggregator: 'pedidosya', reliable: true };
+    },
+    releaseCloudTicket: async (id) => calls.push(['release', id]),
+  }));
+  assert.deepEqual(calls, [
+    ['keep', 'unread-photo', 'ticket.jpg'],
+    ['cloud', 'unread-photo'],
+    ['release', 'photo-1'],
+  ]);
+  assert.equal(result.photo.name, 'PEYA2298878868');
+  assert.equal(item.orderDigits, 'PEYA2298878868');
+  assert.equal(item.status, 'done');
+});
+
+test('an uncertain cloud code stays pending for human review', async () => {
+  const item = sampleItem();
+  let corrected = false;
+  const result = await processQueueItem(item, mockDeps({
+    detectOrderFromPhoto: async () => null,
+    uploadUnidentifiedOrder: async () => ({ id: 'unread-photo', name: 'Código no encontrado' }),
+    uploadPhoto: async () => { corrected = true; throw new Error('no automatic correction'); },
+    recoverOrderCodeInCloud: async () => ({ displayCode: 'PEYA2298878868', aggregator: 'pedidosya', reliable: false }),
+  }));
+  assert.equal(corrected, false);
+  assert.equal(result.photo.name, 'Código no encontrado');
+  assert.equal(item.orderDigits, '');
+  assert.equal(item.status, 'done');
+});
+
 test('the background worker retains an unread ticket after uploading its no-code evidence', async () => {
   const store = createMemoryQueueStore();
   useQueueStoreForTests(store);

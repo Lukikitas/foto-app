@@ -1,10 +1,15 @@
 import { detectOrderFromPhoto } from './orderOcr.js';
 import { getUnresolvedTicket } from './unresolvedTicketStore.js';
+import { isCompleteOrderCode } from './orderCode.js';
+import { recoverOrderCodeInCloud } from './cloudOrderRecovery.js';
+import { isAbortError } from './tesseractAssets.js';
 
 export async function suggestUnresolvedOrderCode(photo, {
   getTicket = getUnresolvedTicket,
   detect = detectOrderFromPhoto,
   fetchPhoto = fetch,
+  cloudRecover = recoverOrderCodeInCloud,
+  signal,
 } = {}) {
   let ticket = null;
   try {
@@ -14,19 +19,37 @@ export async function suggestUnresolvedOrderCode(photo, {
   }
   if (ticket) {
     try {
-      const detected = await detect(ticket);
+      const detected = await detect(ticket, { requireStrong: true, budgetMs: 15_000, signal });
       if (detected?.displayCode) return detected.displayCode;
     } catch (error) {
+      if (isAbortError(error)) throw error;
       console.warn('No se pudo releer el ticket local; se intenta con la foto del pedido.', error);
     }
   }
 
   if (!photo?.public_url) throw new Error('No se encontró la foto del pedido.');
-  const response = await fetchPhoto(photo.public_url);
-  if (!response.ok) throw new Error('No se pudo descargar la foto del pedido.');
-  const blob = await response.blob();
-  if (!blob.type.startsWith('image/')) throw new Error('La foto del pedido no es una imagen.');
-  const evidence = new File([blob], 'evidencia.jpg', { type: blob.type });
-  const detected = await detect(evidence, { evidence: true });
+  let detected = null;
+  let evidenceError = null;
+  try {
+    const response = await fetchPhoto(photo.public_url, { signal });
+    if (!response.ok) throw new Error('No se pudo descargar la foto del pedido.');
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('La foto del pedido no es una imagen.');
+    const evidence = new File([blob], 'evidencia.jpg', { type: blob.type });
+    detected = await detect(evidence, { evidence: true, budgetMs: 35_000, signal });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    evidenceError = error;
+  }
+  if (isCompleteOrderCode(detected)) return detected.displayCode;
+  try {
+    const cloud = await cloudRecover(photo.id);
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (cloud?.displayCode) return cloud.displayCode;
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    console.warn('No se pudo usar el OCR de respaldo.', error);
+  }
+  if (evidenceError) throw evidenceError;
   return detected?.displayCode || null;
 }

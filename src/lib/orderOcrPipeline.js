@@ -2,6 +2,7 @@ import {
   chooseOrderFromOcrTexts,
   inspectOrderFromOcrTexts,
   isConfidentOrderMatch,
+  isCompleteOrderCode,
 } from './orderCode.js';
 import {
   buildEvidencePasses,
@@ -90,6 +91,39 @@ function fastCodeCrop(source, top, height, left = 0.1, relativeWidth = 0.8, requ
   context.imageSmoothingQuality = 'high';
   context.drawImage(source, x, y, width, cropHeight, 0, 0, canvas.width, canvas.height);
   return canvas;
+}
+
+function brightPaperColumns(source, top, height) {
+  const context = source.getContext('2d', { willReadFrequently: true });
+  if (!context) return null;
+  const y = Math.floor(source.height * top);
+  const bandHeight = Math.min(source.height - y, Math.max(1, Math.floor(source.height * height)));
+  const { data } = context.getImageData(0, y, source.width, bandHeight);
+  let start = -1;
+  let best = { start: 0, length: 0 };
+  for (let x = 0; x <= source.width; x += 1) {
+    let bright = 0;
+    let samples = 0;
+    if (x < source.width) {
+      for (let row = 0; row < bandHeight; row += 4) {
+        const index = (row * source.width + x) * 4;
+        const luminance = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+        if (luminance > 160) bright += 1;
+        samples += 1;
+      }
+    }
+    const paper = x < source.width && bright / Math.max(1, samples) > 0.48;
+    if (paper && start < 0) start = x;
+    if (!paper && start >= 0) {
+      if (x - start > best.length) best = { start, length: x - start };
+      start = -1;
+    }
+  }
+  if (best.length < source.width * 0.2) return null;
+  const margin = Math.round(source.width * 0.025);
+  const left = Math.max(0, best.start - margin);
+  const right = Math.min(source.width, best.start + best.length + margin);
+  return { left: left / source.width, width: (right - left) / source.width };
 }
 
 export function fastCodeCropPlan(width, height) {
@@ -448,7 +482,7 @@ function rotatedCanvas(source, rotation) {
 }
 
 function prepareTicketViews(bitmap, { evidence = false } = {}) {
-  const original = canvasFromSource(bitmap, OCR_MAX_SIDE);
+  const original = canvasFromSource(bitmap, evidence ? 2600 : OCR_MAX_SIDE);
   const enhancedFull = cloneCanvas(original);
   enhanceInPlace(enhancedFull);
 
@@ -461,7 +495,11 @@ function prepareTicketViews(bitmap, { evidence = false } = {}) {
   ].filter(Boolean);
 
   const evidenceCrops = evidence
-    ? [cropBand(original, { left: 0.42, top: 0.15, width: 0.58, height: 0.7 })].filter(Boolean)
+    ? [
+      cropBand(original, { left: 0.5, top: 0.15, width: 0.5, height: 0.75 }),
+      cropBand(original, { left: 0.25, top: 0.15, width: 0.55, height: 0.75 }),
+      cropBand(original, { left: 0, top: 0.15, width: 0.55, height: 0.75 }),
+    ].filter(Boolean)
     : [];
   return { enhancedFull, regionCrops, extraBands, evidenceCrops };
 }
@@ -515,20 +553,7 @@ async function collectGroup({ sources, rotations, psms, variants }, texts, signa
 }
 
 function isInstantFastMatch(inspection) {
-  if (!inspection?.order) return false;
-  const { displayCode, aggregator } = inspection.order;
-  const digits = displayCode.replace(/\D/g, '');
-
-  // Labeled code with healthy digit count
-  if (inspection.labeled > 0 && digits.length >= 4) return true;
-
-  // Platform standard complete code length
-  if (aggregator === 'pedidosya' && digits.length === 10) return true;
-  if (aggregator === 'rappi' && (digits.length === 9 || digits.length >= 6)) return true;
-  if (aggregator === 'rappi_turbo' && digits.length >= 4) return true;
-  if (aggregator === 'mercadopago' && digits.length >= 6) return true;
-
-  return false;
+  return isCompleteOrderCode(inspection?.order) && inspection.labeled > 0;
 }
 
 async function readFastCode(bitmap, recognizeOcrData, signal, deadline) {
@@ -568,9 +593,44 @@ async function readFastCode(bitmap, recognizeOcrData, signal, deadline) {
     const key = inspection.order.displayCode.replace(/[^A-Z0-9]/g, '');
     const count = (votes.get(key)?.count || 0) + 1;
     votes.set(key, { order: inspection.order, count });
-    if (count >= 2) return inspection.order;
+    if (count >= 2 && isCompleteOrderCode(inspection.order)) return inspection.order;
   }
   return null;
+}
+
+async function readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline) {
+  const votes = new Map();
+  let weak = null;
+  for (const source of [views.evidenceCrops[0], views.regionCrops[0], views.enhancedFull].filter(Boolean)) {
+    for (const rotation of [90, 270]) {
+      const rotated = rotatedCanvas(source, rotation);
+      for (const top of [0, 0.82]) {
+        if (Date.now() >= deadline) return { strong: null, weak };
+        throwIfAborted(signal);
+        const columns = brightPaperColumns(rotated, top, 0.18);
+        if (!columns) continue;
+        const crop = fastCodeCrop(rotated, top, 0.18, columns.left, columns.width, 2.5);
+        const seenInCrop = new Set();
+        for (const variant of ['plain', 'adaptive']) {
+          if (Date.now() >= deadline) return { strong: null, weak };
+          if (variant === 'adaptive') adaptiveThresholdInPlace(crop);
+          const found = await recognizeTexts(crop, PSM.SPARSE_TEXT, recognizeOcrData);
+          const inspection = inspectOrderFromOcrTexts(found);
+          if (!inspection?.order) continue;
+          if (!weak || isCompleteOrderCode(inspection.order)) weak = inspection.order;
+          if (!isCompleteOrderCode(inspection.order)) continue;
+          if (inspection.labeled) return { strong: inspection.order, weak };
+          const key = inspection.order.displayCode.replace(/[^A-Z0-9]/g, '');
+          if (seenInCrop.has(key)) continue;
+          seenInCrop.add(key);
+          const count = (votes.get(key) || 0) + 1;
+          votes.set(key, count);
+          if (count >= 2) return { strong: inspection.order, weak };
+        }
+      }
+    }
+  }
+  return { strong: null, weak };
 }
 
 async function readBitmap(file) {
@@ -582,14 +642,7 @@ async function readBitmap(file) {
 }
 
 export function isCompleteEvidenceCode(inspection) {
-  if (!inspection?.labeled || !inspection.order) return false;
-  const length = inspection.order.displayCode.replace(/\D/g, '').length;
-  return {
-    pedidosya: [10],
-    rappi: [9, 10],
-    rappi_turbo: [9, 10],
-    mercadopago: [11],
-  }[inspection.order.aggregator]?.includes(length) || false;
+  return Boolean(inspection?.labeled && isCompleteOrderCode(inspection.order));
 }
 
 async function readOrderFromFile(file, { thorough = true, evidence = false, requireStrong = false, signal, recognizeOcrData, deadline } = {}) {
@@ -610,6 +663,10 @@ async function readOrderFromFile(file, { thorough = true, evidence = false, requ
 
     const texts = [];
     const views = prepareTicketViews(bitmap, { evidence });
+    const edge = evidence
+      ? await readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline)
+      : null;
+    if (edge?.strong) return edge.strong;
     const passes = evidence
       ? buildEvidencePasses({ ...views, PSM })
       : buildRecognitionPasses({ ...views, PSM, thorough });
@@ -617,13 +674,13 @@ async function readOrderFromFile(file, { thorough = true, evidence = false, requ
     for (const pass of passes) {
       const completed = await collectGroup(pass, texts, signal, recognizeOcrData, deadline);
       const inspection = inspectOrderFromOcrTexts(texts);
-      if (evidence ? isCompleteEvidenceCode(inspection) : isConfidentOrderMatch(inspection)) {
+      if (isCompleteEvidenceCode(inspection) || (!requireStrong && !evidence && isConfidentOrderMatch(inspection))) {
         return inspection.order;
       }
-      if (!completed) return evidence && !requireStrong ? chooseOrderFromOcrTexts(texts) : null;
+      if (!completed) return evidence && !requireStrong ? chooseOrderFromOcrTexts(texts) || edge?.weak : null;
     }
 
-    return requireStrong ? null : chooseOrderFromOcrTexts(texts);
+    return requireStrong ? null : chooseOrderFromOcrTexts(texts) || edge?.weak;
   } finally {
     bitmap.close();
   }
@@ -636,12 +693,13 @@ export function createOrderDetector(recognizeOcrData) {
     throwIfAborted(options.signal);
 
     const fallbackFiles = (options.fallbackFiles || []).filter((extra) => extra && extra !== file);
-    const deadline = Date.now() + OCR_BUDGET_MS;
+    const deadline = Date.now() + (options.budgetMs || OCR_BUDGET_MS);
     let found;
     try {
       found = await readOrderFromFile(file, {
         thorough: true,
         evidence: Boolean(options.evidence),
+        requireStrong: Boolean(options.requireStrong),
         signal: options.signal,
         recognizeOcrData,
         deadline,
@@ -658,7 +716,7 @@ export function createOrderDetector(recognizeOcrData) {
         requireStrong: true,
         signal: options.signal,
         recognizeOcrData,
-        deadline: Date.now() + 10_000,
+        deadline: Date.now() + (options.fallbackBudgetMs || 25_000),
       });
       if (fallback) return fallback;
     }

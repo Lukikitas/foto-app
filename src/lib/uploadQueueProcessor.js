@@ -26,6 +26,9 @@ export async function processQueueItem(item, options = {}) {
     onComplete,
     onOcrError = (error) => console.error('No se pudo completar el OCR; se guarda la evidencia sin código.', error),
     retainUnresolvedTicket = saveUnresolvedTicket,
+    keepTicketForRecovery,
+    recoverOrderCodeInCloud,
+    releaseCloudTicket,
     signal,
     allowOcr = true,
   } = options;
@@ -72,6 +75,7 @@ export async function processQueueItem(item, options = {}) {
       try {
         detectedOrder = await detectOrderFromPhoto(item.ticketFile, {
           signal,
+          requireStrong: true,
           fallbackFiles: item.file?.type?.startsWith('image/') ? [item.file] : [],
         });
       } catch (error) {
@@ -135,6 +139,29 @@ export async function processQueueItem(item, options = {}) {
     if (item.ticketFile && !item.orderDigits && item.kind === 'order') {
       if (!photo?.id) throw new Error('No se pudo conservar el ticket sin identificar.');
       await retainUnresolvedTicket(photo.id, item.ticketFile);
+    }
+    if (!item.orderDigits && item.kind === 'order' && photo?.id && recoverOrderCodeInCloud) {
+      try {
+        if (item.ticketFile && keepTicketForRecovery) {
+          await keepTicketForRecovery(photo.id, item.ticketFile);
+        }
+        const recovered = await recoverOrderCodeInCloud(photo.id);
+        if (recovered?.displayCode && recovered.reliable && recovered.aggregator) {
+          photo = await uploadPhoto(
+            preparedFile,
+            recovered.displayCode,
+            item.meta,
+            recovered.aggregator,
+            item.storagePath,
+          );
+          item.orderDigits = recovered.displayCode;
+          item.aggregator = recovered.aggregator;
+          item.label = `Pedido #${recovered.displayCode}`;
+          await releaseCloudTicket?.(photo.id);
+        }
+      } catch (cloudError) {
+        console.warn('No se pudo completar el OCR en la nube; la foto queda pendiente de revisión.', cloudError);
+      }
     }
     releaseTicket(item);
     item.status = 'done';

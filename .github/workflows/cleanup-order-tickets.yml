@@ -1,0 +1,33 @@
+name: Borrar tickets vencidos
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Borrar tickets con más de 72 horas
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          CLEANUP_SECRET: ${{ secrets.TICKET_CLEANUP_SECRET }}
+          CLOUD_OCR_ENABLED: ${{ vars.VITE_CLOUD_OCR_ENABLED }}
+        run: |
+          if [ "$CLOUD_OCR_ENABLED" != "true" ]; then
+            echo "Respaldo de OCR desactivado"
+            exit 0
+          fi
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$CLEANUP_SECRET" ]; then
+            echo "Faltan secretos para borrar los tickets vencidos" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            -X POST "$SUPABASE_URL/functions/v1/order-code-recovery" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "x-cleanup-secret: $CLEANUP_SECRET" \
+            -d '{"action":"cleanup"}'

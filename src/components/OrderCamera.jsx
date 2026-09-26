@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
 import { getCameraFlash, getTakenByHistory, saveCameraFlash, saveLastTakenBy } from '../lib/storage';
 import { subscribe } from '../lib/uploadQueue';
+import { inspectCaptureCanvas, isSameCapturedScene } from '../lib/imageQuality';
 import PhotographerPicker from './PhotographerPicker';
 
 const STEPS = {
@@ -85,7 +86,7 @@ function canvasToFile(canvas, name, type, quality) {
   });
 }
 
-async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = false, timeoutMs = 1200) {
+async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = false, ticket = false) {
   if (!video?.videoWidth || !video?.videoHeight) {
     throw new Error('La cámara todavía no está lista.');
   }
@@ -95,36 +96,50 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
   const fallback = document.createElement('canvas');
   drawFrame(video, fallback, 2560, softwareZoom ? zoom : 1);
 
+  const quality = inspectCaptureCanvas(fallback, { ticket });
+  let upgrade = Promise.resolve(null);
   if (!softwareZoom && typeof ImageCapture === 'function' && track?.readyState === 'live') {
-    try {
+    upgrade = (async () => {
+      try {
       const capture = new ImageCapture(track);
       const blob = await Promise.race([
         capture.takePhoto(),
         new Promise((_, reject) =>
-          window.setTimeout(() => reject(new Error('Timeout de foto')), timeoutMs)
+          window.setTimeout(() => reject(new Error('Timeout de foto')), 1200)
         ),
       ]);
       if (blob?.size && blob.type?.startsWith('image/')) {
         const extension = blob.type === 'image/png' ? 'png' : 'jpg';
-        return new File([blob], name.replace(/\.jpg$/, `.${extension}`), {
+        const still = new File([blob], name.replace(/\.jpg$/, `.${extension}`), {
           type: blob.type,
           lastModified: Date.now(),
         });
+        const bitmap = await createImageBitmap(still);
+        try {
+          if (!isSameCapturedScene(fallback, bitmap)) return null;
+          const stillQuality = inspectCaptureCanvas(bitmap, { ticket });
+          if (stillQuality.issue === 'blurry' && quality.issue !== 'blurry') return null;
+          if (stillQuality.sharpness < quality.sharpness * 0.8) return null;
+          return still;
+        } finally {
+          bitmap.close();
+        }
       }
-    } catch {
-      // Fallback cleanly to video frame on low-end devices or when takePhoto times out
-    }
+      } catch { /* The frozen frame remains available on unsupported devices. */ }
+      return null;
+    })();
   }
 
-  return canvasToFile(fallback, name, 'image/jpeg', 0.95);
+  const file = await canvasToFile(fallback, name, 'image/jpeg', 0.95);
+  return { file, quality, upgrade };
 }
 
 function makeTicketPhoto(video, track, name, zoom, softwareZoom) {
-  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, 1200);
+  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, true);
 }
 
 function makeEvidencePhoto(video, track, name, zoom, softwareZoom) {
-  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, 1200);
+  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, false);
 }
 
 function getLiveTrack(stream) {
@@ -152,6 +167,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const ticketFileRef = useRef(null);
+  const ticketUpgradeRef = useRef(null);
+  const pendingPairRef = useRef(null);
   const flashOnRef = useRef(getCameraFlash());
   const [status, setStatus] = useState('starting');
   const [step, setStep] = useState(STEPS.ticket);
@@ -166,6 +183,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   const [maxZoom, setMaxZoom] = useState(3);
   const [hardwareZoom, setHardwareZoom] = useState(false);
   const [zoomBusy, setZoomBusy] = useState(false);
+  const [qualityNotice, setQualityNotice] = useState(null);
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [whoOpen, setWhoOpen] = useState(() => !takenBy?.trim());
 
@@ -260,17 +278,21 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         setTrackTorch(track, false);
       }
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      flushPendingPair(false);
       ticketFileRef.current = null;
     };
   }, []);
 
   function resetToTicket() {
     ticketFileRef.current = null;
+    ticketUpgradeRef.current = null;
     setStep(STEPS.ticket);
     setTakingPhoto(false);
+    setQualityNotice(null);
   }
 
   function handleCancel() {
+    flushPendingPair();
     ticketFileRef.current = null;
     onCancel();
   }
@@ -336,8 +358,51 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     }
   }
 
+  async function resetZoom() {
+    if (zoom <= 1) return;
+    const track = getLiveTrack(streamRef.current);
+    setZoomBusy(true);
+    if (hardwareZoom && track?.readyState === 'live') {
+      try {
+        await track.applyConstraints({ advanced: [{ zoom: minZoom }] });
+      } catch { /* Keep the camera usable when a device rejects the reset. */ }
+    }
+    setZoom(hardwareZoom ? (track?.getSettings?.().zoom ?? minZoom) : 1);
+    setZoomBusy(false);
+  }
+
+  function commitPair({ ticketFile, ticketUpgrade, evidenceFile, evidenceUpgrade }) {
+    void Promise.all([ticketUpgrade || null, evidenceUpgrade || null])
+      .then(([betterTicket, betterEvidence]) => onCapturePair({
+        ticketFile: betterTicket || ticketFile,
+        evidenceFile: betterEvidence || evidenceFile,
+      }))
+      .then(() => setQueuedPairs((count) => count + 1))
+      .catch((captureError) => setError(captureError.message || 'No se pudo guardar el par. Revisá la cola.'));
+  }
+
+  function flushPendingPair(updateNotice = true) {
+    const pending = pendingPairRef.current;
+    if (!pending) return;
+    pendingPairRef.current = null;
+    window.clearTimeout(pending.timer);
+    pending.commit();
+    if (updateNotice) setQualityNotice(null);
+  }
+
+  function repeatLastEvidence() {
+    const pending = pendingPairRef.current;
+    if (!pending || step !== STEPS.ticket || takingPhoto) return;
+    window.clearTimeout(pending.timer);
+    pendingPairRef.current = null;
+    ticketFileRef.current = pending.pair.ticketFile;
+    ticketUpgradeRef.current = pending.pair.ticketUpgrade;
+    setStep(STEPS.evidence);
+    setQualityNotice(null);
+  }
+
   async function handleCapture() {
-    if (status !== 'ready' || takingPhoto) return;
+    if (status !== 'ready' || takingPhoto || zoomBusy) return;
 
     if (!takenBy?.trim()) {
       setWhoOpen(true);
@@ -346,6 +411,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     }
 
     setWhoOpen(false);
+    if (step === STEPS.ticket) flushPendingPair();
     setTakingPhoto(true);
     try {
       if (!videoRef.current?.videoWidth) {
@@ -357,21 +423,25 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       if (navigator.vibrate) navigator.vibrate(25);
 
       if (step === STEPS.ticket) {
-        ticketFileRef.current = await makeTicketPhoto(
+        const shot = await makeTicketPhoto(
           videoRef.current,
           getLiveTrack(streamRef.current),
           `ticket-${Date.now()}.jpg`,
           zoom,
           !hardwareZoom && zoom > 1,
         );
+        ticketFileRef.current = shot.file;
+        ticketUpgradeRef.current = shot.upgrade;
         if (navigator.vibrate) navigator.vibrate(35);
         setStep(STEPS.evidence);
+        setQualityNotice(shot.quality.issue ? { issue: shot.quality.issue, step: STEPS.ticket } : null);
+        void resetZoom();
         setError(null);
         setTakingPhoto(false);
         return;
       }
 
-      const evidenceFile = await makeEvidencePhoto(
+      const shot = await makeEvidencePhoto(
         videoRef.current,
         getLiveTrack(streamRef.current),
         `evidencia-${Date.now()}.jpg`,
@@ -379,17 +449,30 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         !hardwareZoom && zoom > 1,
       );
       const ticketFile = ticketFileRef.current;
+      const ticketUpgrade = ticketUpgradeRef.current;
       ticketFileRef.current = null;
+      ticketUpgradeRef.current = null;
       if (!ticketFile) {
         throw new Error('Falta la foto del ticket. Volvé a empezar el par.');
       }
 
-      await onCapturePair({ ticketFile, evidenceFile });
+      const pair = { ticketFile, ticketUpgrade, evidenceFile: shot.file, evidenceUpgrade: shot.upgrade };
+      if (shot.quality.issue) {
+        const pending = { pair, timer: null, commit: () => commitPair(pair) };
+        pending.timer = window.setTimeout(() => {
+          if (pendingPairRef.current === pending) flushPendingPair();
+        }, 5000);
+        pendingPairRef.current = pending;
+        setQualityNotice({ issue: shot.quality.issue, step: STEPS.evidence });
+      } else {
+        commitPair(pair);
+        setQualityNotice(null);
+      }
       if (navigator.vibrate) navigator.vibrate([35, 50, 45]);
-      setQueuedPairs((count) => count + 1);
       setError(null);
       setStep(STEPS.ticket);
       setTakingPhoto(false);
+      void resetZoom();
     } catch (captureError) {
       setError(captureError.message || 'No se pudo tomar la foto.');
       if (step === STEPS.evidence && !ticketFileRef.current) {
@@ -410,7 +493,12 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     : isTicketStep
       ? 'Sacar foto del ticket'
       : 'Sacar foto del pedido';
-  const canCapture = status === 'ready' && !takingPhoto && photographerReady;
+  const canCapture = status === 'ready' && !takingPhoto && !zoomBusy && photographerReady;
+  const qualityMessage = {
+    dark: 'La foto salió oscura.',
+    blurry: 'La foto podría estar movida.',
+    cropped: 'El ticket parece cortado.',
+  }[qualityNotice?.issue];
 
   return (
     <section className={`order-camera${whoOpen ? ' order-camera--who-open' : ''}`} aria-label="Cámara rápida de pedidos">
@@ -489,6 +577,17 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         </p>
       )}
       {error && <p className="message message--error">{error}</p>}
+      {qualityMessage && (
+        <div className="order-camera__quality" role="status">
+          <span>{qualityMessage}</span>
+          {qualityNotice.step === STEPS.evidence && pendingPairRef.current && step === STEPS.ticket && (
+            <button type="button" onClick={repeatLastEvidence}>Repetir última foto</button>
+          )}
+          {qualityNotice.step === STEPS.ticket && step === STEPS.evidence && (
+            <button type="button" onClick={resetToTicket}>Repetir última foto</button>
+          )}
+        </div>
+      )}
 
       <div className="order-camera__actions">
         <div className="order-camera__zoom" aria-label="Zoom de cámara">
@@ -529,7 +628,9 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
             <span>{flashOn ? 'On' : 'Off'}</span>
           </button>
         </div>
-        <p className="order-camera__shutter-label">{captureLabel}</p>
+        <p className="order-camera__shutter-label">
+          {takingPhoto ? 'Mantené el celular quieto hasta la confirmación' : captureLabel}
+        </p>
       </div>
     </section>
   );

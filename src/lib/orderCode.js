@@ -237,7 +237,9 @@ export function inspectOrderFromOcrTexts(texts) {
     const key = compactAlnum(order.displayCode);
     const entry = votes.get(key) || { order, count: 0, labeled: 0 };
     entry.count += 1;
-    if (hasCodigoLabel(text)) entry.labeled += 1;
+    const lines = String(text).split(/\r?\n/).map((line) => repairKnownPrefixes(normalizeLine(line)));
+    const labeledOrder = scanLabeledLines(lines);
+    if (labeledOrder && compactAlnum(labeledOrder.displayCode) === key) entry.labeled += 1;
     if (order.displayCode.length > entry.order.displayCode.length) {
       entry.order = order;
     }
@@ -262,6 +264,17 @@ export function chooseOrderFromOcrTexts(texts) {
 
 export function isConfidentOrderMatch(inspection) {
   return Boolean(inspection && (inspection.labeled > 0 || inspection.count >= 2));
+}
+
+export function isCompleteOrderCode(order) {
+  if (!order) return false;
+  const digits = String(order.displayCode || '').replace(/\D/g, '').length;
+  return {
+    pedidosya: [10],
+    rappi: [9, 10],
+    rappi_turbo: [9, 10],
+    mercadopago: [11],
+  }[order.aggregator]?.includes(digits) || false;
 }
 
 /** Extracts a reliable aggregator order code from OCR text. */
