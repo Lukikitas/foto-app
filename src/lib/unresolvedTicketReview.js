@@ -10,7 +10,9 @@ export async function suggestUnresolvedOrderCode(photo, {
   fetchPhoto = fetch,
   cloudRecover = recoverOrderCodeInCloud,
   signal,
+  withDetails = false,
 } = {}) {
+  const suggestion = (code, preview = null) => withDetails ? { code, preview } : code;
   let ticket = null;
   try {
     ticket = await getTicket(photo?.id);
@@ -20,7 +22,7 @@ export async function suggestUnresolvedOrderCode(photo, {
   if (ticket) {
     try {
       const detected = await detect(ticket, { requireStrong: true, budgetMs: 15_000, signal });
-      if (detected?.displayCode) return detected.displayCode;
+      if (detected?.displayCode) return suggestion(detected.displayCode);
     } catch (error) {
       if (isAbortError(error)) throw error;
       console.warn('No se pudo releer el ticket local; se intenta con la foto del pedido.', error);
@@ -41,15 +43,15 @@ export async function suggestUnresolvedOrderCode(photo, {
     if (isAbortError(error)) throw error;
     evidenceError = error;
   }
-  if (isCompleteOrderCode(detected)) return detected.displayCode;
+  if (isCompleteOrderCode(detected)) return suggestion(detected.displayCode, detected.preview);
   try {
     const cloud = await cloudRecover(photo.id);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (cloud?.displayCode) return cloud.displayCode;
+    if (cloud?.displayCode) return suggestion(cloud.displayCode);
   } catch (error) {
     if (isAbortError(error)) throw error;
     console.warn('No se pudo usar el OCR de respaldo.', error);
   }
   if (evidenceError) throw evidenceError;
-  return detected?.displayCode || null;
+  return detected?.displayCode ? suggestion(detected.displayCode, detected.preview) : null;
 }

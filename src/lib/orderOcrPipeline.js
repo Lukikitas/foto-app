@@ -601,9 +601,14 @@ async function readFastCode(bitmap, recognizeOcrData, signal, deadline) {
 async function readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline) {
   const votes = new Map();
   let weak = null;
-  for (const source of [views.evidenceCrops[0], views.regionCrops[0], views.enhancedFull].filter(Boolean)) {
+  const sources = [
+    { canvas: views.evidenceCrops[0], crop: { left: 0.5, top: 0.15, width: 0.5, height: 0.75 } },
+    { canvas: views.regionCrops[0], crop: null },
+    { canvas: views.enhancedFull, crop: null },
+  ].filter((source) => source.canvas);
+  for (const source of sources) {
     for (const rotation of [90, 270]) {
-      const rotated = rotatedCanvas(source, rotation);
+      const rotated = rotatedCanvas(source.canvas, rotation);
       for (const top of [0, 0.82]) {
         if (Date.now() >= deadline) return { strong: null, weak };
         throwIfAborted(signal);
@@ -619,13 +624,14 @@ async function readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline) 
           if (!inspection?.order) continue;
           if (!weak || isCompleteOrderCode(inspection.order)) weak = inspection.order;
           if (!isCompleteOrderCode(inspection.order)) continue;
-          if (inspection.labeled) return { strong: inspection.order, weak };
+          const order = { ...inspection.order, preview: { rotation, crop: source.crop } };
+          if (inspection.labeled) return { strong: order, weak };
           const key = inspection.order.displayCode.replace(/[^A-Z0-9]/g, '');
           if (seenInCrop.has(key)) continue;
           seenInCrop.add(key);
           const count = (votes.get(key) || 0) + 1;
           votes.set(key, count);
-          if (count >= 2) return { strong: inspection.order, weak };
+          if (count >= 2) return { strong: order, weak };
         }
       }
     }

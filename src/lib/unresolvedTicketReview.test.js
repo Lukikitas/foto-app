@@ -47,3 +47,15 @@ test('review falls back to evidence when the local ticket has no readable code',
   assert.deepEqual(sources, ['ticket', 'evidence']);
   assert.equal(code, 'PEYA2299229072');
 });
+
+test('review passes the detected rotated crop to the batch confirmation view', async () => {
+  const preview = { rotation: 90, crop: { left: 0.5, top: 0.15, width: 0.5, height: 0.75 } };
+  const result = await suggestUnresolvedOrderCode({ id: 'photo-4', public_url: 'https://example.test/evidence.jpg' }, {
+    withDetails: true,
+    getTicket: async () => null,
+    fetchPhoto: async () => ({ ok: true, blob: async () => new Blob(['image'], { type: 'image/jpeg' }) }),
+    detect: async () => ({ displayCode: 'PEYA2298878868', aggregator: 'pedidosya', preview }),
+    cloudRecover: async () => { throw new Error('A complete local code should not spend cloud quota'); },
+  });
+  assert.deepEqual(result, { code: 'PEYA2298878868', preview });
+});

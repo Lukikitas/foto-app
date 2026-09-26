@@ -841,7 +841,7 @@
 .code-recovery__result { padding: 0.45rem 0; border-top: 1px solid #ddd; }
 .code-recovery__preview { display: grid; gap: 0.2rem; }
 .code-recovery__preview a { display: grid; place-items: center; width: 8rem; height: 6rem; overflow: hidden; background: #181818; }
-.code-recovery__preview img { width: 100%; height: 100%; object-fit: contain; }
+.code-recovery__preview canvas { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
 .code-recovery__result label { flex: 1 1 12rem; display: grid; gap: 0.2rem; }
 .code-recovery__result input:not([type="checkbox"]) { width: 100%; padding: 0.4rem; }
 .code-recovery__result small { width: 100%; }

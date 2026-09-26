@@ -19,16 +19,62 @@ function readSavedJob() {
   return null;
 }
 
-function RecoveryPreview({ url }) {
-  const [rotation, setRotation] = useState(90);
+function RecoveryPreview({ url, preview }) {
+  const canvasRef = useRef(null);
+  const [image, setImage] = useState(null);
+  const [rotation, setRotation] = useState(preview?.rotation ?? 90);
+  const [showFull, setShowFull] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !url) return undefined;
+    let active = true;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      const loaded = new Image();
+      loaded.onload = () => { if (active) setImage(loaded); };
+      loaded.src = url;
+      observer.disconnect();
+    });
+    observer.observe(canvas);
+    return () => { active = false; observer.disconnect(); };
+  }, [url]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !image) return;
+    const region = !showFull && preview?.crop
+      ? preview.crop
+      : { left: 0, top: 0, width: 1, height: 1 };
+    const sx = Math.floor(image.naturalWidth * region.left);
+    const sy = Math.floor(image.naturalHeight * region.top);
+    const sw = Math.max(1, Math.floor(image.naturalWidth * region.width));
+    const sh = Math.max(1, Math.floor(image.naturalHeight * region.height));
+    const scale = Math.min(300 / sw, 300 / sh);
+    const width = Math.max(1, Math.round(sw * scale));
+    const height = Math.max(1, Math.round(sh * scale));
+    canvas.width = rotation % 180 ? height : width;
+    canvas.height = rotation % 180 ? width : height;
+    const context = canvas.getContext('2d');
+    if (rotation === 90) { context.translate(canvas.width, 0); context.rotate(Math.PI / 2); }
+    if (rotation === 180) { context.translate(canvas.width, canvas.height); context.rotate(Math.PI); }
+    if (rotation === 270) { context.translate(0, canvas.height); context.rotate(-Math.PI / 2); }
+    context.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
+  }, [image, preview, rotation, showFull]);
+
   return (
     <div className="code-recovery__preview">
       <a href={url} target="_blank" rel="noreferrer" aria-label="Abrir foto completa para comprobar el código">
-        <img src={url} alt="Foto del pedido girada para revisión" loading="lazy" style={{ transform: `rotate(${rotation}deg)` }} />
+        <canvas ref={canvasRef} role="img" aria-label="Recorte girado de la foto del pedido" />
       </a>
-      <button type="button" className="btn btn--small btn--ghost" onClick={() => setRotation((value) => (value + 90) % 360)}>
-        Girar ↻
-      </button>
+      <div>
+        <button type="button" className="btn btn--small btn--ghost" onClick={() => setRotation((value) => (value + 90) % 360)}>Girar ↻</button>
+        {preview?.crop && (
+          <button type="button" className="btn btn--small btn--ghost" onClick={() => setShowFull((value) => !value)}>
+            {showFull ? 'Ver recorte' : 'Ver completa'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -78,9 +124,12 @@ export default function CodeRecoveryPanel({ onUpdated }) {
             continue;
           }
           let code = '';
+          let preview = null;
           let issue = '';
           try {
-            code = await suggestUnresolvedOrderCode(photo, { signal: controller.signal }) || '';
+            const suggestion = await suggestUnresolvedOrderCode(photo, { signal: controller.signal, withDetails: true });
+            code = suggestion?.code || '';
+            preview = suggestion?.preview || null;
           } catch (failure) {
             if (controller.signal.aborted) break;
             issue = failure.message || 'No se pudo analizar.';
@@ -90,7 +139,7 @@ export default function CodeRecoveryPanel({ onUpdated }) {
             ...current,
             offset: current.offset + 1,
             results: [...current.results, {
-              photo: { id: photo.id, public_url: photo.public_url }, code, issue, selected: Boolean(code),
+              photo: { id: photo.id, public_url: photo.public_url }, code, preview, issue, selected: Boolean(code),
             }],
           };
           save(current);
@@ -179,7 +228,7 @@ export default function CodeRecoveryPanel({ onUpdated }) {
           <div className="code-recovery__results">
             {job.results.map((item) => (
               <div className="code-recovery__result" key={item.photo.id}>
-                <RecoveryPreview url={item.photo.public_url} />
+                <RecoveryPreview url={item.photo.public_url} preview={item.preview} />
                 <label>
                   <span>{item.code ? 'Código propuesto: comprobalo en la foto' : 'Sin propuesta: podés completarlo manualmente'}</span>
                   <input value={item.code} onChange={(event) => editResult(item.photo.id, { code: event.target.value })} placeholder="Código del pedido" />
