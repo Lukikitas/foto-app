@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { NATIVE_PACKAGE_NAME } from '../lib/nativeCameraSession';
 
 export default function NativeCameraInstallModal({ isOpen, onClose, onContinueWeb, onOpenIntent }) {
   const [manifest, setManifest] = useState({

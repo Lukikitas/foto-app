@@ -40,7 +40,12 @@ test('processNativeSessionReturn downloads pairs and enqueues them into existing
 
   const mockDownload = async (bucket, path, filename, mimeType) => {
     downloads.push({ bucket, path, filename, mimeType });
-    return new File(['dummy-bytes'], filename, { type: mimeType });
+    if (typeof File !== 'undefined') {
+      return new File(['dummy-bytes'], filename, { type: mimeType });
+    }
+    const blob = new Blob(['dummy-bytes'], { type: mimeType });
+    blob.name = filename;
+    return blob;
   };
 
   const mockEnqueue = async (item) => {
