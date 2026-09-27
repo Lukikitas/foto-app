@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, 'codex/android-native-camera']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -36,7 +36,7 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_CLOUD_OCR_ENABLED: ${{ vars.VITE_CLOUD_OCR_ENABLED }}
-          VITE_NATIVE_CAMERA_ENABLED: ${{ vars.VITE_NATIVE_CAMERA_ENABLED || 'true' }}
+          VITE_NATIVE_CAMERA_ENABLED: ${{ vars.VITE_NATIVE_CAMERA_ENABLED || 'false' }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

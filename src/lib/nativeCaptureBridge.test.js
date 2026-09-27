@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { processNativeSessionReturn } from './nativeCaptureBridge.js';
-import * as nativeCameraSession from './nativeCameraSession.js';
 
 let mockSessionPairs;
 let mockImportedPairs;
@@ -53,55 +52,47 @@ test('processNativeSessionReturn downloads pairs and enqueues them into existing
     return 'queue-id';
   };
 
-  // Mock nativeCameraSession methods
-  const originalFetch = nativeCameraSession.fetchNativeSessionPairs;
-  const originalMark = nativeCameraSession.markNativePairsAsImported;
+  const fetchPairsFn = async () => ({
+    ...mockSessionPairs,
+    pairs: mockSessionPairs.pairs.map((p) => ({
+      ...p,
+      state: mockImportedPairs.includes(p.id) ? 'imported' : p.state,
+    })),
+    state: mockImportedPairs.length === mockSessionPairs.pairs.length ? 'completed' : mockSessionPairs.state,
+  });
 
-  nativeCameraSession.fetchNativeSessionPairs = async () => {
-    return {
-      ...mockSessionPairs,
-      pairs: mockSessionPairs.pairs.map((p) => ({
-        ...p,
-        state: mockImportedPairs.includes(p.id) ? 'imported' : p.state,
-      })),
-      state: mockImportedPairs.length === mockSessionPairs.pairs.length ? 'completed' : mockSessionPairs.state,
-    };
-  };
-
-  nativeCameraSession.markNativePairsAsImported = async (sessionId, sessionToken, ids) => {
+  const markImportedFn = async (sessionId, sessionToken, ids) => {
     mockImportedPairs.push(...ids);
     return { markedCount: ids.length, remainingPending: 0 };
   };
 
-  try {
-    const result = await processNativeSessionReturn(
-      {
-        sessionId: mockSessionPairs.sessionId,
-        sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-        takenBy: 'Lucas',
-      },
-      {
-        downloadFn: mockDownload,
-        enqueueFn: mockEnqueue,
-      }
-    );
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: mockSessionPairs.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+    },
+    {
+      downloadFn: mockDownload,
+      enqueueFn: mockEnqueue,
+      fetchPairsFn,
+      markImportedFn,
+      clearSessionFn: () => {},
+    },
+  );
 
-    assert.equal(result.importedCount, 2);
-    assert.equal(result.remainingCount, 0);
-    assert.equal(result.sessionState, 'completed');
-    assert.equal(enqueuedItems.length, 2);
+  assert.equal(result.importedCount, 2);
+  assert.equal(result.remainingCount, 0);
+  assert.equal(result.sessionState, 'completed');
+  assert.equal(enqueuedItems.length, 2);
 
-    assert.equal(enqueuedItems[0].kind, 'order');
-    assert.equal(enqueuedItems[0].meta.taken_by, 'Lucas');
-    assert.equal(enqueuedItems[0].meta.notes, 'Combo 1');
-    assert.equal(enqueuedItems[0].meta.is_refutado, false);
+  assert.equal(enqueuedItems[0].kind, 'order');
+  assert.equal(enqueuedItems[0].meta.taken_by, 'Lucas');
+  assert.equal(enqueuedItems[0].meta.notes, 'Combo 1');
+  assert.equal(enqueuedItems[0].meta.is_refutado, false);
 
-    assert.equal(enqueuedItems[1].meta.is_refutado, true);
+  assert.equal(enqueuedItems[1].meta.is_refutado, true);
 
-    // Verify 4 total downloads (2 ticket + 2 evidence)
-    assert.equal(downloads.length, 4);
-  } finally {
-    nativeCameraSession.fetchNativeSessionPairs = originalFetch;
-    nativeCameraSession.markNativePairsAsImported = originalMark;
-  }
+  // Verify 4 total downloads (2 ticket + 2 evidence)
+  assert.equal(downloads.length, 4);
 });

@@ -24,8 +24,11 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   const onProgress = options.onProgress;
   const downloadFn = options.downloadFn || downloadStorageAsFile;
   const enqueueFn = options.enqueueFn || enqueue;
+  const fetchPairsFn = options.fetchPairsFn || fetchNativeSessionPairs;
+  const markImportedFn = options.markImportedFn || markNativePairsAsImported;
+  const clearSessionFn = options.clearSessionFn || clearStoredNativeSession;
 
-  const sessionData = await fetchNativeSessionPairs(sessionId, sessionToken);
+  const sessionData = await fetchPairsFn(sessionId, sessionToken);
   const pairs = sessionData.pairs || [];
   const pendingToImport = pairs.filter((p) => p.state === 'uploaded');
 
@@ -60,7 +63,7 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
         },
       });
 
-      await markNativePairsAsImported(sessionId, sessionToken, [pair.id]);
+      await markImportedFn(sessionId, sessionToken, [pair.id]);
       importedIds.push(pair.id);
 
       onProgress?.({
@@ -74,11 +77,11 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   }
 
   // Check if session has finished and all pairs are imported
-  const updatedStatus = await fetchNativeSessionPairs(sessionId, sessionToken);
+  const updatedStatus = await fetchPairsFn(sessionId, sessionToken);
   const remainingNotImported = (updatedStatus.pairs || []).filter((p) => p.state !== 'imported');
 
   if (updatedStatus.state === 'completed' || remainingNotImported.length === 0) {
-    clearStoredNativeSession();
+    clearSessionFn();
   }
 
   return {

@@ -75,6 +75,10 @@ fun CameraScreen(
     val cameraXManager = remember { CameraXManager(context) }
     var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
 
+    DisposableEffect(cameraXManager) {
+        onDispose { cameraXManager.shutdown() }
+    }
+
     val step by viewModel.captureStep.collectAsState()
     val takenBy by viewModel.takenBy.collectAsState()
     val pairsCount by viewModel.pairsCount.collectAsState()
@@ -98,7 +102,7 @@ fun CameraScreen(
 
     fun triggerFocus(offset: Offset) {
         val pv = previewViewRef ?: return
-        cameraXManager.focusOnPoint(offset.x, offset.y, pv)
+        cameraXManager.focusOnPoint(pv.meteringPointFactory, offset.x, offset.y)
         focusPoint = offset
         scope.launch {
             focusAlpha.snapTo(1f)
@@ -116,7 +120,11 @@ fun CameraScreen(
                     implementationMode = PreviewView.ImplementationMode.PERFORMANCE
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                     previewViewRef = this
-                    cameraXManager.startCamera(lifecycleOwner, this)
+                    cameraXManager.init {
+                        cameraXManager.startCamera(lifecycleOwner, this) { error ->
+                            viewModel.reportCameraError(error)
+                        }
+                    }
                 }
             },
             modifier = Modifier

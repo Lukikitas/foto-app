@@ -25,7 +25,7 @@ import {
   putQueueRecord,
   serializeQueueRecord,
   shouldRestoreQueueRecord,
-} from './uploadQueueStore';
+} from './uploadQueueStore.js';
 
 const queue = [];
 const listeners = new Set();

@@ -418,6 +418,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         _diagnosticsOpen.value = false
     }
 
+    fun reportCameraError(error: Throwable) {
+        _errorMessage.value = error.message ?: "No se pudo iniciar la cámara."
+    }
+
     fun clearError() {
         _errorMessage.value = null
     }
