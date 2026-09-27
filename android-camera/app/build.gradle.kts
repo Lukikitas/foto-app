@@ -6,6 +6,11 @@ plugins {
     alias(libs.plugins.kotlinx.serialization)
 }
 
+val releaseStorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
+val releaseStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD")
+
 android {
     namespace = "ar.com.starapp.fotoappcamera"
     compileSdk = 35
@@ -23,8 +28,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            releaseStorePath.orNull?.let { storeFile = file(it) }
+            storePassword = releaseStorePassword.orNull
+            keyAlias = releaseKeyAlias.orNull
+            keyPassword = releaseKeyPassword.orNull
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseStorePath.isPresent) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

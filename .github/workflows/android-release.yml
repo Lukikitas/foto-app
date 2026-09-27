@@ -1,0 +1,80 @@
+name: Publish Android Camera APK
+
+on:
+  push:
+    tags:
+      - 'android-camera-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish (for example android-camera-v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-camera-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-camera
+    env:
+      ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android-camera/release.keystore
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      EXPECTED_CERT_SHA256: FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12'
+
+      - name: Restore release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+
+      - name: Verify signing certificate
+        run: |
+          ACTUAL_CERT=$(keytool -J-Duser.language=en -list -v             -keystore "$ANDROID_KEYSTORE_PATH"             -storepass "$ANDROID_KEYSTORE_PASSWORD"             -alias "$ANDROID_KEY_ALIAS" | awk '/SHA256:/{print $2; exit}')
+          test "$ACTUAL_CERT" = "$EXPECTED_CERT_SHA256"
+
+      - name: Test, lint and build signed APK
+        run: gradle testDebugUnitTest lintRelease assembleRelease --no-daemon
+
+      - name: Prepare release assets
+        run: |
+          VERSION_NAME=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | cut -d'"' -f2)
+          APK_NAME="fotoapp-camera-v${VERSION_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "../${APK_NAME}"
+          cd ..
+          sha256sum "${APK_NAME}" > "${APK_NAME}.sha256"
+          echo "APK_NAME=${APK_NAME}" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG"             "$APK_NAME"             "$APK_NAME.sha256"             --verify-tag             --title "Foto-app Cámara ${RELEASE_TAG#android-camera-v}"             --notes "APK firmado de Foto-app Cámara. Incluye captura continua, gran angular físico cuando el dispositivo lo expone, zoom por gesto y sincronización segura con Foto-app."
