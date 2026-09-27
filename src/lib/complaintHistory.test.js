@@ -243,7 +243,7 @@ test('unmarking a pending gallery complaint removes it from history', () => {
   assert.equal(Object.keys(unmarked.items).length, 0);
 });
 
-test('unmarking does not delete a complaint that already has sheet details', () => {
+test('unmarking deletes a complaint even when it already has sheet details', () => {
   const seeded = upsertHistoryItems(emptyHistory(), [complaint()]).store;
   const photo = {
     id: 'photo-gal-3',
@@ -254,10 +254,7 @@ test('unmarking does not delete a complaint that already has sheet details', () 
   };
   const attached = syncGalleryComplaintInStore(seeded, photo);
   const unmarked = syncGalleryComplaintInStore(attached, { ...photo, has_complaint: false });
-  const item = Object.values(unmarked.items)[0];
-  assert.equal(item.reason, 'Faltó producto');
-  assert.equal(item.amount, 8990);
-  assert.equal(item.photoId, 'photo-gal-3');
+  assert.equal(Object.keys(unmarked.items).length, 0);
 });
 
 test('cruzar replaces pending gallery details with the sheet row', () => {
@@ -320,7 +317,7 @@ test('editing a history entry changes code, aggregator and photo without losing 
   assert.equal(historyItemToRow(item).complaint.aggregator, 'mercadopago');
 });
 
-test('editing an attached gallery photo refreshes its history without making a duplicate', () => {
+test('editing and unmarking an attached gallery photo removes its history', () => {
   const seeded = upsertHistoryItems(emptyHistory(), [complaint()]).store;
   const linked = attachPhotosToHistory(seeded, [{
     complaint: complaint(),
@@ -334,12 +331,7 @@ test('editing an attached gallery photo refreshes its history without making a d
     created_at: '2026-09-17T17:51:00.000-03:00',
     has_complaint: false,
   });
-  assert.equal(Object.keys(updated.items).length, 1);
-  const item = Object.values(updated.items)[0];
-  assert.equal(item.orderCode, 'RAPPI480195216');
-  assert.equal(item.aggregator, 'rappi');
-  assert.equal(item.photoUrl, 'https://example.com/new.jpg');
-  assert.equal(item.reason, 'Faltó producto');
+  assert.equal(Object.keys(updated.items).length, 0);
 });
 
 test('editing a history code refuses a collision on the same day', () => {

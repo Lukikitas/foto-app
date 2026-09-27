@@ -20,7 +20,15 @@ export default function PhotoEditForm({
   });
 
   function updateForm(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      if (key === 'has_complaint' && !value) {
+        return { ...prev, has_complaint: false, is_refutado: false };
+      }
+      if (key === 'is_refutado' && value) {
+        return { ...prev, has_complaint: true, is_refutado: true };
+      }
+      return { ...prev, [key]: value };
+    });
   }
 
   function handleNameChange(e) {

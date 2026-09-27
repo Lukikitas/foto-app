@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AGGREGATORS, getAggregatorLabel } from '../lib/aggregators';
-import { COMPLAINT_STATUS_LABELS, COMPLAINT_STATUSES } from '../lib/complaintHistory';
+import { COMPLAINT_STATUSES } from '../lib/complaintHistory';
 import { formatNumber } from '../lib/metrics';
 
 const COMMON_REASONS = [

@@ -38,22 +38,21 @@ import {
 import { argentinaToday, formatMoney, PERIOD_PRESETS, resolvePeriod } from '../lib/metrics';
 import {
   cachedComplaintHistory,
-  deleteHistoryItemById,
-  deleteHistoryItemsByIds,
   editHistoryItemById,
-  importComplaintsToHistory,
   loadComplaintHistory,
   patchHistoryItemsByIds,
   setHistoryPhoto,
-  setHistoryResolution,
-  setHistoryResolutions,
   subscribeComplaintHistory,
   syncGalleryComplaintToHistory,
 } from '../lib/complaintHistoryStore';
+import {
+  deleteHistoryRowsSynchronized,
+  importComplaintsSynchronized,
+  setComplaintStatusSynchronized,
+  setComplaintStatusesSynchronized,
+} from '../lib/complaintSynchronization.js';
 import { downloadRegistryXlsx } from '../lib/complaintReport';
 import {
-  applyComplaintToPhoto,
-  applyComplaintsToPhotos,
   buildComplaintExport,
   clearComplaintBatch,
   copyText,
@@ -90,6 +89,7 @@ import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
 import ComplaintBatchEditModal from './ComplaintBatchEditModal';
 import ComplaintsBulkBar from './ComplaintsBulkBar';
+import ComplaintCodeListImport from './ComplaintCodeListImport.jsx';
 
 const FILTERS = [
   { id: 'all', label: 'Todas' },
@@ -197,8 +197,11 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const masterCheckboxRef = useRef(null);
 
   useEffect(() => {
-    setSelectedIds(new Set());
-    setLastClickedIndex(null);
+    const timer = window.setTimeout(() => {
+      setSelectedIds(new Set());
+      setLastClickedIndex(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [inboxView, filter, historyPreset, historyAggregator, historySort]);
 
   const rematch = useCallback((nextComplaints, nextPicks, nextPhotos) => {
@@ -547,7 +550,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setFilter('all');
     const matched = await loadAndMatch(nextComplaints, {});
     saveComplaintBatch(nextComplaints, {});
-    const result = await importComplaintsToHistory(nextComplaints, matched);
+    const result = await importComplaintsSynchronized(nextComplaints, matched);
+    if (result.updatedPhotos?.length) applyUpdatedPhotos(result.updatedPhotos);
     setHistoryStore(historyFromResult(result));
     if (fromSheetUrl && sheetUrl.trim()) {
       setSync(await recordManualCruzar(sheetUrl));
@@ -629,6 +633,24 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     return nextPhotos;
   }
 
+  function handleCodeListImported({ complaints: nextComplaints, rows: matchedRows, result }) {
+    const updatedById = new Map((result.updatedPhotos || []).map((photo) => [photo.id, photo]));
+    const nextRows = matchedRows.map((row) => ({
+      ...row,
+      photo: updatedById.get(row.photo?.id) || row.photo,
+    }));
+    const nextPhotos = new Map(photos.map((photo) => [photo.id, photo]));
+    result.updatedPhotos?.forEach((photo) => nextPhotos.set(photo.id, photo));
+    setComplaints(nextComplaints);
+    setPhotos([...nextPhotos.values()]);
+    setRows(attachHistoryToRows(nextRows, historyFromResult(result)));
+    setHistoryStore(historyFromResult(result));
+    setPickedPhotoIds({});
+    setFilter('all');
+    saveComplaintBatch(nextComplaints, {});
+    setNotice(`${nextComplaints.length} reclamos cargados desde la lista de códigos.`);
+  }
+
   function pickPhoto(complaintId, photoId) {
     const nextPicks = { ...pickedPhotoIds, [complaintId]: photoId };
     setPickedPhotoIds(nextPicks);
@@ -640,21 +662,9 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setLoading(true);
     setError(null);
     try {
-      const disputed = status && status !== COMPLAINT_STATUSES.queja;
-      const jobs = [];
-      if (row.photo?.id && disputed) {
-        jobs.push(
-          applyComplaintToPhoto(row.photo, row.complaint, { refutado: true }).then((updated) => {
-            applyUpdatedPhotos([updated]);
-            return updated;
-          }),
-        );
-      } else {
-        jobs.push(Promise.resolve(row.photo));
-      }
-      jobs.push(setHistoryResolution(row.complaint, row.photo, { status }));
-      const [, history] = await Promise.all(jobs);
-      setHistoryStore(historyFromResult(history));
+      const result = await setComplaintStatusSynchronized(row, status);
+      if (result.updatedPhoto) applyUpdatedPhotos([result.updatedPhoto]);
+      setHistoryStore(historyFromResult(result.history));
       setNotice(`Pedido ${row.complaint.orderCode} marcado como ${statusLabel(status)}.`);
     } catch (err) {
       setError(err.message || 'No se pudo actualizar el reclamo.');
@@ -694,8 +704,9 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setLoading(true);
     setError(null);
     try {
-      const history = await deleteHistoryItemById(id);
-      setHistoryStore(historyFromResult(history));
+      const result = await deleteHistoryRowsSynchronized([row]);
+      if (result.updatedPhotos.length) applyUpdatedPhotos(result.updatedPhotos);
+      setHistoryStore(historyFromResult(result.store));
       setNotice(`Se borró ${row.complaint.orderCode}.`);
     } catch (err) {
       setError(err.message || 'No se pudo borrar la queja.');
@@ -878,14 +889,9 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setLoading(true);
     setError(null);
     try {
-      const disputed = status && status !== COMPLAINT_STATUSES.queja;
-      const photoRows = targetRows.filter((row) => row.photo?.id);
-      const updated = photoRows.length
-        ? await applyComplaintsToPhotos(photoRows, { refutado: Boolean(disputed) })
-        : [];
-      if (updated.length) applyUpdatedPhotos(updated);
-      const history = await setHistoryResolutions(targetRows, { status });
-      setHistoryStore(historyFromResult(history));
+      const result = await setComplaintStatusesSynchronized(targetRows, status);
+      if (result.updatedPhotos.length) applyUpdatedPhotos(result.updatedPhotos);
+      setHistoryStore(historyFromResult(result.history));
       setNotice(`${targetRows.length} pedidos marcados como ${statusLabel(status)}.`);
     } catch (err) {
       setError(err.message || 'No se pudieron actualizar los reclamos.');
@@ -936,24 +942,13 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
 
   async function handleBatchMarkStatus(status) {
     if (selectedIds.size === 0) return;
-    const targetIds = [...selectedIds];
     setLoading(true);
     setError(null);
     try {
-      const disputed = status && status !== COMPLAINT_STATUSES.queja;
-      const photoRows = selectedRows.filter((row) => row.photo?.id);
-      if (photoRows.length) {
-        const updatedPhotos = await applyComplaintsToPhotos(photoRows, { refutado: Boolean(disputed) });
-        if (updatedPhotos.length) applyUpdatedPhotos(updatedPhotos);
-      }
-      if (inboxView === 'historial') {
-        const updated = await patchHistoryItemsByIds(targetIds, { status });
-        setHistoryStore(historyFromResult(updated));
-      } else {
-        const history = await setHistoryResolutions(selectedRows, { status });
-        setHistoryStore(historyFromResult(history));
-      }
-      setNotice(`${targetIds.length} reclamos marcados como ${statusLabel(status)}.`);
+      const result = await setComplaintStatusesSynchronized(selectedRows, status);
+      if (result.updatedPhotos.length) applyUpdatedPhotos(result.updatedPhotos);
+      setHistoryStore(historyFromResult(result.history));
+      setNotice(`${selectedRows.length} reclamos marcados como ${statusLabel(status)}.`);
       setSelectedIds(new Set());
     } catch (err) {
       setError(err.message || 'No se pudieron actualizar los reclamos seleccionados.');
@@ -987,15 +982,16 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setError(null);
     try {
       if (changes.status) {
-        const disputed = changes.status !== COMPLAINT_STATUSES.queja;
-        const photoRows = selectedRows.filter((row) => row.photo?.id);
-        if (photoRows.length) {
-          const updatedPhotos = await applyComplaintsToPhotos(photoRows, { refutado: Boolean(disputed) });
-          if (updatedPhotos.length) applyUpdatedPhotos(updatedPhotos);
-        }
+        const synchronized = await setComplaintStatusesSynchronized(selectedRows, changes.status);
+        if (synchronized.updatedPhotos.length) applyUpdatedPhotos(synchronized.updatedPhotos);
+        setHistoryStore(historyFromResult(synchronized.history));
       }
-      const updated = await patchHistoryItemsByIds(targetIds, changes);
-      setHistoryStore(historyFromResult(updated));
+      const remaining = { ...changes };
+      delete remaining.status;
+      if (Object.keys(remaining).length) {
+        const updated = await patchHistoryItemsByIds(targetIds, remaining);
+        setHistoryStore(historyFromResult(updated));
+      }
       setNotice(`Se actualizaron datos en ${targetIds.length} reclamos del historial.`);
       setBatchModalOpen(false);
       setSelectedIds(new Set());
@@ -1012,12 +1008,12 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     if (!window.confirm(`¿Seguro que querés eliminar ${count} reclamos del historial? Las fotos no se borran.`)) {
       return;
     }
-    const targetIds = [...selectedIds];
     setLoading(true);
     setError(null);
     try {
-      const updated = await deleteHistoryItemsByIds(targetIds);
-      setHistoryStore(historyFromResult(updated));
+      const result = await deleteHistoryRowsSynchronized(selectedRows);
+      if (result.updatedPhotos.length) applyUpdatedPhotos(result.updatedPhotos);
+      setHistoryStore(historyFromResult(result.store));
       setNotice(`Se eliminaron ${count} reclamos del historial.`);
       setSelectedIds(new Set());
     } catch (err) {
@@ -1121,11 +1117,12 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       {inboxView === 'cruzar' && (
         <div id="complaints-load-panel" className="complaints__load-panel" hidden={!importOpen}>
           <div className="complaints__load-methods" role="group" aria-label="Método de carga">
-            {[['peya', 'Excel PedidosYa'], ['rappi', 'Excel Rappi / Turbo'], ['refunds', 'Refutados aceptados'], ['manual', 'Texto, CSV o Sheets']].map(([id, label]) => <button key={id} type="button" className={`btn btn--small ${importMethod === id ? 'btn--primary' : 'btn--ghost'}`} aria-pressed={importMethod === id} disabled={loading} onClick={() => setImportMethod(id)}>{label}</button>)}
+            {[['peya', 'Excel PedidosYa'], ['rappi', 'Excel Rappi / Turbo'], ['refunds', 'Refutados aceptados'], ['codes', 'Lista de códigos'], ['manual', 'Texto, CSV o Sheets']].map(([id, label]) => <button key={id} type="button" className={`btn btn--small ${importMethod === id ? 'btn--primary' : 'btn--ghost'}`} aria-pressed={importMethod === id} disabled={loading} onClick={() => setImportMethod(id)}>{label}</button>)}
           </div>
           <div hidden={importMethod !== 'peya'}><PeyaExcelImport disabled={loading} onBusy={setLoading} /></div>
           <div hidden={importMethod !== 'rappi'}><RappiExcelImport disabled={loading} onBusy={setLoading} /></div>
           <div hidden={importMethod !== 'refunds'}><PeyaRefundsImport disabled={loading} onBusy={setLoading} /></div>
+          <div hidden={importMethod !== 'codes'}><ComplaintCodeListImport disabled={loading} onBusy={setLoading} onImported={handleCodeListImported} /></div>
           <div hidden={importMethod !== 'manual'}>
         <form className="complaints__import" onSubmit={handleSubmit}>
           <div className="complaints__import-meta">

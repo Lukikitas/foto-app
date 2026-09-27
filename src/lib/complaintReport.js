@@ -150,7 +150,7 @@ export function buildReportCsv(report) {
 
 import { CELL_STYLES, colToLetter, downloadBlob, generateXlsxBlob } from './xlsxExport.js';
 
-export function buildRegistryWorkbook(items, title = 'Detalle de Reclamos') {
+export function buildRegistryWorkbook(items) {
   const extras = extraFieldKeys(items);
   const header = [
     { value: 'Código Pedido', style: CELL_STYLES.HEADER },

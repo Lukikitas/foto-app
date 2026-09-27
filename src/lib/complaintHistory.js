@@ -403,18 +403,17 @@ export function upsertGalleryComplaint(store, photo) {
   return next;
 }
 
-export function removePendingGalleryComplaint(store, photo) {
+export function removeGalleryComplaint(store, photo) {
   const next = parseHistory(store);
   const existing = findHistoryForPhoto(next, photo);
   if (!existing) return next;
-  if (!isPendingComplaintDetails(existing.reason)) return next;
-  if (existing.amount != null) return next;
-  if (String(existing.combo || '').trim()) return next;
-  if (String(existing.comment || '').trim()) return next;
   delete next.items[existing.id];
   next.updatedAt = nowIso();
   return next;
 }
+
+// Kept as a compatibility alias for callers outside the current bundle.
+export const removePendingGalleryComplaint = removeGalleryComplaint;
 
 export function syncGalleryComplaintInStore(store, photo) {
   if (!photo || !compactCode(photo.name) || photo.name === 'Código no encontrado') {
@@ -422,7 +421,7 @@ export function syncGalleryComplaintInStore(store, photo) {
   }
   const next = syncEditedPhotoInStore(store, photo);
   if (photo.has_complaint) return upsertGalleryComplaint(next, photo);
-  return removePendingGalleryComplaint(next, photo);
+  return removeGalleryComplaint(next, photo);
 }
 
 export function editHistoryItemInStore(store, id, { orderCode, aggregator, photo } = {}) {

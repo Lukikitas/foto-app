@@ -14,31 +14,35 @@ function fixture() {
   cell(s,'D10','KFC OTRO LOCAL');cell(s,'B10','123456789');
   return { Sheets:{'Reclamos - Órdenes':s} };
 }
-const report = (account='rappi') => parseRappiWorkbook(fixture(),account);
-test('Rappi account is mandatory and other aggregators are rejected',()=>{
-  for(const account of ['',undefined,'pedidosya']) assert.throws(()=>parseRappiWorkbook(fixture(),account),/Elegí/);
+const report = (account='rappi') => { const book=fixture(); if(account==='rappi_turbo') cell(book.Sheets['Reclamos - Órdenes'],'D9','Kfc Turbo - la Plata'); return parseRappiWorkbook(book); };
+test('Rappi account is detected from the normalized store name',()=>{
+  assert.equal(report().complaints[0].aggregator,'rappi');
+  assert.equal(report('rappi_turbo').complaints[0].aggregator,'rappi_turbo');
 });
 test('maps only relevant columns, filters store, keeps detail and comment separate',()=>{
   const r=report();const c=r.complaints[0];assert.equal(r.excluded,1);assert.equal(c.orderCode,'RAPPI478947179');assert.equal(c.day,'2026-09-02');assert.equal(c.orderAtIso,null);assert.equal(c.timeOfDay,null);assert.equal(c.amount,4800);assert.equal(c.reason,'Producto Faltante');assert.equal(c.comment,'Faltó una papa');assert.equal(c.fields['Detalle del motivo'],'Bolsa cerrada');assert.equal(c.combo,'');assert.deepEqual(r.daily.map(d=>d.complaints),[0,1,0]);
 });
 test('currency symbol and explicit zero are zero, international and Argentine formats work',()=>{
-  for(const [raw,amount] of [['$',0],['$0',0],['$24,032.81',24032.81],['$24.032,81',24032.81],['',null]]){const b=fixture();cell(b.Sheets['Reclamos - Órdenes'],'M9',raw);assert.equal(parseRappiWorkbook(b,'rappi').complaints[0].amount,amount);}
+  for(const [raw,amount] of [['$',0],['$0',0],['$24,032.81',24032.81],['$24.032,81',24032.81],['',null]]){const b=fixture();cell(b.Sheets['Reclamos - Órdenes'],'M9',raw);assert.equal(parseRappiWorkbook(b).complaints[0].amount,amount);}
 });
 test('ignored columns cannot override fields or block import',()=>{
-  const b=fixture();for(const col of ['C','G','H','I','K','L'])b.Sheets['Reclamos - Órdenes'][col+'9']={t:'e',v:42};assert.equal(parseRappiWorkbook(b,'rappi').complaints[0].amount,4800);
+  const b=fixture();for(const col of ['C','G','H','I','K','L'])b.Sheets['Reclamos - Órdenes'][col+'9']={t:'e',v:42};assert.equal(parseRappiWorkbook(b).complaints[0].amount,4800);
 });
 test('invalid dates, amounts, schema, missing local and wrong periods fail before writes',()=>{
-  for(const [address,v] of [['E9','31/02/2026'],['E9','04/09/2026'],['M9','dinero'],['D9','KFC - LA PLATA II'],['M8','Importe de Rappi'],['F5','01/08/2026']]){const b=fixture();cell(b.Sheets['Reclamos - Órdenes'],address,v);assert.throws(()=>parseRappiWorkbook(b,'rappi'));}
-  assert.throws(()=>parseRappiWorkbook({Sheets:{}},'rappi'),/Falta/);
+  for(const [address,v] of [['E9','31/02/2026'],['E9','04/09/2026'],['M9','dinero'],['D9','KFC - LA PLATA II'],['M8','Importe de Rappi'],['F5','01/08/2026']]){const b=fixture();cell(b.Sheets['Reclamos - Órdenes'],address,v);assert.throws(()=>parseRappiWorkbook(b));}
+  assert.throws(()=>parseRappiWorkbook({Sheets:{}}),/Falta/);
 });
 test('Excel serial dates preserve calendar day without inventing time',()=>{
-  const b=fixture();cell(b.Sheets['Reclamos - Órdenes'],'E9',46267);const c=parseRappiWorkbook(b,'rappi').complaints[0];assert.equal(c.day,'2026-09-02');assert.equal(c.orderAtIso,null);
+  const b=fixture();cell(b.Sheets['Reclamos - Órdenes'],'E9',46267);const c=parseRappiWorkbook(b).complaints[0];assert.equal(c.day,'2026-09-02');assert.equal(c.orderAtIso,null);
 });
 test('identical duplicates collapse; conflicting duplicates report rows',()=>{
-  const b=fixture();const s=b.Sheets['Reclamos - Órdenes'];for(const col of ['B','D','E','F','J','M','N'])s[col+'11']={...s[col+'9']};assert.equal(parseRappiWorkbook(b,'rappi').duplicates,1);cell(s,'N11','Otro comentario');assert.throws(()=>parseRappiWorkbook(b,'rappi'),/filas 9 y 11/);
+  const b=fixture();const s=b.Sheets['Reclamos - Órdenes'];for(const col of ['B','D','E','F','J','M','N'])s[col+'11']={...s[col+'9']};assert.equal(parseRappiWorkbook(b).duplicates,1);cell(s,'N11','Otro comentario');assert.throws(()=>parseRappiWorkbook(b),/filas 9 y 11/);
 });
 test('same order number is independent for Rappi and Turbo, including reimports',()=>{
   let s=mergeRappiHistory(emptyHistory(),report()).store;s=mergeRappiHistory(s,report('rappi_turbo')).store;assert.equal(Object.keys(s.items).length,2);assert.equal(mergeRappiHistory(s,report()).added,0);assert.equal(mergeRappiHistory(s,report('rappi_turbo')).added,0);assert.deepEqual(Object.values(s.items).map(i=>i.aggregator).sort(),['rappi','rappi_turbo']);
+});
+test('a mixed workbook groups complaints and daily metrics by detected account',()=>{
+  const b=fixture();const s=b.Sheets['Reclamos - Órdenes'];for(const col of ['B','E','F','J','M','N'])s[col+'11']={...s[col+'9']};cell(s,'D11','Kfc Turbo - la Plata');cell(s,'B11','478947180');const r=parseRappiWorkbook(b);assert.deepEqual(r.aggregators.sort(),['rappi','rappi_turbo']);assert.equal(r.complaints.length,2);assert.equal(r.daily.filter(d=>d.complaints===1).length,2);const metrics=mergeRappiMetrics(emptyStore(),r);assert.equal(metrics.days['2026-09-02'].rappi.complaints,1);assert.equal(metrics.days['2026-09-02'].rappi_turbo.complaints,1);
 });
 test('date-only records survive persistence, filters, edits, resolution IDs and reports',()=>{
   const s=mergeRappiHistory(emptyHistory(),report()).store;const item=Object.values(parseHistory(JSON.parse(JSON.stringify(s))).items)[0];assert.equal(complaintDay(item),'2026-09-02');assert.equal(complaintHistoryId(item),item.id);assert.equal(historyItemToRow(item,[]).complaint.day,item.day);assert.equal(listHistoryItems(s,{from:'2026-09-02',to:'2026-09-02'}).length,1);assert.equal(groupHistoryFlags(s,'2026-09-01','2026-09-03')['2026-09-02'].rappi.queja,1);

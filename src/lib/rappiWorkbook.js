@@ -5,8 +5,11 @@ import { compactCode } from './complaintMatch.js';
 import { enumerateDays, upsertDayStats } from './metrics.js';
 
 export const RAPPI_SHEET = 'Reclamos - Órdenes';
-export function assertRappiAccount(aggregator) {
-  if (!['rappi', 'rappi_turbo'].includes(aggregator)) throw new Error('Elegí Rappi o Rappi Turbo antes de seleccionar el Excel.');
+export function detectRappiStoreAccount(value) {
+  const normalized = normalizeStoreName(value);
+  if (normalized === 'KFC TURBO-LA PLATA') return 'rappi_turbo';
+  if (normalized === 'KFC-LA PLATA') return 'rappi';
+  return null;
 }
 function value(sheet, address) {
   const cell = sheet[address];
@@ -15,8 +18,7 @@ function value(sheet, address) {
 }
 const text = v => String(v ?? '').trim();
 const header = v => text(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ');
-export function parseRappiWorkbook(book, aggregator) {
-  assertRappiAccount(aggregator);
+export function parseRappiWorkbook(book) {
   const sheet = book.Sheets[RAPPI_SHEET];
   if (!sheet) throw new Error('Falta la hoja ' + RAPPI_SHEET + '.');
   const required = { B: 'ORDEN ID', D: 'TIENDA', E: 'FECHA', F: 'MOTIVO', J: 'DETALLE DEL MOTIVO', M: 'COMPENSACION AL CLIENTE PAGADA POR EL RESTAURANTE', N: 'COMENTARIOS' };
@@ -34,7 +36,8 @@ export function parseRappiWorkbook(book, aggregator) {
   const lastRow = Number(sheet['!ref']?.match(/(\d+)$/)?.[1] || 0);
   for (let row = 9; row <= lastRow; row++) {
     const local = text(value(sheet, 'D' + row));
-    if (normalizeStoreName(local) !== 'KFC-LA PLATA') {
+    const aggregator = detectRappiStoreAccount(local);
+    if (!aggregator) {
       if (local) excluded++;
       continue;
     }
@@ -65,28 +68,32 @@ export function parseRappiWorkbook(book, aggregator) {
     } catch (cause) { throw new Error(RAPPI_SHEET + ', fila ' + row + ': ' + cause.message, { cause }); }
   }
   if (!matchedLocal) throw new Error('No se encontraron reclamos de KFC - LA PLATA. No se modificó ningún dato.');
-  const daily = enumerateDays(from, to).map(day => ({ day, complaints: complaints.filter(c => c.day === day).length }));
-  return { aggregator, complaints, daily, from, to, excluded, duplicates, missingAmounts: complaints.filter(c => c.amount == null).length };
+  const aggregators = [...new Set(complaints.map(c => c.aggregator))];
+  const daily = aggregators.flatMap(aggregator => enumerateDays(from, to).map(day => ({
+    day,
+    aggregator,
+    complaints: complaints.filter(c => c.day === day && c.aggregator === aggregator).length,
+  })));
+  return { aggregators, complaints, daily, from, to, excluded, duplicates, missingAmounts: complaints.filter(c => c.amount == null).length };
 }
 export function mergeRappiMetrics(store, report) {
-  assertRappiAccount(report.aggregator);
-  return report.daily.reduce((next, row) => upsertDayStats(next, row.day, report.aggregator, {
-    ...next.days?.[row.day]?.[report.aggregator], complaints: row.complaints,
+  return report.daily.reduce((next, row) => upsertDayStats(next, row.day, row.aggregator, {
+    ...next.days?.[row.day]?.[row.aggregator], complaints: row.complaints,
   }), store);
 }
 const core = code => compactCode(code).replace(/^(RAPPITURBO|RAPPI)/, '');
 export function mergeRappiHistory(store, report, rows = []) {
-  assertRappiAccount(report.aggregator);
   const next = parseHistory(store);
   const imported = [];
   const stamp = new Date().toISOString();
   let added = 0;
   let updated = 0;
   for (const complaint of report.complaints) {
+    const aggregator = complaint.aggregator;
     const candidates = Object.values(next.items).filter(item => {
       const [sourceCode, sourceDay] = (item.sourceId || '').split('|');
-      if (item.manualEdit && sourceDay === complaint.day && core(sourceCode) === core(complaint.orderCode) && (item.aggregator === report.aggregator || sourceCode === compactCode(complaint.orderCode))) return true;
-      return item.aggregator === report.aggregator && core(item.orderCode) === core(complaint.orderCode) && complaintDay(item) === complaint.day;
+      if (item.manualEdit && sourceDay === complaint.day && core(sourceCode) === core(complaint.orderCode) && (item.aggregator === aggregator || sourceCode === compactCode(complaint.orderCode))) return true;
+      return item.aggregator === aggregator && core(item.orderCode) === core(complaint.orderCode) && complaintDay(item) === complaint.day;
     });
     if (candidates.length > 1) throw new Error('Más de un reclamo existente para ' + complaint.orderCode + '. Revisá el historial.');
     const existing = candidates[0];

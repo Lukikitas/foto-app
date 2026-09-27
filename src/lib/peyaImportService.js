@@ -8,6 +8,7 @@ import { matchComplaintsToPhotos } from './complaintMatch.js';
 import { getPhotoAggregator } from './aggregators.js';
 
 import { announceWorkbookImport as announce } from './workbookImportEvents.js';
+import { synchronizeRowsWithHistory } from './complaintSynchronization.js';
 export { subscribeWorkbookImport as subscribePeyaImport } from './workbookImportEvents.js';
 export async function importPeyaReport(report) {
   const release = beginWorkbookImport();
@@ -15,7 +16,10 @@ export async function importPeyaReport(report) {
     loadMetrics: () => loadMetricsStore({ strict: true }),
     validateHistory: async () => mergePeyaHistory(await loadComplaintHistory({ force: true, strict: true }), report),
     matchPhotos: async complaints => matchComplaintsToPhotos(complaints, (await fetchPhotosForComplaints(complaints)).filter(p => getPhotoAggregator(p) === 'pedidosya')),
-    saveHistory: (incoming, rows) => mutateComplaintHistory(store => mergePeyaHistory(store, incoming, rows)),
+    saveHistory: async (incoming, rows) => (await synchronizeRowsWithHistory(
+      rows,
+      () => mutateComplaintHistory(store => mergePeyaHistory(store, incoming, rows)),
+    )).history,
     saveMetrics: saveMetricsStore,
   };
   try {

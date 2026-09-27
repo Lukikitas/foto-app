@@ -5,7 +5,7 @@ import { loadComplaintHistory, mutateComplaintHistory } from './complaintHistory
 import { loadMetricsStore, saveMetricsStore } from './metricsStore.js';
 import { fetchPhotosForComplaints, saveComplaintBatch } from './complaints.js';
 import { matchComplaintsToPhotos } from './complaintMatch.js';
-import { getPhotoAggregator } from './aggregators.js';
+import { synchronizeRowsWithHistory } from './complaintSynchronization.js';
 import { announceWorkbookImport } from './workbookImportEvents.js';
 export async function importRappiReport(report) {
   const release = beginWorkbookImport();
@@ -13,8 +13,11 @@ export async function importRappiReport(report) {
     const result = await executePeyaImport(report, {
       loadMetrics: () => loadMetricsStore({ strict: true }),
       validateHistory: async () => mergeRappiHistory(await loadComplaintHistory({ force: true, strict: true }), report),
-      matchPhotos: async complaints => matchComplaintsToPhotos(complaints, (await fetchPhotosForComplaints(complaints)).filter(p => getPhotoAggregator(p) === report.aggregator)),
-      saveHistory: (incoming, rows) => mutateComplaintHistory(store => mergeRappiHistory(store, incoming, rows)),
+      matchPhotos: async complaints => matchComplaintsToPhotos(complaints, await fetchPhotosForComplaints(complaints)),
+      saveHistory: async (incoming, rows) => (await synchronizeRowsWithHistory(
+        rows,
+        () => mutateComplaintHistory(store => mergeRappiHistory(store, incoming, rows)),
+      )).history,
       saveMetrics: saveMetricsStore, mergeMetrics: mergeRappiMetrics,
     });
     saveComplaintBatch(result.history.complaints, {});

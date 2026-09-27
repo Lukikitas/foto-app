@@ -70,11 +70,14 @@ export function getPhotoKind(photo) {
 }
 
 export function normalizePhotoMeta(meta = {}) {
+  const hasComplaint = Boolean(meta.has_complaint);
   return {
     notes: meta.notes?.trim() || null,
-    has_complaint: Boolean(meta.has_complaint),
+    has_complaint: hasComplaint,
     taken_by: meta.taken_by?.trim() || null,
-    is_refutado: Boolean(meta.is_refutado),
+    // A refutation cannot exist without a complaint. Clearing the complaint
+    // is therefore the single authoritative way to clear both flags.
+    is_refutado: hasComplaint && Boolean(meta.is_refutado),
   };
 }
 

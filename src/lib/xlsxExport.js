@@ -205,9 +205,9 @@ function buildStylesXml() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <numFmts count="3">
-    <numFmt numFmtId="164" formatCode="&quot;$&quot;\ #,##0.00"/>
+    <numFmt numFmtId="164" formatCode="&quot;$&quot;\\ #,##0.00"/>
     <numFmt numFmtId="165" formatCode="0.0%"/>
-    <numFmt numFmtId="166" formatCode="&quot;$&quot;\ #,##0"/>
+    <numFmt numFmtId="166" formatCode="&quot;$&quot;\\ #,##0"/>
   </numFmts>
   <fonts count="7">
     <!-- 0: Normal -->
@@ -451,7 +451,7 @@ function buildWorkbookXml(sheets) {
   const sheetsXml = sheets
     .map((sheet, idx) => {
       const id = idx + 1;
-      const cleanName = (sheet.name || `Hoja ${id}`).replace(/[:\\/?*\[\]]/g, ' ').slice(0, 31);
+      const cleanName = (sheet.name || `Hoja ${id}`).replace(/[:\\/?*[\]]/g, ' ').slice(0, 31);
       return `<sheet name="${xmlEscape(cleanName)}" sheetId="${id}" r:id="rId${id}"/>`;
     })
     .join('');

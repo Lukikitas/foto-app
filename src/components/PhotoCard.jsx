@@ -5,7 +5,7 @@ import { useLongPress } from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
 import PhotoEditForm from './PhotoEditForm';
 import CompleteOrderCode from './CompleteOrderCode';
-import { syncGalleryComplaintToHistory } from '../lib/complaintHistoryStore';
+import { updateGalleryPhotoWithComplaintSync } from '../lib/complaintSynchronization.js';
 import { suggestUnresolvedOrderCode } from '../lib/unresolvedTicketReview.js';
 import {
   cleanupReplacedPhoto,
@@ -20,7 +20,6 @@ import {
   isUnidentifiedOrder,
   isValidOrderDigits,
   updatePhoto,
-  updatePhotoDetails,
 } from '../lib/photos';
 
 function PhotoBadges({ photo }) {
@@ -127,26 +126,20 @@ export default function PhotoCard({
     setLoading(true);
     setError(null);
     try {
-      const updated = await updatePhotoDetails(photo, {
+      const result = await updateGalleryPhotoWithComplaintSync(photo, {
         ...form,
         has_complaint: isOrder ? form.has_complaint : false,
         is_refutado: isOrder ? form.is_refutado : false,
       });
-      if (isOrder) {
-        try {
-          await syncGalleryComplaintToHistory(updated);
-        } catch (err) {
-          onUpdated?.(updated);
-          setEditing(false);
-          setError(err.message || 'La foto se guardó, pero no se pudo actualizar el historial.');
-          return;
-        }
-      }
+      const updated = result.photo;
       await cleanupReplacedPhoto(photo, updated);
       onUpdated?.(updated);
       setEditing(false);
     } catch (err) {
-      setError(err.message || 'Error al guardar los cambios.');
+      if (err.updatedPhoto) onUpdated?.(err.updatedPhoto);
+      setError(err.rollbackError
+        ? 'No se pudo sincronizar y tampoco restaurar la marca anterior. Reintentá desde la galería.'
+        : err.message || 'Error al guardar los cambios.');
     } finally {
       setLoading(false);
     }

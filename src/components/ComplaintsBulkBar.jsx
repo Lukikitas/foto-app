@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { AGGREGATOR_OPTIONS, getAggregatorLabel } from '../lib/aggregators';
-import { COMPLAINT_STATUS_LABELS, COMPLAINT_STATUSES } from '../lib/complaintHistory';
+import { AGGREGATOR_OPTIONS } from '../lib/aggregators';
+import { COMPLAINT_STATUSES } from '../lib/complaintHistory';
 import { formatMoney, formatNumber } from '../lib/metrics';
 
 export default function ComplaintsBulkBar({
@@ -9,7 +9,6 @@ export default function ComplaintsBulkBar({
   hasPhotos = false,
   onClearSelection,
   onSelectAllVisible,
-  isAllVisibleSelected = false,
   visibleCount = 0,
   onMarkStatus,
   onSetAggregator,

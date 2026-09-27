@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, detectAggregator, getAggregatorLabel } from '../lib/aggregators';
 import { setTargetAwtPct, setTargetComplaintPct } from '../lib/metrics';
 import { loadMetricsStore, saveMetricsStore } from '../lib/metricsStore';
@@ -7,6 +7,7 @@ import {
   RECOVERY_MODES, confirmRecoveredCode, loadRecoveryEvents,
   loadRecoveryProgress, loadRecoverySettings, saveRecoverySettings,
 } from '../lib/recoverySettings';
+import { APP_VERSION, RELEASE_NOTES } from '../lib/version.js';
 
 function argentinaDate(value) {
   if (!value) return '—';
@@ -31,6 +32,9 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [releaseOpen, setReleaseOpen] = useState(false);
+  const releaseButtonRef = useRef(null);
+  const releaseCloseRef = useRef(null);
 
   const refreshProgress = useCallback(async () => {
     const nextProgress = await loadRecoveryProgress();
@@ -71,6 +75,23 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
     }, 15_000);
     return () => window.clearInterval(timer);
   }, [refreshProgress]);
+  useEffect(() => {
+    if (!releaseOpen) return undefined;
+    const opener = releaseButtonRef.current;
+    releaseCloseRef.current?.focus();
+    function handleDialogKey(event) {
+      if (event.key === 'Escape') setReleaseOpen(false);
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        releaseCloseRef.current?.focus();
+      }
+    }
+    window.addEventListener('keydown', handleDialogKey);
+    return () => {
+      window.removeEventListener('keydown', handleDialogKey);
+      opener?.focus();
+    };
+  }, [releaseOpen]);
 
   async function saveOperation(event) {
     event.preventDefault();
@@ -193,6 +214,13 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           </label>
           <p>Esta preferencia se guarda en este dispositivo.</p>
         </section>
+
+        <section className="settings__card settings__version-card">
+          <h3>Versión</h3>
+          <p className="settings__version-number">Versión {APP_VERSION}</p>
+          <button ref={releaseButtonRef} type="button" className="btn btn--ghost"
+            onClick={() => setReleaseOpen(true)}>Ver cambios de versión</button>
+        </section>
       </div>
 
       <section className="settings__card">
@@ -274,6 +302,19 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           </>
         )}
       </section>
+      {releaseOpen && <div className="release-modal" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setReleaseOpen(false);
+      }}>
+        <section className="release-modal__dialog" role="dialog" aria-modal="true"
+          aria-labelledby="release-modal-title">
+          <div className="release-modal__head">
+            <h2 id="release-modal-title">Novedades de la versión {APP_VERSION}</h2>
+            <button ref={releaseCloseRef} type="button" className="btn btn--ghost btn--small"
+              onClick={() => setReleaseOpen(false)} aria-label="Cerrar novedades">Cerrar</button>
+          </div>
+          <ul>{RELEASE_NOTES.map((note) => <li key={note}>{note}</li>)}</ul>
+        </section>
+      </div>}
     </section>
   );
 }
