@@ -123,6 +123,10 @@ class UploadWorker(
                         updatedAt = System.currentTimeMillis()
                     )
                 )
+
+                // Once both files are safely stored and registered remotely, free device space.
+                ticketFile.delete()
+                evidenceFile.delete()
             } catch (e: Exception) {
                 db.captureDao().updatePair(
                     pair.copy(

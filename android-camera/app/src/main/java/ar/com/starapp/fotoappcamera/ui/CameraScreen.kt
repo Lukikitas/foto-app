@@ -118,7 +118,7 @@ fun CameraScreen(
             factory = { ctx ->
                 PreviewView(ctx).apply {
                     implementationMode = PreviewView.ImplementationMode.PERFORMANCE
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                    scaleType = PreviewView.ScaleType.FIT_CENTER
                     previewViewRef = this
                     cameraXManager.init {
                         cameraXManager.startCamera(lifecycleOwner, this) { error ->
@@ -184,7 +184,7 @@ fun CameraScreen(
                 Image(
                     bitmap = b.asImageBitmap(),
                     contentDescription = "Foto capturada",
-                    contentScale = ContentScale.Crop,
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize()
                 )
             }
