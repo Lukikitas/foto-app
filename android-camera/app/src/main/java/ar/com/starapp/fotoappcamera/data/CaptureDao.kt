@@ -42,7 +42,7 @@ interface CaptureDao {
     @Query("SELECT * FROM native_capture_pairs WHERE sessionId = :sessionId ORDER BY pairNumber ASC")
     suspend fun getPairsForSessionSync(sessionId: String): List<NativeCapturePair>
 
-    @Query("SELECT * FROM native_capture_pairs WHERE sessionId = :sessionId AND uploadState IN ('local', 'preparing', 'error') ORDER BY pairNumber ASC")
+    @Query("SELECT * FROM native_capture_pairs WHERE sessionId = :sessionId AND uploadState IN ('local', 'preparing', 'uploading', 'error') ORDER BY pairNumber ASC")
     suspend fun getPendingUploadPairs(sessionId: String): List<NativeCapturePair>
 
     @Query("SELECT COUNT(*) FROM native_capture_pairs WHERE sessionId = :sessionId")

@@ -15,7 +15,6 @@ export default function NativeCameraReturnNotice({ onDone }) {
   useEffect(() => {
     const active = getStoredNativeSession();
     if (!active) return;
-    setSession(active);
 
     let mounted = true;
     let timer = null;
@@ -32,7 +31,7 @@ export default function NativeCameraReturnNotice({ onDone }) {
         });
         if (mounted) {
           setSummary(result);
-          if (result.remainingCount > 0 && result.sessionState !== 'completed') {
+          if (result.sessionState !== 'completed') {
             timer = setTimeout(checkAndImport, 6000);
           } else {
             onDone?.();
@@ -71,7 +70,9 @@ export default function NativeCameraReturnNotice({ onDone }) {
           {!importing && summary && (
             <span>
               {summary.totalPairs} pares tomados · {summary.importedCount} incorporados a la cola
-              {summary.remainingCount > 0 ? ` · ${summary.remainingCount} subiendo desde el teléfono…` : ' · Todos listos.'}
+              {summary.sessionState === 'completed'
+                ? ' · Todos listos.'
+                : ` · ${summary.remainingCount} disponibles; esperando la sincronización del teléfono…`}
             </span>
           )}
           {error && <span className="message--error"> {error}</span>}

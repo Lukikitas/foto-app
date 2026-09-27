@@ -174,7 +174,16 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private suspend fun loadOrCreateSession(sessionId: String, sessionToken: String) {
         val existing = db.captureDao().getSession(sessionId)
         if (existing != null) {
+            if (sessionToken.isNotBlank() && SupabaseApiClient.calculateSha256(sessionToken) != existing.tokenHash) {
+                _errorMessage.value = "El enlace de sesión no coincide con la sesión guardada."
+                return
+            }
             attachSession(existing)
+            return
+        }
+
+        if (sessionToken.isBlank()) {
+            _errorMessage.value = "El enlace de Foto-app no incluye una credencial de sesión válida."
             return
         }
 
@@ -184,11 +193,17 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
         // Activate session in Supabase
         val activationResult = api.activateSession(sessionId, tokenHash, appVersion, deviceModel)
-        val takenByFromRemote = if (activationResult.isSuccess) {
-            activationResult.getOrNull()?.get("takenBy")?.toString()?.replace("\"", "").orEmpty()
-        } else {
-            ""
+        if (activationResult.isFailure) {
+            _errorMessage.value = activationResult.exceptionOrNull()?.message
+                ?: "No se pudo validar la sesión con Foto-app."
+            return
         }
+
+        val takenByFromRemote = activationResult.getOrNull()
+            ?.get("takenBy")
+            ?.toString()
+            ?.replace("\"", "")
+            .orEmpty()
 
         val newSession = NativeCaptureSession(
             sessionId = sessionId,

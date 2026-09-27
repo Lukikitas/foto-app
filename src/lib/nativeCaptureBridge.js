@@ -79,7 +79,7 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   const updatedStatus = await fetchPairsFn(sessionId, sessionToken);
   const remainingNotImported = (updatedStatus.pairs || []).filter((p) => p.state !== 'imported');
 
-  if (updatedStatus.state === 'completed' || remainingNotImported.length === 0) {
+  if (updatedStatus.state === 'completed') {
     clearSessionFn();
   }
 

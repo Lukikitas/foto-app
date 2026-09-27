@@ -41,7 +41,11 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
+  const [tab, setTab] = useState(() => {
+    const isNativeReturn = typeof window !== 'undefined'
+      && (window.location.pathname.startsWith('/camera-return') || window.location.search.includes('session='));
+    return isNativeReturn || isPhoneViewport() ? TABS.capture : TABS.metrics;
+  });
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
   const [sessionAuthor, setSessionAuthor] = useState('');
@@ -54,7 +58,6 @@ export default function App() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.location.pathname.startsWith('/camera-return') || window.location.search.includes('session=')) {
-      setTab(TABS.capture);
       if (window.location.pathname.startsWith('/camera-return')) {
         window.history.replaceState({}, '', '/' + window.location.search);
       }
