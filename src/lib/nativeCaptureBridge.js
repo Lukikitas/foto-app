@@ -1,5 +1,4 @@
 import { supabase } from './supabase.js';
-import { enqueue } from './uploadQueue.js';
 import {
   clearStoredNativeSession,
   fetchNativeSessionPairs,
@@ -23,7 +22,7 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   const { sessionId, sessionToken, takenBy } = sessionRecord;
   const onProgress = options.onProgress;
   const downloadFn = options.downloadFn || downloadStorageAsFile;
-  const enqueueFn = options.enqueueFn || enqueue;
+  const enqueueFn = options.enqueueFn || (await import('./uploadQueue.js')).enqueue;
   const fetchPairsFn = options.fetchPairsFn || fetchNativeSessionPairs;
   const markImportedFn = options.markImportedFn || markNativePairsAsImported;
   const clearSessionFn = options.clearSessionFn || clearStoredNativeSession;
