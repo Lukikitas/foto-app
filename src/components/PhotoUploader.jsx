@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react';
 import OrderCamera from './OrderCamera';
 import PhotographerPicker from './PhotographerPicker';
+import NativeCameraInstallModal from './NativeCameraInstallModal';
+import NativeCameraReturnNotice from './NativeCameraReturnNotice';
+import { isNativeCameraFeatureEnabled, createNativeSession } from '../lib/nativeCameraSession';
 import { isValidOrderDigits } from '../lib/photos';
 import { getTakenByHistory, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
@@ -22,6 +25,8 @@ export default function PhotoUploader({ author, onAuthorChange }) {
   const [detectedOrder, setDetectedOrder] = useState(null);
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [orderCameraOpen, setOrderCameraOpen] = useState(false);
+  const [nativeInstallOpen, setNativeInstallOpen] = useState(false);
+  const [nativeLaunching, setNativeLaunching] = useState(false);
   const [meta, setMeta] = useState(() => getEmptyMeta(author));
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [error, setError] = useState(null);
@@ -93,6 +98,36 @@ export default function PhotoUploader({ author, onAuthorChange }) {
     setTakenByHistory(getTakenByHistory());
     setOrderCameraOpen(true);
     setError(null);
+  }
+
+  async function openNativeCamera() {
+    const name = meta.taken_by.trim();
+    if (!name) {
+      setError('Poné quién está sacando la foto.');
+      return;
+    }
+
+    saveLastTakenBy(name);
+    setTakenByHistory(getTakenByHistory());
+    setNativeLaunching(true);
+    setError(null);
+    try {
+      const session = await createNativeSession(name);
+      window.location.href = session.intentUri;
+    } catch (err) {
+      setError(err.message || 'No se pudo iniciar la cámara nativa.');
+      setNativeInstallOpen(true);
+    } finally {
+      setNativeLaunching(false);
+    }
+  }
+
+  function handleMainCaptureClick() {
+    if (isNativeCameraFeatureEnabled()) {
+      void openNativeCamera();
+    } else {
+      openOrderCamera();
+    }
   }
 
   async function handleOrderCapture({ ticketFile, evidenceFile }) {
@@ -219,14 +254,16 @@ export default function PhotoUploader({ author, onAuthorChange }) {
           </p>
         )}
 
+        <NativeCameraReturnNotice onDone={() => setTakenByHistory(getTakenByHistory())} />
+
         {/* ZONA DE CAPTURA RÁPIDA (Cuando no hay foto seleccionada) */}
         {!file && (
           <div className="uploader__capture-card">
             <button
               type="button"
               className="uploader__hero-camera-btn"
-              onClick={openOrderCamera}
-              disabled={!photographerReady}
+              onClick={handleMainCaptureClick}
+              disabled={!photographerReady || nativeLaunching}
               title={photographerReady ? 'Abrir cámara de pedidos' : 'Elegí tu nombre primero'}
             >
               <div className="uploader__hero-icon-ring">
@@ -237,9 +274,33 @@ export default function PhotoUploader({ author, onAuthorChange }) {
               </div>
               <div className="uploader__hero-text">
                 <strong>SACAR FOTO</strong>
-                <span>Cámara rápida · 1. Ticket + 2. Bolsa</span>
+                <span>
+                  {isNativeCameraFeatureEnabled()
+                    ? (nativeLaunching ? 'Iniciando cámara Android…' : 'Cámara Android · Gran angular y ráfaga')
+                    : 'Cámara rápida · 1. Ticket + 2. Bolsa'}
+                </span>
               </div>
             </button>
+
+            {isNativeCameraFeatureEnabled() && (
+              <div className="uploader__native-options">
+                <button
+                  type="button"
+                  className="btn btn--small btn--ghost"
+                  onClick={openOrderCamera}
+                  disabled={!photographerReady}
+                >
+                  📷 Usar cámara web clásica
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--small btn--ghost"
+                  onClick={() => setNativeInstallOpen(true)}
+                >
+                  ⚙️ Instalar / Ajustes de cámara Android
+                </button>
+              </div>
+            )}
 
             {/* Accesos rápidos secundarios (Cámara del cel / Galería) */}
             <div className="uploader__quick-row">
@@ -378,6 +439,19 @@ export default function PhotoUploader({ author, onAuthorChange }) {
           </div>
         )}
       </form>
+
+      <NativeCameraInstallModal
+        isOpen={nativeInstallOpen}
+        onClose={() => setNativeInstallOpen(false)}
+        onContinueWeb={() => {
+          setNativeInstallOpen(false);
+          openOrderCamera();
+        }}
+        onOpenIntent={() => {
+          setNativeInstallOpen(false);
+          void openNativeCamera();
+        }}
+      />
     </section>
   );
 }

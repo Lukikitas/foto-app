@@ -1,0 +1,10 @@
+{
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "protocolVersion": 1,
+  "minimumPwaVersion": "1.5.0",
+  "downloadUrl": "https://delivery.star-app.com.ar/android-camera/fotoapp-camera-v1.0.0-debug.apk",
+  "sha256": "PENDING_RELEASE_BUILD",
+  "releaseNotes": "Versión inicial: captura continua ticket/pedido, detección de gran angular real con CameraX y subida en segundo plano.",
+  "mandatory": false
+}

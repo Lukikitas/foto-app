@@ -1,0 +1,102 @@
+import assert from 'node:assert/strict';
+import { beforeEach, test } from 'node:test';
+import { processNativeSessionReturn } from './nativeCaptureBridge.js';
+import * as nativeCameraSession from './nativeCameraSession.js';
+
+let mockSessionPairs;
+let mockImportedPairs;
+
+beforeEach(() => {
+  mockSessionPairs = {
+    sessionId: '123e4567-e89b-12d3-a456-426614174000',
+    takenBy: 'Lucas',
+    state: 'finishing',
+    pairCount: 2,
+    pairs: [
+      {
+        id: 'p1-uuid',
+        pairNumber: 1,
+        ticketPath: '123e4567-e89b-12d3-a456-426614174000/1/ticket.jpg',
+        evidencePath: '123e4567-e89b-12d3-a456-426614174000/1/evidence.jpg',
+        state: 'uploaded',
+        metadata: { notes: 'Combo 1', is_refutado: false },
+      },
+      {
+        id: 'p2-uuid',
+        pairNumber: 2,
+        ticketPath: '123e4567-e89b-12d3-a456-426614174000/2/ticket.jpg',
+        evidencePath: '123e4567-e89b-12d3-a456-426614174000/2/evidence.jpg',
+        state: 'uploaded',
+        metadata: { notes: '', is_refutado: true },
+      },
+    ],
+  };
+  mockImportedPairs = [];
+});
+
+test('processNativeSessionReturn downloads pairs and enqueues them into existing queue', async () => {
+  const enqueuedItems = [];
+  const downloads = [];
+
+  const mockDownload = async (bucket, path, filename, mimeType) => {
+    downloads.push({ bucket, path, filename, mimeType });
+    return new File(['dummy-bytes'], filename, { type: mimeType });
+  };
+
+  const mockEnqueue = async (item) => {
+    enqueuedItems.push(item);
+    return 'queue-id';
+  };
+
+  // Mock nativeCameraSession methods
+  const originalFetch = nativeCameraSession.fetchNativeSessionPairs;
+  const originalMark = nativeCameraSession.markNativePairsAsImported;
+
+  nativeCameraSession.fetchNativeSessionPairs = async () => {
+    return {
+      ...mockSessionPairs,
+      pairs: mockSessionPairs.pairs.map((p) => ({
+        ...p,
+        state: mockImportedPairs.includes(p.id) ? 'imported' : p.state,
+      })),
+      state: mockImportedPairs.length === mockSessionPairs.pairs.length ? 'completed' : mockSessionPairs.state,
+    };
+  };
+
+  nativeCameraSession.markNativePairsAsImported = async (sessionId, sessionToken, ids) => {
+    mockImportedPairs.push(...ids);
+    return { markedCount: ids.length, remainingPending: 0 };
+  };
+
+  try {
+    const result = await processNativeSessionReturn(
+      {
+        sessionId: mockSessionPairs.sessionId,
+        sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        takenBy: 'Lucas',
+      },
+      {
+        downloadFn: mockDownload,
+        enqueueFn: mockEnqueue,
+      }
+    );
+
+    assert.equal(result.importedCount, 2);
+    assert.equal(result.remainingCount, 0);
+    assert.equal(result.sessionState, 'completed');
+    assert.equal(enqueuedItems.length, 2);
+
+    assert.equal(enqueuedItems[0].kind, 'order');
+    assert.equal(enqueuedItems[0].meta.taken_by, 'Lucas');
+    assert.equal(enqueuedItems[0].meta.notes, 'Combo 1');
+    assert.equal(enqueuedItems[0].meta.is_refutado, false);
+
+    assert.equal(enqueuedItems[1].meta.is_refutado, true);
+
+    // Verify 4 total downloads (2 ticket + 2 evidence)
+    assert.equal(downloads.length, 4);
+  } finally {
+    nativeCameraSession.fetchNativeSessionPairs = originalFetch;
+    nativeCameraSession.markNativePairsAsImported = originalMark;
+  }
+});

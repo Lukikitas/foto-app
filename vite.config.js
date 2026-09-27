@@ -102,6 +102,13 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
+        related_applications: [
+          {
+            platform: 'play',
+            id: 'ar.com.starapp.fotoappcamera',
+            url: 'https://delivery.star-app.com.ar/instalar-camara',
+          },
+        ],
       },
     }),
   ],

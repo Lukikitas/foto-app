@@ -15,6 +15,7 @@ import UpdatePrompt from './components/UpdatePrompt';
 import PhotoGallery from './components/PhotoGallery';
 import PhotoUploader from './components/PhotoUploader';
 import UploadQueueStatus from './components/UploadQueueStatus';
+import NativeCameraInstallModal from './components/NativeCameraInstallModal';
 import './App.css';
 
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
@@ -46,6 +47,19 @@ export default function App() {
   const [sessionAuthor, setSessionAuthor] = useState('');
   const [metricsRefreshKey, setMetricsRefreshKey] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(getNavCollapsed);
+  const [installPageOpen, setInstallPageOpen] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/instalar-camara')
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname.startsWith('/camera-return') || window.location.search.includes('session=')) {
+      setTab(TABS.capture);
+      if (window.location.pathname.startsWith('/camera-return')) {
+        window.history.replaceState({}, '', '/' + window.location.search);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     setUploadCompleteHandler(() => {
@@ -177,6 +191,19 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <NativeCameraInstallModal
+        isOpen={installPageOpen}
+        onClose={() => {
+          setInstallPageOpen(false);
+          window.history.replaceState({}, '', '/');
+        }}
+        onContinueWeb={() => {
+          setInstallPageOpen(false);
+          window.history.replaceState({}, '', '/');
+          setTab(TABS.capture);
+        }}
+      />
     </div>
   );
 }

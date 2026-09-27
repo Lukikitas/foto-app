@@ -1,0 +1,7 @@
+<resources>
+    <color name="primary_red">#E4002B</color>
+    <color name="dark_background">#121214</color>
+    <color name="surface_dark">#202024</color>
+    <color name="text_white">#FFFFFF</color>
+    <color name="text_muted">#A0A0B0</color>
+</resources>
