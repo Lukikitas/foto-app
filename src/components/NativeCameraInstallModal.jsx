@@ -32,7 +32,7 @@ export default function NativeCameraInstallModal({ isOpen, onClose, onContinueWe
 
         <div className="native-install-specs">
           <div><span>Versión:</span> <strong>v{manifest.versionName}</strong></div>
-          <div><span>Tamaño:</span> <strong>~8 MB</strong></div>
+          <div><span>Tamaño:</span> <strong>~2 MB</strong></div>
           <div><span>Requisitos:</span> <strong>Android 8.0 o superior</strong></div>
           <div><span>Permisos:</span> <strong>Cámara</strong> (notificaciones opcionales para subida en segundo plano)</div>
         </div>
