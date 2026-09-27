@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Foto-app Cámara</string>
+    <string name="step_ticket">1 de 2 · Ticket</string>
+    <string name="step_evidence">2 de 2 · Pedido</string>
+    <string name="guide_ticket">Encuadre del ticket: asegurá que se lea el número</string>
+    <string name="guide_evidence">Encuadre del pedido: bolsa, contenido y ticket</string>
+    <string name="lens_normal">1×</string>
+    <string name="lens_wide">0,5×</string>
+    <string name="lens_wide_fallback">Amplio</string>
+    <string name="finish_session">Finalizar</string>
+    <string name="action_retake">Repetir</string>
+    <string name="action_confirm">Usar foto</string>
+    <string name="action_back_to_ticket">Volver al ticket</string>
+    <string name="offline_notice">Sin conexión · Las fotos se guardan en el teléfono</string>
+    <string name="wide_not_available">Gran angular no disponible para aplicaciones externas</string>
+</resources>

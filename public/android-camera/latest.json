@@ -1,0 +1,9 @@
+{
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "protocolVersion": 1,
+  "minimumPwaVersion": "1.5.0",
+  "downloadUrl": "https://github.com/Lukikitas/foto-app/releases/download/android-camera-v1.0.0/fotoapp-camera-v1.0.0.apk",
+  "releaseNotes": "Versión inicial: captura continua ticket/pedido, detección de gran angular real con CameraX y subida en segundo plano.",
+  "mandatory": false
+}

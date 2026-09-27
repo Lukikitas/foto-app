@@ -15,6 +15,7 @@ import UpdatePrompt from './components/UpdatePrompt';
 import PhotoGallery from './components/PhotoGallery';
 import PhotoUploader from './components/PhotoUploader';
 import UploadQueueStatus from './components/UploadQueueStatus';
+import NativeCameraInstallModal from './components/NativeCameraInstallModal';
 import './App.css';
 
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
@@ -40,12 +41,28 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
+  const [tab, setTab] = useState(() => {
+    const isNativeReturn = typeof window !== 'undefined'
+      && (window.location.pathname.startsWith('/camera-return') || window.location.search.includes('session='));
+    return isNativeReturn || isPhoneViewport() ? TABS.capture : TABS.metrics;
+  });
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
   const [sessionAuthor, setSessionAuthor] = useState('');
   const [metricsRefreshKey, setMetricsRefreshKey] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(getNavCollapsed);
+  const [installPageOpen, setInstallPageOpen] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/instalar-camara')
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname.startsWith('/camera-return') || window.location.search.includes('session=')) {
+      if (window.location.pathname.startsWith('/camera-return')) {
+        window.history.replaceState({}, '', '/' + window.location.search);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     setUploadCompleteHandler(() => {
@@ -177,6 +194,19 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <NativeCameraInstallModal
+        isOpen={installPageOpen}
+        onClose={() => {
+          setInstallPageOpen(false);
+          window.history.replaceState({}, '', '/');
+        }}
+        onContinueWeb={() => {
+          setInstallPageOpen(false);
+          window.history.replaceState({}, '', '/');
+          setTab(TABS.capture);
+        }}
+      />
     </div>
   );
 }
