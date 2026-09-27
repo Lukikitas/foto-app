@@ -1164,7 +1164,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         </p>
       )}
 
-      <ComplaintDraftReview active={inboxView === 'cruzar'} onOpenHistory={openHistorial} />
+      <ComplaintDraftReview active={inboxView === 'cruzar'} onOpenHistory={openHistorial} onResolved={() => setNotice(null)} />
 
       {showHistoryList && (
         <div className="complaints__history-tools">

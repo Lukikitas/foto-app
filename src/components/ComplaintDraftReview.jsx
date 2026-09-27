@@ -7,7 +7,7 @@ import { loadComplaintHistory } from '../lib/complaintHistoryStore';
 import { formatMoney } from '../lib/metrics';
 import PhotoLightbox from './PhotoLightbox';
 
-export default function ComplaintDraftReview({ active, onOpenHistory }) {
+export default function ComplaintDraftReview({ active, onOpenHistory, onResolved }) {
   const [draft, setDraft] = useState(cachedDraft);
   const [history, setHistory] = useState(emptyHistory);
   const [rows, setRows] = useState([]);
@@ -88,7 +88,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory }) {
         {summary && <p>{summary.added} nuevos · {summary.changed} modificados · {summary.unchanged} sin cambios</p>}
         <p>Revisá el agregador, el monto y las fotos. Quitar una fila no borra reclamos del Historial.</p></div>
         <div className="draft-review__row-actions"><button className="btn btn--ghost" disabled={disabled || Boolean(editing)} onClick={() => act(() => refresh(undefined, true))}>Actualizar coincidencias</button>
-        <button className="btn btn--ghost" disabled={disabled} onClick={() => { if (window.confirm('¿Descartar esta lista compartida? El Historial y las Métricas no se modificarán.')) void act(() => discardDraft(draft)); }}>Descartar lista</button></div>
+        <button className="btn btn--ghost" disabled={disabled} onClick={() => { if (window.confirm('¿Descartar esta lista compartida? El Historial y las Métricas no se modificarán.')) void act(async () => { await discardDraft(draft); onResolved?.(); }); }}>Descartar lista</button></div>
       </header>
       <div className="draft-review__bulk">
         <label><input type="checkbox" checked={selected.size > 0 && selected.size === draft.data.complaints.length} onChange={e => setSelected(e.target.checked ? new Set(draft.data.complaints.map((_,i) => i)) : new Set())} /> Seleccionar todas</label>
@@ -122,7 +122,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory }) {
       </div>
       {draft.data.report && <p className="draft-review__metrics">Al guardar también se actualizarán las Métricas con las cifras originales del Excel. Quitar reclamos de esta lista no cambia esos totales.</p>}
       <div className="draft-review__commit"><button className="btn btn--primary" disabled={disabled || Boolean(validation) || Boolean(editing)} onClick={() => act(async () => {
-        const result = await confirmDraft(draft); setNotice(`Guardado: ${result.added} nuevos y ${result.updated} existentes. ${result.warning || ''}`);
+        const result = await confirmDraft(draft); onResolved?.(); setNotice(`Guardado: ${result.added} nuevos y ${result.updated} existentes. ${result.warning || ''}`);
       })}>{busy ? 'Guardando…' : 'Guardar en Historial'}</button><span>Solo este botón confirma la lista.</span></div>
     </>}
     {editing && <div className="release-modal"><form className="release-modal__dialog draft-review__editor" aria-label="Corregir reclamo" onSubmit={e => {
