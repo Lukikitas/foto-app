@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cameraZoomRange, rearCameras, snapCameraZoom, wideCamera } from '../lib/cameraControls';
+import { availableCameras, cameraZoomRange, rearCameras, snapCameraZoom, wideCamera } from '../lib/cameraControls';
 import { clamp, pinchDistance } from '../lib/touchZoom';
 import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
 
@@ -23,6 +23,8 @@ export default function useCameraControls(videoRef, flashOnRef) {
   const [hardwareZoom, setHardwareZoom] = useState(false);
   const [range, setRange] = useState({ min: 1, max: 3 });
   const [devices, setDevices] = useState([]);
+  const [allDevices, setAllDevices] = useState([]);
+  const [enumerationError, setEnumerationError] = useState('');
   const [deviceId, setDeviceId] = useState('');
   const [normalDeviceId, setNormalDeviceId] = useState('');
   const [flashSupported, setFlashSupported] = useState(false);
@@ -56,19 +58,30 @@ export default function useCameraControls(videoRef, flashOnRef) {
     setImageRatio(video.videoWidth / video.videoHeight);
     setFlashSupported(trackSupportsTorch(track));
     if (trackSupportsTorch(track)) await setTrackTorch(track, flashOnRef.current);
+    await refreshDevices();
+    setStatus('ready');
+  }
+  async function refreshDevices() {
+    const track = streamRef.current?.getVideoTracks()[0];
+    const id = track?.getSettings().deviceId || '';
     try {
-      const cameras = rearCameras(await navigator.mediaDevices.enumerateDevices(), id);
-      setDevices(cameras);
+      const discovered = await navigator.mediaDevices.enumerateDevices();
+      if (!mounted.current) return;
+      const all = availableCameras(discovered, { deviceId: id, label: track?.label });
+      const cameras = rearCameras(all.map(d => ({ ...d, kind: 'videoinput' })), id);
+      setAllDevices(all); setDevices(cameras); setEnumerationError('');
       if (!normalId.current) {
         const wide = wideCamera(cameras);
-        const normal = wide?.deviceId === id ? cameras.find(d => d.deviceId !== id && /back|rear|environment|trasera/i.test(d.label)) : null;
+        const normal = wide?.deviceId === id ? cameras.find(d => d.deviceId !== id && !wideCamera([d]) && !/tele|macro/i.test(d.label) && /back|rear|environment|trasera/i.test(d.label)) : null;
         normalId.current = normal?.deviceId || id;
         setNormalDeviceId(normalId.current);
       }
     } catch {
+      if (!mounted.current) return;
+      setEnumerationError('No se pudo consultar la lista de cámaras. Tocá Volver a detectar.');
       normalId.current ||= id; setNormalDeviceId(normalId.current);
+      setAllDevices(current => current.length ? current : availableCameras([], { deviceId: id, label: track?.label }));
     }
-    setStatus('ready');
   }
   async function open(id) {
     return navigator.mediaDevices.getUserMedia({ audio: false, video: {
@@ -161,6 +174,7 @@ export default function useCameraControls(videoRef, flashOnRef) {
   return { streamRef, status, error, setError, zoom, minZoom: range.min, maxZoom: range.max,
     hardwareZoom, zoomBusy, flashSupported, setFlashSupported, devices, deviceId,
     normalDeviceId, wideDeviceId: wideCamera(devices)?.deviceId,
+    allDevices, enumerationError, nativeRange: hardwareZoom ? range : null, refreshDevices,
     imageRatio, switchCamera, requestZoom, resetForStep,
     gestures: { onPointerDown: pointerDown, onPointerMove: pointerMove, onPointerUp: pointerUp,
       onPointerCancel: pointerUp, onLostPointerCapture: pointerUp } };
