@@ -5,7 +5,6 @@ import { subscribe } from '../lib/uploadQueue';
 import { inspectCaptureCanvas, isSameCapturedScene } from '../lib/imageQuality';
 import PhotographerPicker from './PhotographerPicker';
 import useCameraControls from './useCameraControls';
-import CameraLensPicker from './CameraLensPicker';
 
 const STEPS = {
   ticket: 'ticket',
@@ -426,7 +425,15 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       )}
 
       <div className="order-camera__actions">
-        <CameraLensPicker camera={camera} disabled={takingPhoto || zoomBusy || status !== 'ready'} remember={!isTicketStep} />
+        {camera.devices.length > 1 && <div className="order-camera__lenses">
+          {camera.wideDeviceId && <>
+            <button type="button" className="btn btn--small btn--ghost" disabled={takingPhoto || zoomBusy || status !== 'ready'} onClick={() => camera.switchCamera(camera.normalDeviceId, !isTicketStep)}>Normal</button>
+            <button type="button" className="btn btn--small btn--ghost" disabled={takingPhoto || zoomBusy || status !== 'ready'} onClick={() => camera.switchCamera(camera.wideDeviceId, !isTicketStep)}>Amplio</button>
+          </>}
+          <label>Elegir cámara <select aria-label="Elegir cámara" value={camera.deviceId} disabled={takingPhoto || zoomBusy || status !== 'ready'} onChange={event => camera.switchCamera(event.target.value, !isTicketStep)}>
+            {camera.devices.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Cámara ${index + 1}`}</option>)}
+          </select></label>
+        </div>}
         <div className="order-camera__zoom" aria-label="Zoom de cámara">
           <button type="button" onClick={() => handleZoom(-1)} disabled={status !== 'ready' || zoomBusy || takingPhoto || zoom <= minZoom} aria-label="Disminuir zoom">−</button>
           <button type="button" onClick={() => camera.requestZoom(Math.min(maxZoom, Math.max(minZoom, 1)))} disabled={takingPhoto || status !== 'ready'} aria-label="Restablecer zoom">{Number(zoom.toFixed(1))}×</button>

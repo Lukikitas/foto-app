@@ -2,7 +2,6 @@ import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
 export const RELEASE_GROUPS = [
   { title: 'Cámara', notes: [
-    'Corrección 1.5.1: más nombres de gran angular, selección de todas las cámaras disponibles y diagnóstico de compatibilidad desde la PWA.',
     'Zoom continuo con dos dedos y selección opcional del lente amplio en celulares compatibles.',
     'Guías ajustadas al encuadre real y preferencia de cámara para la foto del pedido.',
   ] },
