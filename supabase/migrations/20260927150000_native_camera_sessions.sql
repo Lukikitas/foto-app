@@ -44,9 +44,14 @@ alter table public.native_capture_pairs enable row level security;
 revoke all on public.native_capture_sessions, public.native_capture_pairs from anon, authenticated;
 
 -- Storage bucket for native capture uploads
-insert into storage.buckets (id, name, public)
-values ('native-captures', 'native-captures', false)
-on conflict (id) do nothing;
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
+    insert into storage.buckets (id, name, public)
+    values ('native-captures', 'native-captures', false)
+    on conflict (id) do nothing;
+  end if;
+end $$;
 
 -- 1. Create session from PWA
 create or replace function public.create_native_capture_session(
