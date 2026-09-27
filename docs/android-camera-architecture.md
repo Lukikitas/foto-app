@@ -59,7 +59,8 @@ sequenceDiagram
     end
 
     opt Subida en segundo plano
-        WorkManager->>Supabase: Sube ticket.jpg y evidence.jpg al bucket native-captures
+        WorkManager->>Supabase: Envía cada JPEG a native-camera-transfer
+        Supabase->>Supabase: Valida sesión/token y guarda en native-captures
         WorkManager->>Supabase: RPC register_native_capture_pair()
     end
 
@@ -149,6 +150,7 @@ La aplicación nativa implementa un algoritmo de inspección profunda en `Camera
 - **Entidades Room:**
   - `NativeCaptureSession`: Controla el estado de la sesión (`created`, `active`, `finishing`, `completed`).
   - `NativeCapturePair`: Registra `pairNumber` (secuencia estricta y única), rutas locales, hashes SHA-256, y estado de subida (`local`, `preparing`, `uploading`, `uploaded`, `imported`).
+- **Transferencia protegida:** la función Edge `native-camera-transfer` valida `sessionId`, hash del token, ruta, vencimiento, tamaño e integridad SHA-256 antes de usar la credencial de servicio para Storage. El APK no contiene la clave de servicio.
 - **WorkManager:**
   - Ejecuta la subida con reintentos exponenciales automáticos (`BackoffPolicy.EXPONENTIAL`).
   - Si no hay conexión, los pares se conservan intactos en el dispositivo.

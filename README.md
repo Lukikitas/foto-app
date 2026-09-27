@@ -68,3 +68,16 @@ Verificado con el archivo de referencia: 24 reclamos, 11 con monto cero y $208.0
 ### Reintegros de PedidosYa
 
 Desde Reclamos o Métricas → Carga, «Importar refutados aceptados» admite .xls/.xlsx. Lee únicamente Reintegros: B (pedido), D (DS) y E (KFC - La Plata, nombre completo normalizado). SI/NO y otros locales se ignoran. La vista previa no escribe; confirmar cambia solo el estado de quejas existentes de PedidosYa a refutado_aceptado, preservando fechas, montos, fotos y correcciones. Los pedidos ausentes o con varias coincidencias se informan y no se crean ni modifican. Reimportar no duplica; ante un error puede reintentarse. No modifica métricas ni el lote de cruce con fotos.
+
+## Cámara Android nativa
+
+La integración se publica desactivada por defecto mediante `VITE_NATIVE_CAMERA_ENABLED=false`. Para habilitarla en producción se requiere completar este orden:
+
+1. Aplicar `supabase/migrations/20260927150000_native_camera_sessions.sql`.
+2. Desplegar la función `native-camera-transfer` con la configuración de `supabase/config.toml`. Esta función valida la sesión y el token antes de subir o descargar cada foto; la app no escribe directamente en Storage.
+3. Configurar en GitHub los secretos `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` y `ANDROID_KEY_PASSWORD`. El certificado debe coincidir con la huella publicada en `public/.well-known/assetlinks.json`.
+4. Crear el tag `android-camera-v1.0.0`. El workflow `Publish Android Camera APK` compila, firma, verifica el certificado y publica el APK junto con su SHA-256.
+5. Comprobar el enlace definido en `public/android-camera/latest.json` y realizar la prueba física en POCO X6 Pro y Moto G15.
+6. Activar la variable de repositorio `VITE_NATIVE_CAMERA_ENABLED=true` y publicar `main`.
+
+El workflow de Pages solo responde a `main`, para que una rama de trabajo no reemplace la aplicación operativa.

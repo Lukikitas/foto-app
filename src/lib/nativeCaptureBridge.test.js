@@ -96,3 +96,39 @@ test('processNativeSessionReturn downloads pairs and enqueues them into existing
   // Verify 4 total downloads (2 ticket + 2 evidence)
   assert.equal(downloads.length, 4);
 });
+
+test('keeps a finishing session while Android still has files to upload', async () => {
+  let cleared = false;
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: mockSessionPairs.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+    },
+    {
+      fetchPairsFn: async () => ({
+        sessionId: mockSessionPairs.sessionId,
+        state: 'finishing',
+        pairCount: 0,
+        pairs: [],
+      }),
+      downloadFn: async () => {
+        throw new Error('No debería descargar archivos.');
+      },
+      enqueueFn: async () => {
+        throw new Error('No debería encolar archivos.');
+      },
+      markImportedFn: async () => {
+        throw new Error('No debería marcar archivos.');
+      },
+      clearSessionFn: () => {
+        cleared = true;
+      },
+    },
+  );
+
+  assert.equal(result.sessionState, 'finishing');
+  assert.equal(result.totalPairs, 0);
+  assert.equal(result.remainingCount, 0);
+  assert.equal(cleared, false);
+});
