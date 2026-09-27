@@ -162,15 +162,6 @@ export function parseHistory(raw) {
   return store;
 }
 
-function mergeText(current, incoming) {
-  const next = String(incoming || '').trim();
-  const prev = String(current || '').trim();
-  if (!next) return prev;
-  if (!prev) return next;
-  if (prev.includes(next)) return prev;
-  return `${prev}\n${next}`.slice(0, 500);
-}
-
 function findHistoryForSheetComplaint(store, id, compact) {
   if (store.items[id]) return store.items[id];
   const manuallyEdited = Object.values(store.items).find((item) => item.sourceId === id);
@@ -186,7 +177,7 @@ function mergeSheetReason(existingReason, incomingReason) {
   const prev = String(existingReason || '').trim();
   if (isPendingComplaintDetails(prev)) return next;
   if (isPendingComplaintDetails(next)) return prev;
-  return mergeText(prev, next);
+  return next || prev;
 }
 
 export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
@@ -220,7 +211,7 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
 
     if (existing) {
       incoming.reason = mergeSheetReason(existing.reason, complaint.reason);
-      incoming.comment = mergeText(existing.comment, complaint.comment);
+      incoming.comment = String(complaint.comment || existing.comment || '').trim();
       incoming.combo = String(complaint.combo || existing.combo || '').trim();
       incoming.amount = toAmount(complaint.amount ?? existing.amount);
       incoming.fields = mergeFields(existing.fields, complaint.fields);

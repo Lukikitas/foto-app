@@ -62,7 +62,7 @@ test('re-uploading a sheet updates the same row instead of copying it', () => {
   assert.equal(second.updated, 1);
   assert.equal(Object.keys(second.store.items).length, 1);
   const item = Object.values(second.store.items)[0];
-  assert.match(item.comment, /Sin papas/);
+  assert.doesNotMatch(item.comment, /Sin papas/);
   assert.match(item.comment, /Confirmado por el local/);
   assert.equal(item.status, COMPLAINT_STATUSES.queja);
   assert.equal(item.amount, 9100);

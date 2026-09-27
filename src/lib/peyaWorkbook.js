@@ -131,13 +131,14 @@ export function mergePeyaHistory(store, report, rows = []) {
     });
     if (matches.length > 1) throw new Error('Hay más de un reclamo existente para el pedido ' + c.orderCode + '. Revisá el historial.');
     const existing = matches[0];
-    if (existing?.manualEdit) return { ...existing, id: existing.id };
+    
     if (existing) return {
       ...c, id: existing.id, orderCode: existing.orderCode,
-      // Older bulk edits have no manualEdit marker. Preserve populated details too.
-      amount: existing.amount ?? c.amount, combo: existing.combo || c.combo,
-      reason: isPendingComplaintDetails(existing.reason) ? c.reason : existing.reason || c.reason,
-      comment: existing.comment || c.comment, fields: { ...c.fields, ...existing.fields },
+      aggregator: existing.manualEdit ? existing.aggregator : c.aggregator,
+      sourceId: existing.sourceId, manualEdit: existing.manualEdit,
+      amount: c.amount ?? existing.amount, combo: c.combo || existing.combo,
+      reason: c.reason && !isPendingComplaintDetails(c.reason) ? c.reason : existing.reason,
+      comment: c.comment || existing.comment, fields: { ...existing.fields, ...Object.fromEntries(Object.entries(c.fields || {}).filter(([, value]) => value != null && String(value).trim())) },
     };
     const collision = store.items?.[c.id];
     if (collision && collision.aggregator !== 'pedidosya') throw new Error('El pedido ' + c.orderCode + ' coincide con otro agregador. Revisá el historial.');

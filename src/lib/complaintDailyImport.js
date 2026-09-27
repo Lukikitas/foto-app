@@ -5,7 +5,7 @@ import {
   msUntilDailyImportCutoff,
 } from './complaintSync.js';
 import { loadComplaintSync, mutateComplaintSync } from './complaintSyncStore.js';
-import { fetchPhotosForComplaints, matchComplaintsToPhotos, saveComplaintBatch } from './complaints.js';
+import { fetchPhotosForComplaints, matchComplaintsToPhotos } from './complaints.js';
 import { importComplaintsToHistory, loadComplaintHistory } from './complaintHistoryStore.js';
 
 const listeners = new Set();
@@ -77,7 +77,6 @@ export async function maybeRunDailyImport(now = new Date()) {
       }
 
       const cruzar = await cruzarSheetUrl(sync.sheetUrl);
-      saveComplaintBatch(cruzar.complaints, {});
       const saved = await mutateComplaintSync((current) => ({
         ...current,
         sheetUrl: current.sheetUrl || sync.sheetUrl,

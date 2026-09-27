@@ -1,3 +1,4 @@
+import PhotoLightbox from './PhotoLightbox';
 import { useMemo, useState } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import {
@@ -30,6 +31,7 @@ export default function MetricsComplaintsList({
   onNotice,
 }) {
   const [search, setSearch] = useState('');
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [status, setStatus] = useState('all');
   const items = useMemo(
     () =>
@@ -167,7 +169,7 @@ export default function MetricsComplaintsList({
                   </td>
                   <td>{formatMoney(item.amount)}</td>
                   <td>{COMPLAINT_STATUS_LABELS[item.status] || item.status}</td>
-                  <td>{item.photoUrl ? 'Sí' : 'No'}</td>
+                  <td>{item.photoUrl ? <button type="button" className="btn btn--small btn--ghost" onClick={() => setLightboxPhoto({ id: item.photoId, name: item.orderCode, public_url: item.photoUrl, created_at: item.orderAtIso })}>Ver foto</button> : 'No'}</td>
                   <td>
                     <div className="metrics-registry__actions">
                       {!item.photoUrl && (
@@ -192,6 +194,7 @@ export default function MetricsComplaintsList({
           </table>
         </div>
       )}
+    {lightboxPhoto && <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />}
     </div>
   );
 }

@@ -1,7 +1,18 @@
-export const APP_VERSION = '1.4';
-
-export const RELEASE_NOTES = [
-  'La galería y el historial de reclamos ahora se mantienen sincronizados en ambos sentidos.',
-  'Gestionar permite cargar una lista de códigos y completar fecha y agregador en forma individual o múltiple.',
-  'Los Excel de Rappi detectan automáticamente si cada pedido pertenece a Rappi o Rappi Turbo.',
+import packageInfo from '../../package.json';
+export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
+export const RELEASE_GROUPS = [
+  { title: 'Cámara', notes: [
+    'Zoom continuo con dos dedos y selección opcional del lente amplio en celulares compatibles.',
+    'Guías ajustadas al encuadre real y preferencia de cámara para la foto del pedido.',
+  ] },
+  { title: 'Reclamos', notes: [
+    'Listas compartidas para revisar, corregir o descartar antes de guardar en Historial.',
+    'Los Excel actualizan los montos y detalles presentes, conservando estados, fotos y datos que vengan vacíos.',
+    'Guardado con control de versiones para proteger los cambios entre dispositivos.',
+  ] },
+  { title: 'Experiencia', notes: [
+    'Todas las fotos ampliadas admiten pellizco, desplazamiento y doble toque.',
+    'Ajustes renovados, con una presentación más clara de la versión y sus novedades.',
+  ] },
 ];
+export const RELEASE_NOTES = RELEASE_GROUPS.flatMap(group => group.notes);

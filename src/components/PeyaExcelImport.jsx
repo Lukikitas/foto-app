@@ -30,8 +30,8 @@ export default function PeyaExcelImport({ disabled = false, onBusy }) {
   async function confirm() {
     working(true); setError(''); setNotice('');
     try {
-      const result = await importPeyaReport(preview.report);
-      setNotice('Importación completa: ' + result.history.added + ' reclamos nuevos, ' + result.history.updated + ' existentes y ' + preview.report.daily.length + ' días actualizados. ' + result.warning);
+      await importPeyaReport(preview.report);
+      setNotice('Lista preparada. Abrí Reclamos → Gestionar para revisar, corregir y guardar en Historial.');
       setPreview(null);
     } catch (err) { setError(err.message || 'No se pudo guardar. Podés reintentar.'); }
     finally { working(false); }
@@ -49,7 +49,7 @@ export default function PeyaExcelImport({ disabled = false, onBusy }) {
       {preview && <div className="peya-import__preview">
         <h4>Vista previa · {preview.filename}</h4>
         <p>{preview.report.complaints.length} reclamos de La Plata: {preview.added} nuevos y {preview.updated} existentes. {preview.report.excluded} filas de otros locales excluidas. {preview.report.duplicates} duplicados idénticos omitidos.</p>
-        <p>Se reemplazarán los valores diarios de PedidosYa. Los detalles ya cargados, estados de refutación y fotos se conservan; se completan los campos faltantes.</p>
+        <p>Se reemplazarán los valores diarios de PedidosYa. Los datos presentes del Excel reemplazarán los anteriores al confirmar en Gestionar, incluidos los montos. Los vacíos, estados y fotos se conservan.</p>
         <div className="peya-import__table"><table>
           <caption>Valores actuales → valores del Excel</caption>
           <thead><tr><th>Fecha</th><th>Pedidos</th><th>Quejas</th><th>AWT</th></tr></thead>
@@ -61,7 +61,7 @@ export default function PeyaExcelImport({ disabled = false, onBusy }) {
           </table></div>
         </details>
         <div className="peya-import__actions">
-          <button type="button" className="btn btn--primary" disabled={busy || disabled} onClick={confirm}>Importar</button>
+          <button type="button" className="btn btn--primary" disabled={busy || disabled} onClick={confirm}>Preparar lista</button>
           <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => { setPreview(null); setError(''); }}>Cancelar</button>
         </div>
       </div>}

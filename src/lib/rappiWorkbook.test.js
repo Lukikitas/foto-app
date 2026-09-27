@@ -49,7 +49,7 @@ test('date-only records survive persistence, filters, edits, resolution IDs and 
   const edited=editHistoryItemInStore(s,item.id,{orderCode:'RAPPI999999999',aggregator:'rappi'});assert.ok(edited.items['RAPPI999999999|2026-09-02']);assert.equal(mergeRappiHistory(edited,report()).added,0);
 });
 test('existing numeric Rappi codes are reused without touching Turbo or manual details',()=>{
-  const s=emptyHistory();const c={...report().complaints[0],orderCode:'478947179',id:'478947179|2026-09-02',status:'refutado_aceptado',photoId:'evidence',amount:800,comment:'Corregido'};s.items[c.id]=c;const next=mergeRappiHistory(s,report());assert.equal(next.added,0);const i=Object.values(next.store.items)[0];assert.equal(i.photoId,'evidence');assert.equal(i.amount,800);assert.equal(i.comment,'Corregido');assert.equal(i.status,'refutado_aceptado');
+  const s=emptyHistory();const c={...report().complaints[0],orderCode:'478947179',id:'478947179|2026-09-02',status:'refutado_aceptado',photoId:'evidence',amount:800,comment:'Corregido'};s.items[c.id]=c;const next=mergeRappiHistory(s,report());assert.equal(next.added,0);const i=Object.values(next.store.items)[0];assert.equal(i.photoId,'evidence');assert.equal(i.amount,report().complaints[0].amount);assert.equal(i.comment,report().complaints[0].comment);assert.equal(i.status,'refutado_aceptado');
 });
 test('daily complaint import preserves all orders, AWT, other accounts and outside days',()=>{
   const s=emptyStore();s.days={'2026-09-02':{rappi:{orders:50,awt:3,complaints:9},rappi_turbo:{orders:88,awt:0,complaints:7},pedidosya:{orders:100,awt:10,complaints:5}},'2026-08-31':{rappi:{orders:20,awt:0,complaints:2}}};

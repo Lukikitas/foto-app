@@ -1,5 +1,25 @@
 # React + Vite
 
+## Versión 1.5
+
+Las cargas manuales preparan una lista compartida en Reclamos → Gestionar. Allí se puede corregir el agregador, fecha y detalles, elegir evidencia, quitar filas o descartar la lista. Solo **Guardar en Historial** confirma el lote; después Gestionar queda vacío. El Sheet automático conserva su importación directa y no reemplaza el borrador manual.
+
+Los datos presentes de los Excel reemplazan los anteriores (incluido monto cero); los campos vacíos conservan el valor existente. Se preservan estados de refutación, evidencia y correcciones de identidad. Las métricas diarias usan las cifras originales del reporte aunque se excluyan filas de la lista.
+
+La cámara permite zoom con dos dedos y elegir lentes disponibles. «Amplio» solo aparece si el dispositivo identifica un lente ultra gran angular. El navegador puede no exponer todos los lentes físicos; no se infiere un 0,5× a partir del orden de las cámaras. Las fotos ampliadas usan el mismo visor táctil en todas las pantallas.
+
+### Activación y compatibilidad
+
+1. Ejecutar `supabase/migrations/20260927090000_reviewed_complaint_imports.sql` antes de publicar el frontend.
+2. Publicar el frontend 1.5 y recargar las sesiones anteriores.
+3. La primera lectura importa cada JSON de Storage al documento versionado de Postgres, mediante inserción exclusiva. Los originales quedan como respaldo y dejan de aceptar escrituras desde clientes antiguos una vez migrados.
+
+Las confirmaciones escriben Historial, Métricas, marcas de fotos y estado del borrador en una transacción de Postgres. Las revisiones previenen sobrescrituras entre dispositivos; reintentar una confirmación ya completada devuelve su resultado anterior. Las ediciones de métricas preservan cambios en otros campos y rechazan conflictos en el mismo dato. Los documentos conservan sus formatos públicos anteriores; las nuevas tablas no exponen acceso directo a clientes.
+
+Para una reversión, no basta con publicar 1.4: esa versión escribe los JSON antiguos. Deben exportarse primero los documentos actuales de Postgres a Storage y retirar las restricciones de escritura en una ventana controlada. No borrar los documentos ni los respaldos como parte de una reversión de interfaz.
+
+Validación: `npm test`, `npm run lint`, `npm run build`. El workflow de validación prueba también la migración dos veces y los casos de concurrencia, atomicidad, descarte e idempotencia en un PostgreSQL aislado. Los archivos de `tests/database/` son exclusivamente para esa base de prueba. El acceso al gran angular requiere además validación física en Android/iPhone.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
@@ -27,15 +47,15 @@ Solo se importa KFC - LA PLATA (espacios, mayúsculas y guiones normalizados):
 
 Las cantidades vacías son cero; hojas, filas o fechas faltantes bloquean la carga. Se leen resultados guardados de fórmulas, sin ejecutar fórmulas ni macros. Los reclamos usan horario argentino. Los pedidos únicos con reclamo determinan la cantidad diaria de quejas.
 
-Las métricas de PedidosYa se reemplazan por día, no se suman. Las reimportaciones conservan detalles existentes, correcciones manuales, estados y evidencias; completan campos faltantes y no eliminan registros ausentes del reporte. Duplicados idénticos se omiten; detalles contradictorios de un mismo pedido/fecha bloquean la carga con las filas afectadas.
+Las métricas de PedidosYa se reemplazan por día, no se suman. Al confirmar la lista, las reimportaciones actualizan los detalles presentes y conservan correcciones de identidad, estados y evidencias. Los vacíos mantienen el dato existente y no se eliminan registros ausentes del reporte. Duplicados idénticos se omiten; detalles contradictorios de un mismo pedido/fecha bloquean la carga con las filas afectadas.
 
-El XLSX se procesa localmente en un Worker con SheetJS CE 0.20.3 (distribución ESM y licencia incluidas en src/vendor). No se sube el libro completo ni se importan datos de otros locales. El historial y las métricas se guardan en los objetos de Storage existentes; si falla la segunda escritura, se informa el guardado parcial y se puede reintentar sin duplicados.
+El XLSX se procesa localmente en un Worker con SheetJS CE 0.20.3 (distribución ESM y licencia incluidas en src/vendor). No se sube el libro completo ni se importan datos de otros locales. Los datos extraídos quedan en el borrador compartido; al confirmar, Historial y Métricas se guardan juntos en Postgres.
 
 Pruebas: npm test. Build: npm run build. El archivo de referencia de septiembre de 2026 produjo 27 reclamos y los 7 pares de pedidos/AWT esperados; ese archivo privado no se incluye en el repositorio.
 
 ## Importación Excel Rappi / Rappi Turbo
 
-En Reclamos o Métricas → Cargar, elegir obligatoriamente Rappi o Rappi Turbo antes del archivo. Ambos usan el mismo formato, pero se guardan como cuentas independientes.
+En Reclamos o Métricas → Cargar, seleccionar el Excel de Rappi. Rappi o Rappi Turbo se detectan por la columna Tienda y pueden revisarse antes de guardar. Ambos usan el mismo formato, pero se guardan como cuentas independientes.
 
 Se lee únicamente Reclamos - Órdenes: encabezados en fila 8, datos desde fila 9. B: pedido; D: tienda; E: fecha; F: motivo; J: detalle del motivo; M: compensación pagada por el restaurante; N: comentario. C, G, H, I, K y L se ignoran. A y O están vacías en el formato de referencia. Se filtra el nombre completo KFC - LA PLATA normalizando espacios, mayúsculas y guiones.
 

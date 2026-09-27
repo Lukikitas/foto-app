@@ -4,6 +4,7 @@ import { getCameraFlash, getTakenByHistory, saveCameraFlash, saveLastTakenBy } f
 import { subscribe } from '../lib/uploadQueue';
 import { inspectCaptureCanvas, isSameCapturedScene } from '../lib/imageQuality';
 import PhotographerPicker from './PhotographerPicker';
+import useCameraControls from './useCameraControls';
 
 const STEPS = {
   ticket: 'ticket',
@@ -35,34 +36,6 @@ function drawFrame(video, canvas, maxWidth = 2560, zoom = 1) {
     width,
     height,
   );
-}
-
-function waitForVideo(video) {
-  if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve();
-
-  return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      cleanup();
-      reject(new Error('La cámara no devolvió imagen.'));
-    }, 8000);
-
-    const onReady = () => {
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        cleanup();
-        resolve();
-      }
-    };
-
-    const cleanup = () => {
-      window.clearTimeout(timeout);
-      video.removeEventListener('loadeddata', onReady);
-      video.removeEventListener('loadedmetadata', onReady);
-    };
-
-    video.addEventListener('loadeddata', onReady);
-    video.addEventListener('loadedmetadata', onReady);
-    onReady();
-  });
 }
 
 function canvasToFile(canvas, name, type, quality) {
@@ -146,43 +119,20 @@ function getLiveTrack(stream) {
   return stream?.getVideoTracks?.()[0] || null;
 }
 
-function getHardwareZoomRange(track) {
-  const range = track?.getCapabilities?.().zoom;
-  if (!range || !Number.isFinite(range.min) || !Number.isFinite(range.max) || range.max <= 1) {
-    return null;
-  }
-  return { min: range.min, max: Math.min(range.max, Math.max(4, range.min)), step: range.step };
-}
-
-function nextHardwareZoom(current, direction, range) {
-  const step = Number.isFinite(range.step) && range.step > 0 ? range.step : 0;
-  const desired = current + direction * Math.max(0.5, step);
-  const snapped = step
-    ? range.min + Math.round((desired - range.min) / step) * step
-    : desired;
-  return Math.max(1, range.min, Math.min(range.max, Number(snapped.toFixed(2))));
-}
-
 export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, onCancel }) {
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
   const ticketFileRef = useRef(null);
   const ticketUpgradeRef = useRef(null);
   const pendingPairRef = useRef(null);
   const flashOnRef = useRef(getCameraFlash());
-  const [status, setStatus] = useState('starting');
   const [step, setStep] = useState(STEPS.ticket);
-  const [error, setError] = useState(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [queuedPairs, setQueuedPairs] = useState(0);
   const [pendingTasks, setPendingTasks] = useState(0);
   const [flashOn, setFlashOn] = useState(getCameraFlash);
-  const [flashSupported, setFlashSupported] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [minZoom, setMinZoom] = useState(1);
-  const [maxZoom, setMaxZoom] = useState(3);
-  const [hardwareZoom, setHardwareZoom] = useState(false);
-  const [zoomBusy, setZoomBusy] = useState(false);
+  const camera = useCameraControls(videoRef, flashOnRef);
+  const { streamRef, status, error, setError, zoom, minZoom, maxZoom, hardwareZoom, zoomBusy,
+    flashSupported, setFlashSupported } = camera;
   const [qualityNotice, setQualityNotice] = useState(null);
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [whoOpen, setWhoOpen] = useState(() => !takenBy?.trim());
@@ -192,101 +142,16 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   }, [flashOn]);
 
   useEffect(() => {
-    let active = true;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    async function applyFlash(track) {
-      const supported = trackSupportsTorch(track);
-      if (!active) return;
-      setFlashSupported(supported);
-      if (supported) {
-        await setTrackTorch(track, flashOnRef.current);
-      }
-    }
-
-    async function startCamera() {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error('Este dispositivo no permite usar la cámara desde la app.');
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 2560 },
-            height: { ideal: 1920 },
-          },
-        });
-        if (!active) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        await waitForVideo(videoRef.current);
-        if (!active) return;
-        const track = getLiveTrack(stream);
-        const zoomRange = getHardwareZoomRange(track);
-        if (zoomRange) {
-          try {
-            await track.applyConstraints({ advanced: [{ zoom: Math.max(1, zoomRange.min) }] });
-            if (!active) return;
-            setHardwareZoom(true);
-            setMinZoom(Math.max(1, zoomRange.min));
-            setMaxZoom(zoomRange.max);
-            setZoom(track.getSettings?.().zoom ?? 1);
-          } catch {
-            // Some browsers report zoom support but reject zoom constraints.
-          }
-        }
-        setStatus('ready');
-        await applyFlash(track);
-      } catch (startError) {
-        if (active) {
-          setError(startError.message || 'No se pudo abrir la cámara.');
-          setStatus('error');
-        }
-      }
-    }
-
-    startCamera();
-
-    const torchRetry = window.setTimeout(() => {
-      if (!active) return;
-      applyFlash(getLiveTrack(streamRef.current));
-    }, 700);
-
-    const unsubscribe = subscribe((items) => {
-      setPendingTasks(
-        items.filter((item) =>
-          item.status === 'pending' || item.status === 'analyzing' || item.status === 'uploading'
-        ).length,
-      );
-    });
-
-    return () => {
-      active = false;
-      window.clearTimeout(torchRetry);
-      unsubscribe();
-      document.body.style.overflow = previousOverflow;
-      const track = getLiveTrack(streamRef.current);
-      if (track && flashOnRef.current) {
-        setTrackTorch(track, false);
-      }
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      flushPendingPair(false);
-      ticketFileRef.current = null;
-    };
+    const unsubscribe = subscribe((items) => setPendingTasks(items.filter(item =>
+      item.status === 'pending' || item.status === 'analyzing' || item.status === 'uploading').length));
+    return () => { unsubscribe(); flushPendingPair(false); ticketFileRef.current = null; };
   }, []);
 
   function resetToTicket() {
     ticketFileRef.current = null;
     ticketUpgradeRef.current = null;
     setStep(STEPS.ticket);
+    void camera.resetForStep(true);
     setTakingPhoto(false);
     setQualityNotice(null);
   }
@@ -332,43 +197,9 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     setError(null);
   }
 
-  async function handleZoom(direction) {
-    if (status !== 'ready' || zoomBusy || takingPhoto) return;
-
-    const track = getLiveTrack(streamRef.current);
-    const range = hardwareZoom ? getHardwareZoomRange(track) : null;
-    const next = range
-      ? nextHardwareZoom(zoom, direction, range)
-      : Math.max(1, Math.min(maxZoom, Math.round((zoom + direction * 0.5) * 10) / 10));
-    if (next === zoom) return;
-
-    if (hardwareZoom) {
-      setZoomBusy(true);
-      try {
-        await track.applyConstraints({ advanced: [{ zoom: next }] });
-        setZoom(track.getSettings?.().zoom ?? next);
-        setError(null);
-      } catch {
-        setError('No se pudo ajustar el zoom de esta cámara.');
-      } finally {
-        setZoomBusy(false);
-      }
-    } else {
-      setZoom(next);
-    }
-  }
-
-  async function resetZoom() {
-    if (zoom <= 1) return;
-    const track = getLiveTrack(streamRef.current);
-    setZoomBusy(true);
-    if (hardwareZoom && track?.readyState === 'live') {
-      try {
-        await track.applyConstraints({ advanced: [{ zoom: minZoom }] });
-      } catch { /* Keep the camera usable when a device rejects the reset. */ }
-    }
-    setZoom(hardwareZoom ? (track?.getSettings?.().zoom ?? minZoom) : 1);
-    setZoomBusy(false);
+  function handleZoom(direction) {
+    if (status !== 'ready' || takingPhoto) return;
+    void camera.requestZoom(zoom + direction * 0.25);
   }
 
   function commitPair({ ticketFile, ticketUpgrade, evidenceFile, evidenceUpgrade }) {
@@ -435,7 +266,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         if (navigator.vibrate) navigator.vibrate(35);
         setStep(STEPS.evidence);
         setQualityNotice(shot.quality.issue ? { issue: shot.quality.issue, step: STEPS.ticket } : null);
-        void resetZoom();
+        void camera.resetForStep(false);
         setError(null);
         setTakingPhoto(false);
         return;
@@ -472,7 +303,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       setError(null);
       setStep(STEPS.ticket);
       setTakingPhoto(false);
-      void resetZoom();
+      void camera.resetForStep(true);
     } catch (captureError) {
       setError(captureError.message || 'No se pudo tomar la foto.');
       if (step === STEPS.evidence && !ticketFileRef.current) {
@@ -502,7 +333,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
 
   return (
     <section className={`order-camera${whoOpen ? ' order-camera--who-open' : ''}`} aria-label="Cámara rápida de pedidos">
-      <div className="order-camera__viewport">
+      <div className="order-camera__viewport" {...(takingPhoto ? {} : camera.gestures)}>
+        <div className="order-camera__frame" style={{ aspectRatio: camera.imageRatio, width: `min(100vw, calc(100dvh * ${camera.imageRatio}))` }}>
         <video
           ref={videoRef}
           className="order-camera__video"
@@ -517,6 +349,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         >
           {isTicketStep && <span className="order-camera__guide-focus" />}
           <span>{guideText}</span>
+        </div>
         </div>
       </div>
 
@@ -591,9 +424,18 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       )}
 
       <div className="order-camera__actions">
+        {camera.devices.length > 1 && <div className="order-camera__lenses">
+          {camera.wideDeviceId && <>
+            <button type="button" className="btn btn--small btn--ghost" disabled={takingPhoto || zoomBusy || status !== 'ready'} onClick={() => camera.switchCamera(camera.normalDeviceId, !isTicketStep)}>Normal</button>
+            <button type="button" className="btn btn--small btn--ghost" disabled={takingPhoto || zoomBusy || status !== 'ready'} onClick={() => camera.switchCamera(camera.wideDeviceId, !isTicketStep)}>Amplio</button>
+          </>}
+          <label>Elegir cámara <select aria-label="Elegir cámara" value={camera.deviceId} disabled={takingPhoto || zoomBusy || status !== 'ready'} onChange={event => camera.switchCamera(event.target.value, !isTicketStep)}>
+            {camera.devices.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Cámara ${index + 1}`}</option>)}
+          </select></label>
+        </div>}
         <div className="order-camera__zoom" aria-label="Zoom de cámara">
           <button type="button" onClick={() => handleZoom(-1)} disabled={status !== 'ready' || zoomBusy || takingPhoto || zoom <= minZoom} aria-label="Disminuir zoom">−</button>
-          <output aria-live="polite">{Number(zoom.toFixed(1))}×</output>
+          <button type="button" onClick={() => camera.requestZoom(Math.min(maxZoom, Math.max(minZoom, 1)))} disabled={takingPhoto || status !== 'ready'} aria-label="Restablecer zoom">{Number(zoom.toFixed(1))}×</button>
           <button type="button" onClick={() => handleZoom(1)} disabled={status !== 'ready' || zoomBusy || takingPhoto || zoom >= maxZoom} aria-label="Aumentar zoom">+</button>
         </div>
         {step === STEPS.evidence && (

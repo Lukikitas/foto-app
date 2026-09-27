@@ -1,7 +1,8 @@
 import RappiExcelImport from './RappiExcelImport';
 import PeyaRefundsImport from './PeyaRefundsImport';
 import PeyaExcelImport from './PeyaExcelImport';
-import { subscribePeyaImport } from '../lib/peyaImportService';
+import ComplaintDraftReview from './ComplaintDraftReview';
+import { prepareComplaintDraft } from '../lib/complaintDraftStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import {
@@ -47,7 +48,6 @@ import {
 } from '../lib/complaintHistoryStore';
 import {
   deleteHistoryRowsSynchronized,
-  importComplaintsSynchronized,
   setComplaintStatusSynchronized,
   setComplaintStatusesSynchronized,
 } from '../lib/complaintSynchronization.js';
@@ -59,7 +59,6 @@ import {
   downloadTextFile,
   fetchPhotosForComplaints,
   getEvidenceFilename,
-  loadComplaintBatch,
   replacePhotosInRows,
   saveComplaintBatch,
   uploadComplaintPhotoFile,
@@ -69,7 +68,6 @@ import { dailyImportStatusMessage } from '../lib/complaintSync';
 import {
   cachedComplaintSync,
   loadComplaintSync,
-  recordManualCruzar,
   saveSharedSheetUrl,
 } from '../lib/complaintSyncStore';
 import {
@@ -154,7 +152,7 @@ function sourceAmount(rows) {
 }
 
 function readStoredBatch() {
-  return loadComplaintBatch() || { complaints: [], pickedPhotoIds: {} };
+  return { complaints: [], pickedPhotoIds: {} };
 }
 
 function historyFromResult(result) {
@@ -220,15 +218,6 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   );
 
   useEffect(() => subscribeComplaintHistory(setHistoryStore), []);
-  useEffect(() => subscribePeyaImport((result) => {
-    if (!result.historySaved) return;
-    const incoming = result.history.complaints;
-    setComplaints(incoming);
-    setPickedPhotoIds({});
-    setSkipped(0);
-    setFilter('all');
-    loadAndMatch(incoming, {}).catch(() => setError('Los reclamos se guardaron, pero no se pudieron cargar las fotos.'));
-  }), [loadAndMatch]);
 
   const historyPeriod = useMemo(
     () => resolvePeriod(historyPreset, argentinaToday(), historyCustomFrom, historyCustomTo),
@@ -271,12 +260,6 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         }
         if (result?.status === 'imported' && result.complaints?.length) {
           setError(null);
-          setComplaints(result.complaints);
-          setPickedPhotoIds({});
-          setSkipped(result.skipped || 0);
-          setFilter('all');
-          saveComplaintBatch(result.complaints, {});
-          loadAndMatch(result.complaints, {}).catch(() => {});
           setNotice(
             `Cruce automático: ${result.complaints.length} reclamos · ${result.added} nuevos · ${result.updated} ya estaban.`,
           );
@@ -544,24 +527,11 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       throw new Error('No encontré códigos de pedido. Copiá las columnas de código, hora y motivo.');
     }
     const nextComplaints = assignComplaintsAggregator(parsed.complaints, importAggregator);
-    setComplaints(nextComplaints);
-    setPickedPhotoIds({});
+    await prepareComplaintDraft(nextComplaints, { source: 'manual', sheetUrl: fromSheetUrl ? sheetUrl.trim() : '' });
     setSkipped(parsed.skipped);
-    setFilter('all');
-    const matched = await loadAndMatch(nextComplaints, {});
-    saveComplaintBatch(nextComplaints, {});
-    const result = await importComplaintsSynchronized(nextComplaints, matched);
-    if (result.updatedPhotos?.length) applyUpdatedPhotos(result.updatedPhotos);
-    setHistoryStore(historyFromResult(result));
-    if (fromSheetUrl && sheetUrl.trim()) {
-      setSync(await recordManualCruzar(sheetUrl));
-    } else if (sheetUrl.trim()) {
-      setSync(await saveSharedSheetUrl(sheetUrl));
-    }
     setPasteText('');
-    setNotice(
-      `${nextComplaints.length} reclamos cruzados · ${result.added} nuevos en historial · ${result.updated} ya estaban (sin duplicar).`,
-    );
+    setImportOpen(false);
+    setNotice('Lista preparada. Revisala y elegí Guardar en Historial cuando esté correcta.');
   }
 
   async function runImport(reader, options = {}) {
@@ -633,29 +603,9 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     return nextPhotos;
   }
 
-  function handleCodeListImported({ complaints: nextComplaints, rows: matchedRows, result }) {
-    const updatedById = new Map((result.updatedPhotos || []).map((photo) => [photo.id, photo]));
-    const nextRows = matchedRows.map((row) => ({
-      ...row,
-      photo: updatedById.get(row.photo?.id) || row.photo,
-    }));
-    const nextPhotos = new Map(photos.map((photo) => [photo.id, photo]));
-    result.updatedPhotos?.forEach((photo) => nextPhotos.set(photo.id, photo));
-    setComplaints(nextComplaints);
-    setPhotos([...nextPhotos.values()]);
-    setRows(attachHistoryToRows(nextRows, historyFromResult(result)));
-    setHistoryStore(historyFromResult(result));
-    setPickedPhotoIds({});
-    setFilter('all');
-    saveComplaintBatch(nextComplaints, {});
-    setNotice(`${nextComplaints.length} reclamos cargados desde la lista de códigos.`);
-  }
-
-  function pickPhoto(complaintId, photoId) {
-    const nextPicks = { ...pickedPhotoIds, [complaintId]: photoId };
-    setPickedPhotoIds(nextPicks);
-    rematch(complaints, nextPicks, photos);
-    saveComplaintBatch(complaints, nextPicks);
+  function handleCodeListImported() {
+    setImportOpen(false);
+    setNotice('Lista preparada para revisar antes de guardar.');
   }
 
   async function markRow(row, { status } = {}) {
@@ -1068,7 +1018,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   }
 
   const historyCount = Object.keys(historyStore.items || {}).length;
-  const showCruzarList = inboxView === 'cruzar' && rowsWithHistory.length > 0;
+  const showCruzarList = false;
   const showHistoryList = inboxView === 'historial';
 
   return (
@@ -1204,11 +1154,13 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         </p>
       )}
 
-      {inboxView === 'cruzar' && !showCruzarList && !loading && (
+      {false && (
         <div className="gallery__state gallery__state--empty complaints__empty">
           <p>Usá «Cargar datos» para importar un Excel, pegar una lista o leer Google Sheets. Los reclamos cargados aparecerán acá para gestionarlos.</p>
         </div>
       )}
+
+      <ComplaintDraftReview active={inboxView === 'cruzar'} onOpenHistory={openHistorial} />
 
       {showHistoryList && (
         <div className="complaints__history-tools">
