@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { readDocument, mutateDocument } from './sharedDocuments.js';
 import {
   attachPhotosToHistory,
   clearHistoryItems,
@@ -15,140 +15,42 @@ import {
   upsertHistoryItems,
 } from './complaintHistory.js';
 
-const BUCKET = 'photos';
-const FILE_PATH = 'complaints/history.json';
 const CACHE_KEY = 'foto-app-complaints-history';
-
-function isMissingObject(error) {
-  const status = String(error?.statusCode || error?.status || '');
-  const message = String(error?.message || error?.error || '').toLowerCase();
-  return status === '404' || message.includes('not found') || message.includes('object not found');
-}
-
-function readCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? parseHistory(JSON.parse(raw)) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(store) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(store));
-  } catch {
-    // localStorage no disponible
-  }
-}
-
 let memoryStore = null;
 let loadPromise = null;
-let writeChain = Promise.resolve();
 const listeners = new Set();
-
-function emitComplaintHistory(store) {
-  listeners.forEach((listener) => {
-    try {
-      listener(store);
-    } catch {
-      // un subscriber no debe frenar el guardado
-    }
-  });
-}
-
 function remember(store) {
   memoryStore = store;
-  writeCache(store);
-  emitComplaintHistory(store);
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(store)); } catch { /* Cache is optional. */ }
+  listeners.forEach(listener => listener(store));
   return store;
 }
-
 export function cachedComplaintHistory() {
-  return memoryStore || readCache() || emptyHistory();
+  if (memoryStore) return memoryStore;
+  try { return parseHistory(JSON.parse(localStorage.getItem(CACHE_KEY))); } catch { return emptyHistory(); }
 }
-
 export function subscribeComplaintHistory(listener) {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  listeners.add(listener); return () => listeners.delete(listener);
 }
-
 export async function loadComplaintHistory({ force = false, strict = false } = {}) {
-  if (memoryStore && !force) return memoryStore;
-  if (loadPromise) {
-    if (!strict) return loadPromise;
-    await loadPromise;
-  }
-
-  loadPromise = (async () => {
-    const { data, error } = await supabase.storage.from(BUCKET).download(FILE_PATH);
-    if (error) {
-      if (isMissingObject(error)) {
-        return remember(emptyHistory());
-      }
-      if (strict) throw new Error(error.message || 'No se pudo leer el historial actual.');
-      const cached = readCache();
-      if (cached) {
-        return remember(cached);
-      }
-      throw new Error(error.message || 'No se pudo leer el historial de reclamos.');
-    }
-
-    let parsed;
-    try {
-      parsed = parseHistory(JSON.parse(await data.text()));
-    } catch {
-      if (strict) throw new Error('No se pudo interpretar el historial actual.');
-      parsed = emptyHistory();
-    }
-    if (
-      memoryStore?.updatedAt &&
-      parsed.updatedAt &&
-      Date.parse(memoryStore.updatedAt) > Date.parse(parsed.updatedAt)
-    ) {
-      return memoryStore;
-    }
-    return remember(parsed);
-  })().finally(() => {
-    loadPromise = null;
-  });
-
+  if (memoryStore && !force && !strict) return memoryStore;
+  if (loadPromise) return loadPromise;
+  loadPromise = readDocument('history', emptyHistory)
+    .then(doc => remember(parseHistory(doc.data)))
+    .catch(error => { if (strict) throw error; if (memoryStore) return memoryStore; throw error; })
+    .finally(() => { loadPromise = null; });
   return loadPromise;
 }
-
-export async function saveComplaintHistory(store) {
-  const next = {
-    ...parseHistory(store),
-    version: 2,
-    updatedAt: new Date().toISOString(),
-  };
-  const blob = new Blob([JSON.stringify(next)], { type: 'application/json' });
-  const { error } = await supabase.storage.from(BUCKET).upload(FILE_PATH, blob, {
-    upsert: true,
-    contentType: 'application/json',
-    cacheControl: '0',
-  });
-  if (error) throw new Error(error.message || 'No se pudo guardar el historial de reclamos.');
-  return remember(next);
-}
-
-export function mutateComplaintHistory(mutator) {
-  const run = writeChain.catch(() => {}).then(async () => {
-    const current = await loadComplaintHistory();
+export async function mutateComplaintHistory(mutator) {
+  const result = await mutateDocument('history', emptyHistory, parseHistory, current => {
     const result = mutator(current);
     const next = result?.store || result;
-    const saved = await saveComplaintHistory(next);
-    if (result && typeof result === 'object' && result.store) {
-      return { ...result, store: saved };
-    }
-    return saved;
+    next.updatedAt = new Date().toISOString();
+    return result;
   });
-  writeChain = run.catch(() => {});
-  return run;
+  remember(result?.store || result);
+  return result;
 }
-
 function nextStatus(current, { status, accepted, refutado } = {}) {
   if (status && COMPLAINT_STATUSES[status]) return status;
   if (accepted && refutado) return COMPLAINT_STATUSES.refutado_aceptado;

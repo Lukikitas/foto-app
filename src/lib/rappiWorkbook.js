@@ -100,10 +100,11 @@ export function mergeRappiHistory(store, report, rows = []) {
     if (!existing && next.items[complaint.id]) throw new Error('El código ' + complaint.orderCode + ' coincide con otro registro. Revisá el historial.');
     const item = existing ? normalizeHistoryItem({
       ...existing,
-      reason: isPendingComplaintDetails(existing.reason) ? complaint.reason : existing.reason || complaint.reason,
-      comment: existing.comment || complaint.comment,
-      amount: existing.amount ?? complaint.amount,
-      fields: { ...complaint.fields, ...existing.fields },
+      reason: complaint.reason && !isPendingComplaintDetails(complaint.reason) ? complaint.reason : existing.reason,
+      comment: complaint.comment || existing.comment,
+      combo: complaint.combo || existing.combo,
+      amount: complaint.amount ?? existing.amount,
+      fields: { ...existing.fields, ...Object.fromEntries(Object.entries(complaint.fields || {}).filter(([, value]) => value != null && String(value).trim())) },
       updatedAt: stamp,
     }) : normalizeHistoryItem({ ...complaint, importedAt: stamp, updatedAt: stamp });
     // Never borrow an order time from the photo. The report only contains a date.

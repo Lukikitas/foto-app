@@ -31,8 +31,8 @@ export default function RappiExcelImport({ disabled = false, onBusy }) {
   async function confirm() {
     working(true); setError(''); setNotice('');
     try {
-      const result = await importRappiReport(preview.report);
-      setNotice('Rappi / Turbo: importación completa. ' + result.history.added + ' reclamos nuevos, ' + result.history.updated + ' existentes. Pedidos totales y AWT conservados. ' + result.warning);
+      await importRappiReport(preview.report);
+      setNotice('Lista preparada. Abrí Reclamos → Gestionar para revisar, corregir y guardar en Historial.');
       setPreview(null);
     } catch (err) { setError(err.message || 'No se pudo guardar. Podés reintentar.'); }
     finally { working(false); }
@@ -52,14 +52,14 @@ export default function RappiExcelImport({ disabled = false, onBusy }) {
         <p>{preview.filename} · {preview.report.from.split('-').reverse().join('/')} al {preview.report.to.split('-').reverse().join('/')}</p>
         <p>{preview.report.complaints.length} reclamos: {preview.added} nuevos y {preview.updated} existentes. {preview.report.excluded} filas de otros locales excluidas. {preview.report.duplicates} duplicados omitidos.</p>
         <p>Compensación del restaurante: <strong>{formatMoney(preview.report.complaints.reduce((sum, c) => sum + (c.amount || 0), 0))}</strong>. «$» significa cero. {preview.report.missingAmounts > 0 ? preview.report.missingAmounts + ' reclamos sin monto informado.' : ''}</p>
-        <p>Fechas sin hora. Se actualizarán únicamente las quejas de esta cuenta en el período. Se conservan pedidos totales, AWT, refutaciones, fotos y detalles existentes.</p>
+        <p>Fechas sin hora. Se actualizarán únicamente las quejas de esta cuenta en el período. Se conservan pedidos totales, AWT, refutaciones y fotos. Los datos presentes, incluidos montos, reemplazarán los anteriores al confirmar en Gestionar.</p>
         <details><summary>Ver quejas diarias: valores actuales → Excel</summary><div className="peya-import__table"><table><thead><tr><th>Fecha</th><th>Quejas</th></tr></thead>
           <tbody>{preview.report.daily.map(row => <tr key={`${row.aggregator}-${row.day}`}><th>{row.day.split('-').reverse().join('/')} · {getAggregatorLabel(row.aggregator)}</th><td>{preview.metrics.days?.[row.day]?.[row.aggregator]?.complaints ?? 'Sin datos'} → {row.complaints}</td></tr>)}</tbody>
         </table></div></details>
         <details open><summary>Ver los {preview.report.complaints.length} reclamos</summary><div className="peya-import__table"><table><thead><tr><th>Pedido</th><th>Fecha</th><th>Motivo y detalle</th><th>Comentario del cliente</th><th>Compensación del restaurante</th></tr></thead>
           <tbody>{preview.report.complaints.map(c => <tr key={c.id}><td>{c.orderCode.replace(/^(RAPPITURBO|RAPPI)/, '')}<br /><small>{getAggregatorLabel(c.aggregator)}</small></td><td>{c.day.split('-').reverse().join('/')}<br />Sin hora</td><td>{c.reason}<br />{c.fields['Detalle del motivo']}</td><td>{c.comment}</td><td>{c.amount == null ? 'Sin monto' : formatMoney(c.amount)}</td></tr>)}</tbody>
         </table></div></details>
-        <div className="peya-import__actions"><button type="button" className="btn btn--primary" disabled={busy || disabled} onClick={confirm}>Importar reclamos</button><button type="button" className="btn btn--ghost" disabled={busy} onClick={() => { setPreview(null); setError(''); }}>Cancelar</button></div>
+        <div className="peya-import__actions"><button type="button" className="btn btn--primary" disabled={busy || disabled} onClick={confirm}>Preparar lista</button><button type="button" className="btn btn--ghost" disabled={busy} onClick={() => { setPreview(null); setError(''); }}>Cancelar</button></div>
       </div>}
     </section>
   );

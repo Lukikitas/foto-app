@@ -1,3 +1,4 @@
+import PhotoLightbox from './PhotoLightbox';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, detectAggregator, getAggregatorLabel } from '../lib/aggregators';
 import { setTargetAwtPct, setTargetComplaintPct } from '../lib/metrics';
@@ -7,7 +8,7 @@ import {
   RECOVERY_MODES, confirmRecoveredCode, loadRecoveryEvents,
   loadRecoveryProgress, loadRecoverySettings, saveRecoverySettings,
 } from '../lib/recoverySettings';
-import { APP_VERSION, RELEASE_NOTES } from '../lib/version.js';
+import { APP_VERSION, RELEASE_GROUPS } from '../lib/version.js';
 
 function argentinaDate(value) {
   if (!value) return '—';
@@ -33,6 +34,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [releaseOpen, setReleaseOpen] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const releaseButtonRef = useRef(null);
   const releaseCloseRef = useRef(null);
 
@@ -162,7 +164,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
       {notice && <p className="message message--success" role="status">{notice}</p>}
 
       <div className="settings__grid">
-        <section className="settings__card">
+        <section className="settings__card settings__operation">
           <h3>Revisión automática de “Sin código”</h3>
           {!settings ? <p>Cargando…</p> : (
             <form onSubmit={saveOperation}>
@@ -186,7 +188,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           )}
         </section>
 
-        <section className="settings__card">
+        <section className="settings__card settings__targets">
           <h3>Objetivos de Métricas</h3>
           {!targets ? <p>Cargando…</p> : (
             <form onSubmit={saveTargets}>
@@ -205,7 +207,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           )}
         </section>
 
-        <section className="settings__card">
+        <section className="settings__card settings__appearance">
           <h3>Apariencia</h3>
           <label>Tema
             <select value={theme} onChange={(event) => onThemeChange(event.target.value)}>
@@ -216,10 +218,11 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
         </section>
 
         <section className="settings__card settings__version-card">
-          <h3>Versión</h3>
-          <p className="settings__version-number">Versión {APP_VERSION}</p>
+          <div className="settings__version-top"><div><span className="settings__version-kicker">Acerca de la app</span><h3>Delivery · La Plata</h3></div><span className="settings__version-mark" aria-hidden="true">D</span></div>
+          <div><span className="settings__version-kicker">Versión instalada</span><p className="settings__version-number">{APP_VERSION}</p></div>
+          <p>Una cámara más cómoda, reclamos bajo tu control y fotos que podés explorar con los dedos.</p>
           <button ref={releaseButtonRef} type="button" className="btn btn--ghost"
-            onClick={() => setReleaseOpen(true)}>Ver cambios de versión</button>
+            onClick={() => setReleaseOpen(true)}>Ver novedades →</button>
         </section>
       </div>
 
@@ -249,9 +252,9 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
                 const draft = drafts[item.photo_id] || { code: '', aggregator: '' };
                 return (
                   <article className="settings__result" key={item.photo_id}>
-                    <a href={photo.public_url} target="_blank" rel="noreferrer">
+                    <button type="button" className="settings__photo-button" onClick={() => setLightboxPhoto(photo)} aria-label="Ampliar foto del pedido">
                       <img src={photo.public_url} alt="Foto del pedido analizado" loading="lazy" />
-                    </a>
+                    </button>
                     <div>
                       <strong>{item.status === 'confirmed' ? 'Confirmado' :
                         item.status === 'manual_override' ? 'Corregido manualmente' : 'Propuesta pendiente'}</strong>
@@ -302,6 +305,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           </>
         )}
       </section>
+      {lightboxPhoto && <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />}
       {releaseOpen && <div className="release-modal" onMouseDown={(event) => {
         if (event.target === event.currentTarget) setReleaseOpen(false);
       }}>
@@ -312,7 +316,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
             <button ref={releaseCloseRef} type="button" className="btn btn--ghost btn--small"
               onClick={() => setReleaseOpen(false)} aria-label="Cerrar novedades">Cerrar</button>
           </div>
-          <ul>{RELEASE_NOTES.map((note) => <li key={note}>{note}</li>)}</ul>
+          <div>{RELEASE_GROUPS.map(group => <section className="release-modal__group" key={group.title}><h3>{group.title}</h3><ul>{group.notes.map(note => <li key={note}>{note}</li>)}</ul></section>)}</div>
         </section>
       </div>}
     </section>

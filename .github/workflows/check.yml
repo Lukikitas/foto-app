@@ -1,0 +1,46 @@
+name: Validate version 1.5
+on:
+  pull_request:
+  push:
+    branches: ['codex/**']
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-only
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: foto_app_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: test-only
+      PGDATABASE: foto_app_test
+    steps:
+      - uses: actions/checkout@v4
+      - run: psql -v ON_ERROR_STOP=1 -f tests/database/bootstrap.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260927090000_reviewed_complaint_imports.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260927090000_reviewed_complaint_imports.sql
+      - run: psql -v ON_ERROR_STOP=1 -f tests/database/reviewed-imports.sql

@@ -7,7 +7,7 @@ import {
   parseComplaintCodeList,
 } from '../lib/complaintCodeList.js';
 import { matchComplaintsToPhotos } from '../lib/complaintMatch.js';
-import { importComplaintsSynchronized } from '../lib/complaintSynchronization.js';
+import { prepareComplaintDraft } from '../lib/complaintDraftStore.js';
 import { fetchPhotosForComplaints } from '../lib/complaints.js';
 import { toArgentinaDate } from '../lib/metrics.js';
 
@@ -96,15 +96,9 @@ export default function ComplaintCodeListImport({ disabled = false, onBusy, onIm
     }
     working(true);
     try {
-      const rows = items.map((item, index) => ({
-        complaint: complaints[index],
-        photo: item.photo,
-        status: item.photo ? 'matched' : 'unmatched',
-        candidates: item.candidates,
-      }));
-      const result = await importComplaintsSynchronized(complaints, rows);
-      setNotice(`${complaints.length} reclamos cargados: ${result.added} nuevos y ${result.updated} existentes.`);
-      onImported?.({ complaints, rows, result });
+      await prepareComplaintDraft(complaints, { source: 'codes', pickedPhotoIds: Object.fromEntries(items.map((item,index) => [complaints[index].id, item.photo?.id]).filter(([,id]) => id)) });
+      setNotice('Lista preparada para revisar en Gestionar.');
+      onImported?.();
       setText('');
       setItems([]);
       setSelected(new Set());
@@ -156,7 +150,7 @@ export default function ComplaintCodeListImport({ disabled = false, onBusy, onIm
             </div>}
           </article>)}
         </div>
-        <div className="peya-import__actions"><button type="button" className="btn btn--primary" onClick={confirm} disabled={busy || disabled}>Cargar reclamos</button>
+        <div className="peya-import__actions"><button type="button" className="btn btn--primary" onClick={confirm} disabled={busy || disabled}>Preparar lista</button>
           <button type="button" className="btn btn--ghost" onClick={() => { setItems([]); setError(''); }} disabled={busy}>Cancelar</button></div>
       </div>}
     </section>

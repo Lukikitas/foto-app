@@ -1,3 +1,4 @@
+import PhotoLightbox from './PhotoLightbox';
 import { useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, detectAggregator } from '../lib/aggregators';
 import {
@@ -27,6 +28,7 @@ function RecoveryPreview({ url, preview }) {
   const [image, setImage] = useState(null);
   const [rotation, setRotation] = useState(preview?.rotation ?? 90);
   const [showFull, setShowFull] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -67,9 +69,10 @@ function RecoveryPreview({ url, preview }) {
 
   return (
     <div className="code-recovery__preview">
-      <a href={url} target="_blank" rel="noreferrer" aria-label="Abrir foto completa para comprobar el código">
+      {lightboxOpen && <PhotoLightbox photo={{ public_url: url, name: 'Pedido sin código' }} onClose={() => setLightboxOpen(false)} />}
+      <button type="button" className="settings__photo-button" onClick={() => setLightboxOpen(true)} aria-label="Abrir foto completa para comprobar el código">
         <canvas ref={canvasRef} role="img" aria-label="Recorte girado de la foto del pedido" />
-      </a>
+      </button>
       <div>
         <button type="button" className="btn btn--small btn--ghost" onClick={() => setRotation((value) => (value + 90) % 360)}>Girar ↻</button>
         {preview?.crop && (

@@ -1,33 +1,4 @@
-import { beginWorkbookImport } from './workbookImportEvents.js';
-import { executePeyaImport } from './peyaImportFlow.js';
-import { mergeRappiHistory, mergeRappiMetrics } from './rappiWorkbook.js';
-import { loadComplaintHistory, mutateComplaintHistory } from './complaintHistoryStore.js';
-import { loadMetricsStore, saveMetricsStore } from './metricsStore.js';
-import { fetchPhotosForComplaints, saveComplaintBatch } from './complaints.js';
-import { matchComplaintsToPhotos } from './complaintMatch.js';
-import { synchronizeRowsWithHistory } from './complaintSynchronization.js';
-import { announceWorkbookImport } from './workbookImportEvents.js';
+import { prepareComplaintDraft } from './complaintDraftStore.js';
 export async function importRappiReport(report) {
-  const release = beginWorkbookImport();
-  try {
-    const result = await executePeyaImport(report, {
-      loadMetrics: () => loadMetricsStore({ strict: true }),
-      validateHistory: async () => mergeRappiHistory(await loadComplaintHistory({ force: true, strict: true }), report),
-      matchPhotos: async complaints => matchComplaintsToPhotos(complaints, await fetchPhotosForComplaints(complaints)),
-      saveHistory: async (incoming, rows) => (await synchronizeRowsWithHistory(
-        rows,
-        () => mutateComplaintHistory(store => mergeRappiHistory(store, incoming, rows)),
-      )).history,
-      saveMetrics: saveMetricsStore, mergeMetrics: mergeRappiMetrics,
-    });
-    saveComplaintBatch(result.history.complaints, {});
-    announceWorkbookImport(result);
-    return result;
-  } catch (error) {
-    if (error.result?.historySaved) {
-      saveComplaintBatch(error.result.history.complaints, {});
-      announceWorkbookImport(error.result);
-    }
-    throw error;
-  } finally { release(); }
+  return prepareComplaintDraft(report.complaints, { source: 'rappi', report });
 }

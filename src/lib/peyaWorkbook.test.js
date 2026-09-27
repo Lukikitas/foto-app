@@ -95,7 +95,7 @@ test('reimport preserves resolutions, evidence and prefixed existing codes', () 
 test('manual corrections and unrelated records survive import', () => {
   const r=report();const initial=mergePeyaHistory(emptyHistory(),r).store;const old=Object.values(initial.items)[0];
   delete initial.items[old.id];const corrected={...old,id:'99999999|2026-09-17',orderCode:'99999999',sourceId:old.id,manualEdit:true,aggregator:'rappi',amount:500,combo:'Corregido'};initial.items[corrected.id]=corrected;
-  const next=mergePeyaHistory(initial,r);assert.equal(next.added,0);assert.equal(Object.values(next.store.items)[0].amount,500);assert.equal(Object.values(next.store.items)[0].combo,'Corregido');assert.equal(Object.values(next.store.items)[0].aggregator,'rappi');
+  const next=mergePeyaHistory(initial,r);assert.equal(next.added,0);assert.equal(Object.values(next.store.items)[0].amount,r.complaints[0].amount);assert.equal(Object.values(next.store.items)[0].combo,r.complaints[0].combo);assert.equal(Object.values(next.store.items)[0].aggregator,'rappi');
 });
 test('same numeric code on another aggregator is not overwritten', () => {
   const r=report();const initial=mergePeyaHistory(emptyHistory(),r).store;Object.values(initial.items)[0].aggregator='rappi';assert.throws(()=>mergePeyaHistory(initial,r),/otro agregador/);
@@ -120,9 +120,9 @@ test('photo lookup failure warns without losing import', async () => {
   const {deps}=flowDeps();deps.matchPhotos=async()=>{throw Error('sin red');};const result=await executePeyaImport(report(),deps);assert.ok(result.metricsSaved);assert.match(result.warning,/fotos/);
 });
 
-test('legacy bulk edits without manualEdit are preserved', () => {
+test('legacy bulk details are refreshed from the latest report', () => {
   const r=report();const initial=mergePeyaHistory(emptyHistory(),r).store;const item=Object.values(initial.items)[0];
   item.amount=123;item.combo='Producto corregido';item.reason='Motivo corregido';item.comment='Nota interna';
   const after=Object.values(mergePeyaHistory(initial,r).store.items)[0];
-  assert.equal(after.amount,123);assert.equal(after.combo,'Producto corregido');assert.equal(after.reason,'Motivo corregido');assert.equal(after.comment,'Nota interna');
+  assert.equal(after.amount,r.complaints[0].amount);assert.equal(after.combo,r.complaints[0].combo);assert.equal(after.reason,r.complaints[0].reason);assert.equal(after.comment,r.complaints[0].comment);
 });
