@@ -1,17 +1,46 @@
-import { supabase } from './supabase.js';
+import { supabase, supabaseAnonKey, supabaseUrl } from './supabase.js';
 import {
   clearStoredNativeSession,
   fetchNativeSessionPairs,
   markNativePairsAsImported,
+  hashTokenSha256,
 } from './nativeCameraSession.js';
 
 const NATIVE_BUCKET = 'native-captures';
 
-export async function downloadStorageAsFile(bucket, storagePath, fileName, mimeType = 'image/jpeg') {
-  const { data: blob, error } = await supabase.storage.from(bucket).download(storagePath);
-  if (error || !blob) {
-    throw new Error(error?.message || `No se pudo descargar el archivo ${storagePath}`);
+export async function downloadStorageAsFile(
+  bucket,
+  storagePath,
+  fileName,
+  mimeType = 'image/jpeg',
+  credentials = null,
+) {
+  let blob;
+
+  if (bucket === NATIVE_BUCKET && credentials?.sessionId && credentials?.sessionToken) {
+    const tokenHash = await hashTokenSha256(credentials.sessionToken);
+    const response = await fetch(`${supabaseUrl}/functions/v1/native-camera-transfer`, {
+      method: 'GET',
+      headers: {
+        apikey: supabaseAnonKey,
+        'x-session-id': credentials.sessionId,
+        'x-token-hash': tokenHash,
+        'x-storage-path': storagePath,
+      },
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || `No se pudo descargar el archivo ${storagePath}`);
+    }
+    blob = await response.blob();
+  } else {
+    const result = await supabase.storage.from(bucket).download(storagePath);
+    if (result.error || !result.data) {
+      throw new Error(result.error?.message || `No se pudo descargar el archivo ${storagePath}`);
+    }
+    blob = result.data;
   }
+
   return new File([blob], fileName, {
     type: mimeType,
     lastModified: Date.now(),
@@ -42,12 +71,14 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
         pair.ticketPath,
         `ticket-${pair.pairNumber}.jpg`,
         'image/jpeg',
+        { sessionId, sessionToken },
       );
       const evidenceFile = await downloadFn(
         NATIVE_BUCKET,
         pair.evidencePath,
         `evidencia-${pair.pairNumber}.jpg`,
         'image/jpeg',
+        { sessionId, sessionToken },
       );
 
       await enqueueFn({

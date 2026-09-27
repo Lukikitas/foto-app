@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl =
+export const supabaseUrl =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
   globalThis.process?.env?.VITE_SUPABASE_URL ||
   'https://placeholder.supabase.co';
 
-const supabaseAnonKey =
+export const supabaseAnonKey =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
   globalThis.process?.env?.VITE_SUPABASE_ANON_KEY ||
   'placeholder-anon-key';

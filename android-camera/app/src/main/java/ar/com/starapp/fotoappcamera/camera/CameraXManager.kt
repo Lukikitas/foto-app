@@ -164,9 +164,12 @@ class CameraXManager(private val context: Context) {
     fun takePicture(
         outputFile: File,
         onSuccess: (File) -> Unit,
-        onError: (ImageCaptureException) -> Unit
+        onError: (Throwable) -> Unit
     ) {
-        val capture = imageCapture ?: return
+        val capture = imageCapture ?: run {
+            onError(IllegalStateException("La cámara todavía no está lista para capturar."))
+            return
+        }
         val outputOptions = ImageCapture.OutputFileOptions.Builder(outputFile).build()
 
         capture.takePicture(

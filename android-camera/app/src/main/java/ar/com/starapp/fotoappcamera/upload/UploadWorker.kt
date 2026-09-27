@@ -79,13 +79,13 @@ class UploadWorker(
 
                 // 3. Upload ticket
                 db.captureDao().updatePair(pair.copy(uploadState = NativeCapturePair.STATE_UPLOADING))
-                val ticketUploadResult = api.uploadCaptureFile(remoteTicketPath, ticketFile)
+                val ticketUploadResult = api.uploadCaptureFile(remoteTicketPath, ticketFile, sessionId, tokenHash, ticketHash)
                 if (ticketUploadResult.isFailure) {
                     throw ticketUploadResult.exceptionOrNull() ?: Exception("Fallo al subir ticket")
                 }
 
                 // 4. Upload evidence
-                val evidenceUploadResult = api.uploadCaptureFile(remoteEvidencePath, evidenceFile)
+                val evidenceUploadResult = api.uploadCaptureFile(remoteEvidencePath, evidenceFile, sessionId, tokenHash, evidenceHash)
                 if (evidenceUploadResult.isFailure) {
                     throw evidenceUploadResult.exceptionOrNull() ?: Exception("Fallo al subir evidencia")
                 }

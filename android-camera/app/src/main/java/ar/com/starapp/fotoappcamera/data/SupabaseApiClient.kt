@@ -97,14 +97,19 @@ class SupabaseApiClient(
 
     suspend fun uploadCaptureFile(
         storagePath: String,
-        file: File
+        file: File,
+        sessionId: String,
+        tokenHash: String,
+        fileHash: String
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url("$baseUrl/storage/v1/object/$BUCKET_NAME/$storagePath")
+                .url("$baseUrl/functions/v1/native-camera-transfer")
                 .header("apikey", anonKey)
-                .header("Authorization", "Bearer $anonKey")
-                .header("x-upsert", "true")
+                .header("x-session-id", sessionId)
+                .header("x-token-hash", tokenHash)
+                .header("x-storage-path", storagePath)
+                .header("x-content-sha256", fileHash)
                 .header("Content-Type", "image/jpeg")
                 .post(file.asRequestBody(JPEG_MEDIA_TYPE))
                 .build()

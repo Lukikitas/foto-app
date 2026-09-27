@@ -38,7 +38,10 @@ export default function NativeCameraReturnNotice({ onDone }) {
           }
         }
       } catch (err) {
-        if (mounted) setError(err.message || 'Error al recuperar fotos de la cámara.');
+        if (mounted) {
+          setError(err.message || 'Error al recuperar fotos de la cámara.');
+          timer = setTimeout(checkAndImport, 6000);
+        }
       } finally {
         if (mounted) setImporting(false);
       }
