@@ -19,6 +19,12 @@ begin
   begin perform public.foto_draft_action('update',draft_key,1,'{"complaints":[]}'); exception when others then conflict:=sqlerrm like '%REVISION_CONFLICT%'; end;
   if not conflict then raise exception 'Stale draft edit was accepted'; end if;
   conflict := false;
+  begin perform public.foto_draft_action('update',draft_key,null,'{"complaints":[]}'); exception when others then conflict:=sqlerrm like '%REVISION_CONFLICT%'; end;
+  if not conflict then raise exception 'Missing draft revision was accepted'; end if;
+  conflict := false;
+  begin perform public.foto_documents_commit('[{"key":"history","data":{}}]'); exception when others then conflict:=sqlerrm like '%REVISION_CONFLICT%'; end;
+  if not conflict then raise exception 'Missing document revision was accepted'; end if;
+  conflict := false;
   begin
     perform public.foto_documents_commit('[{"key":"history","revision":1,"data":{"items":{"failed":true}}},{"key":"metrics","revision":999,"data":{}}]',draft_key,2);
   exception when others then conflict:=sqlerrm like '%REVISION_CONFLICT%'; end;

@@ -34,7 +34,13 @@ export async function prepareComplaintDraft(complaints, { source = 'manual', rep
   if (await loadDraft()) throw new Error('Ya hay una lista pendiente. Guardala o descartala primero en Gestionar.');
   // Matching is read-only. The review UI repeats it after edits or new photos.
   await fetchPhotosForComplaints(complaints);
-  return emit(await action('create', { payload: { source, report, sheetUrl, complaints: complaints.map(normalizeDraftComplaint), pickedPhotoIds } }));
+  const normalized = complaints.map(normalizeDraftComplaint);
+  const picks = {};
+  complaints.forEach((item, index) => {
+    const chosen = pickedPhotoIds[item.id];
+    if (chosen) picks[normalized[index].id] = chosen;
+  });
+  return emit(await action('create', { payload: { source, report, sheetUrl, complaints: normalized, pickedPhotoIds: picks } }));
 }
 export async function updateDraft(draft, patch) {
   if (patch.complaints) patch = { ...patch, complaints: patch.complaints.map(normalizeDraftComplaint) };
@@ -50,7 +56,8 @@ export async function matchDraft(draft, history) {
   const existingIds = complaints.map(item => {
     try { return findDraftHistory(history, item)?.photoId; } catch { return null; }
   }).filter(Boolean);
-  const extra = existingIds.length ? await fetchPhotosByIds([...new Set(existingIds)]) : [];
+  const requestedIds = [...new Set([...existingIds, ...Object.values(draft.data.pickedPhotoIds || {}).filter(Boolean)])];
+  const extra = requestedIds.length ? await fetchPhotosByIds(requestedIds) : [];
   const byId = new Map([...photos, ...extra].map(photo => [photo.id, photo]));
   const rows = matchComplaintsToPhotos(complaints, [...byId.values()]).map(row => {
     let existing;
@@ -67,7 +74,11 @@ export async function confirmDraft(draft) {
     const historyDoc = await readDocument('history', emptyHistory);
     const metricsDoc = draft.data.report ? await readDocument('metrics', emptyStore) : null;
     const history = parseHistory(historyDoc.data);
-    const { rows } = await matchDraft(draft, history);
+    const { rows, photos } = await matchDraft(draft, history);
+    const available = new Set(photos.map(photo => photo.id));
+    if (draft.data.complaints.some(item => { const id = draft.data.pickedPhotoIds?.[item.id]; return id && !available.has(id); })) {
+      throw new Error('Una foto elegida ya no está disponible. Actualizá las coincidencias y elegí otra antes de guardar.');
+    }
     const result = mergeDraft(history, draft.data, rows);
     const stamp = new Date().toISOString();
     result.store.updatedAt = stamp;

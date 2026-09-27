@@ -23,7 +23,7 @@ create or replace function public.foto_document_read(document_key text, initial_
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare doc public.foto_app_documents;
 begin
-  if document_key not in ('history','metrics') then raise exception 'Documento inválido'; end if;
+  if document_key is null or document_key not in ('history','metrics') then raise exception 'Documento inválido'; end if;
   if initial_data is not null then
     insert into public.foto_app_documents(key,data) values(document_key, initial_data) on conflict do nothing;
   end if;
@@ -42,17 +42,17 @@ begin
     select * into draft from public.complaint_drafts where id=draft_id for update;
     if not found then raise exception 'Lista no encontrada'; end if;
     if draft.state='saved' then return jsonb_build_object('alreadySaved',true,'result',draft.result); end if;
-    if draft.state <> 'pending' or draft.revision <> draft_revision then
+    if draft.state <> 'pending' or draft.revision is distinct from draft_revision then
       raise exception 'REVISION_CONFLICT: La lista cambió en otro dispositivo.';
     end if;
   end if;
-  if jsonb_typeof(changes) <> 'array' then raise exception 'Cambios inválidos'; end if;
+  if jsonb_typeof(changes) is distinct from 'array' then raise exception 'Cambios inválidos'; end if;
   for change in select value from jsonb_array_elements(changes) loop
     select * into doc from public.foto_app_documents where key=change->>'key' for update;
-    if not found or doc.revision <> (change->>'revision')::bigint then
+    if not found or doc.revision is distinct from (change->>'revision')::bigint then
       raise exception 'REVISION_CONFLICT: Los datos cambiaron. Volvé a intentar.';
     end if;
-    if jsonb_typeof(change->'data') <> 'object' then raise exception 'Documento inválido'; end if;
+    if jsonb_typeof(change->'data') is distinct from 'object' then raise exception 'Documento inválido'; end if;
     update public.foto_app_documents set data=change->'data',revision=revision+1,updated_at=now()
       where key=doc.key returning * into doc;
     result := result || jsonb_build_array(to_jsonb(doc));
@@ -76,15 +76,15 @@ begin
     if not found then return null; end if;
   elsif action='create' then
     if exists(select 1 from public.complaint_drafts where state='pending') then raise exception 'Ya hay una lista pendiente. Guardala o descartala primero.'; end if;
-    if jsonb_typeof(payload->'complaints') <> 'array' then raise exception 'Lista inválida'; end if;
+    if jsonb_typeof(payload->'complaints') is distinct from 'array' then raise exception 'Lista inválida'; end if;
     insert into public.complaint_drafts(data) values(payload) returning * into draft;
   elsif action in ('update','discard') then
     select * into draft from public.complaint_drafts where id=draft_id for update;
-    if not found or draft.state <> 'pending' or draft.revision <> expected_revision then
+    if not found or draft.state <> 'pending' or draft.revision is distinct from expected_revision then
       raise exception 'REVISION_CONFLICT: La lista cambió en otro dispositivo.';
     end if;
     if action='update' then
-      if jsonb_typeof(payload->'complaints') <> 'array' then raise exception 'Lista inválida'; end if;
+      if jsonb_typeof(payload->'complaints') is distinct from 'array' then raise exception 'Lista inválida'; end if;
       update public.complaint_drafts set data=payload,revision=revision+1,updated_at=now() where id=draft_id returning * into draft;
     else
       update public.complaint_drafts set state='discarded',revision=revision+1,updated_at=now() where id=draft_id returning * into draft;

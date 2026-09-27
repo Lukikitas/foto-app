@@ -37,10 +37,9 @@ export function mergeDraft(history, draft, rows = []) {
   const affected = [];
   for (const raw of draft.complaints) {
     const complaint = normalizeDraftComplaint(raw);
-    let previous = findDraftHistory(store, complaint);
+    const previous = findDraftHistory(store, complaint);
     if (previous && complaint.identityEdited && (previous.orderCode !== complaint.orderCode || previous.aggregator !== complaint.aggregator)) {
       store = editHistoryItemInStore(store, previous.id, { orderCode: complaint.orderCode, aggregator: complaint.aggregator });
-      previous = findDraftHistory(store, complaint);
     }
     const report = { complaints: [complaint] };
     const result = complaint.aggregator === 'pedidosya'

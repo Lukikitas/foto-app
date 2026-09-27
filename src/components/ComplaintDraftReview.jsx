@@ -30,11 +30,13 @@ export default function ComplaintDraftReview({ active, onOpenHistory }) {
     const revision = incoming ? incoming.id + ':' + incoming.revision : '';
     const matched = incoming && (forceMatch || revision !== matchedRevision.current) ? await matchDraft(incoming, store) : null;
     if (sequence !== requestId.current) return;
+    if (revision !== matchedRevision.current) setSelected(new Set());
     matchedRevision.current = revision;
     setDraft(incoming); setHistory(store);
     if (!incoming) setRows([]); else if (matched) setRows(matched.rows);
   }, []);
   useEffect(() => {
+    const requests = requestId;
     function reload() {
       if (!active || document.visibilityState === 'hidden' || blocked.current || navigator.onLine === false) return;
       refresh().catch(e => setError(e.message));
@@ -48,7 +50,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory }) {
     const timer = setInterval(reload, 5000);
     window.addEventListener('focus', reload); window.addEventListener('online', connectivity); window.addEventListener('offline', connectivity);
     document.addEventListener('visibilitychange', reload);
-    return () => { ++requestId.current; off(); clearInterval(timer);
+    return () => { ++requests.current; off(); clearInterval(timer);
       window.removeEventListener('focus', reload); window.removeEventListener('online', connectivity); window.removeEventListener('offline', connectivity);
       document.removeEventListener('visibilitychange', reload); };
   }, [active, refresh]);
@@ -93,7 +95,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory }) {
         <label>Agregador <select value={bulk.aggregator} onChange={e => setBulk({ ...bulk, aggregator: e.target.value })}><option value="">Sin cambiar</option>{AGGREGATOR_OPTIONS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></label>
         <label>Fecha <input type="date" value={bulk.day} onChange={e => setBulk({ ...bulk, day: e.target.value })} /></label>
         <button className="btn btn--ghost btn--small" disabled={disabled || !selected.size || (!bulk.day && !bulk.aggregator)} onClick={() => patchRows((c,i) => selected.has(i) ? { ...c, ...(bulk.aggregator ? { aggregator: bulk.aggregator } : {}), ...(bulk.day ? { day: bulk.day, orderAtIso: null, timeOfDay: null, dateAssumed: false } : {}) } : c)}>Aplicar a seleccionados</button>
-        <button className="btn btn--ghost btn--small" disabled={disabled || !selected.size} onClick={() => act(async () => { await updateDraft(draft, { complaints: draft.data.complaints.filter((_,i) => !selected.has(i)), pickedPhotoIds: {} }); setSelected(new Set()); })}>Quitar seleccionados</button>
+        <button className="btn btn--ghost btn--small" disabled={disabled || !selected.size} onClick={() => act(async () => { await updateDraft(draft, { complaints: draft.data.complaints.filter((_,i) => !selected.has(i)) }); setSelected(new Set()); })}>Quitar seleccionados</button>
       </div>
       {validation && <p className="message message--error" role="alert">{validation}</p>}
       <div className="draft-review__rows">

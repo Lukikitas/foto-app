@@ -608,6 +608,16 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setNotice('Lista preparada para revisar antes de guardar.');
   }
 
+  async function pickPhoto(complaintId, photoId) {
+    const row = activeRows.find(item => item.complaint.id === complaintId);
+    const photo = row?.candidates?.find(item => item.id === photoId);
+    if (!row || !photo) return;
+    setLoading(true); setError(null);
+    try { setHistoryStore(historyFromResult(await setHistoryPhoto(row.complaint, photo))); }
+    catch (err) { setError(err.message || 'No se pudo asociar la foto.'); }
+    finally { setLoading(false); }
+  }
+
   async function markRow(row, { status } = {}) {
     setLoading(true);
     setError(null);
@@ -1152,12 +1162,6 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         <p className="message message--success" role="status">
           {notice}
         </p>
-      )}
-
-      {false && (
-        <div className="gallery__state gallery__state--empty complaints__empty">
-          <p>Usá «Cargar datos» para importar un Excel, pegar una lista o leer Google Sheets. Los reclamos cargados aparecerán acá para gestionarlos.</p>
-        </div>
       )}
 
       <ComplaintDraftReview active={inboxView === 'cruzar'} onOpenHistory={openHistorial} />

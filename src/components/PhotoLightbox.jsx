@@ -13,6 +13,7 @@ function PhotoViewer({ photo, onClose, onDownload, badges = null }) {
   const points = useRef(new Map());
   const gesture = useRef(null);
   const lastTap = useRef(null);
+  const lastTouch = useRef(0);
   const moved = useRef(false);
   const state = useRef({ scale: 1, offset: { x: 0, y: 0 } });
   const [view, setView] = useState({ scale: 1, offset: { x: 0, y: 0 } });
@@ -76,6 +77,7 @@ function PhotoViewer({ photo, onClose, onDownload, badges = null }) {
     if (!points.current.has(event.pointerId)) return;
     if (event.type === 'pointerup' && !moved.current && event.pointerType !== 'mouse') {
       const point = local(event); const now = Date.now();
+      lastTouch.current = now;
       if (lastTap.current && now - lastTap.current.time < 300 && Math.hypot(point.x-lastTap.current.x, point.y-lastTap.current.y) < 30) {
         zoom(state.current.scale > 1 ? 1 : 2.5, point); lastTap.current = null;
       } else lastTap.current = { ...point, time: now };
@@ -119,7 +121,7 @@ function PhotoViewer({ photo, onClose, onDownload, badges = null }) {
     <div className="lightbox__content">
       <div ref={stageRef} className={`lightbox__stage${view.scale > 1 ? ' lightbox__stage--zoomed' : ''}`}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up}
-        onDoubleClick={(event) => { if (!event.target.closest('button')) zoom(state.current.scale > 1 ? 1 : 2.5, local(event)); }}>
+        onDoubleClick={(event) => { if (Date.now() - lastTouch.current > 500 && !event.target.closest('button')) zoom(state.current.scale > 1 ? 1 : 2.5, local(event)); }}>
         <div className="lightbox__zoom" style={{ transform: `translate(${view.offset.x}px, ${view.offset.y}px) scale(${view.scale})` }}>
           <img ref={imageRef} src={photo.public_url} alt={title} draggable={false} onLoad={() => commit(1, { x: 0, y: 0 })} />
         </div>

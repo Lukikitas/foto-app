@@ -229,6 +229,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     ticketFileRef.current = pending.pair.ticketFile;
     ticketUpgradeRef.current = pending.pair.ticketUpgrade;
     setStep(STEPS.evidence);
+    void camera.resetForStep(false);
     setQualityNotice(null);
   }
 
