@@ -83,7 +83,16 @@ export async function processQueueItem(item, options = {}) {
     return { yielded: true };
   };
 
-  await persist(item);
+  try {
+    await persist(item);
+  } catch (error) {
+    // This first write happens before the processing loop. A failure must leave
+    // the item retryable instead of letting the page start it again forever.
+    item.status = 'error';
+    item.error = `No se pudo guardar el estado de la foto en este dispositivo: ${error.message}`;
+    notify();
+    throw error;
+  }
   if (yielded()) return yieldNow();
   if (itemNeedsOcr(item) && !allowOcr) return yieldNow();
 

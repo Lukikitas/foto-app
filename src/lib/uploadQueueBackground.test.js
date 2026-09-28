@@ -49,3 +49,25 @@ test('requestBackgroundQueueProcessing still works if Background Sync is missing
   assert.equal(ok, true);
   assert.equal(messages[0].type, UPLOAD_QUEUE_MESSAGE.process);
 });
+
+test('a rejected Background Sync registration does not start a second page drain', async () => {
+  const messages = [];
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const ok = await requestBackgroundQueueProcessing({
+      navigator: {
+        serviceWorker: {
+          ready: Promise.resolve({
+            active: { postMessage: (data) => messages.push(data) },
+            sync: { register: async () => { throw new Error('denied'); } },
+          }),
+        },
+      },
+    });
+    assert.equal(ok, true);
+    assert.deepEqual(messages, [{ type: UPLOAD_QUEUE_MESSAGE.process }]);
+  } finally {
+    console.warn = originalWarn;
+  }
+});

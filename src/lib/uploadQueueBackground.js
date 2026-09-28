@@ -8,9 +8,10 @@ export async function requestBackgroundQueueProcessing(deps = globalThis) {
   const serviceWorker = deps.navigator?.serviceWorker;
   if (!serviceWorker) return false;
 
+  let readyTimer;
   try {
     const readyTimeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout esperando serviceWorker.ready')), 3000);
+      readyTimer = setTimeout(() => reject(new Error('Timeout esperando serviceWorker.ready')), 3000);
     });
 
     const registration = await Promise.race([
@@ -22,11 +23,19 @@ export async function requestBackgroundQueueProcessing(deps = globalThis) {
     if (!worker) return false;
     worker.postMessage({ type: UPLOAD_QUEUE_MESSAGE.process });
     if (registration.sync) {
-      await registration.sync.register(UPLOAD_QUEUE_SYNC_TAG);
+      try {
+        await registration.sync.register(UPLOAD_QUEUE_SYNC_TAG);
+      } catch (error) {
+        // The immediate message was delivered. Do not resume the page queue
+        // while that worker may be processing the same photos.
+        console.warn('Background Sync no disponible; la cola sigue en el service worker activo.', error);
+      }
     }
     return true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(readyTimer);
   }
 }
 

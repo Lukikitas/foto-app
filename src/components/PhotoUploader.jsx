@@ -112,7 +112,7 @@ export default function PhotoUploader({ author, onAuthorChange }) {
     setNativeLaunching(true);
     setError(null);
     try {
-      const session = getReusableNativeSession(name) || await createNativeSession(name);
+      const session = await getReusableNativeSession(name) || await createNativeSession(name);
       window.location.href = session.intentUri;
     } catch (err) {
       setError(err.message || 'No se pudo iniciar la cámara nativa.');
