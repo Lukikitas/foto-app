@@ -1,9 +1,9 @@
 {
-  "versionName": "1.0.2",
-  "versionCode": 3,
+  "versionName": "1.0.3",
+  "versionCode": 4,
   "protocolVersion": 1,
   "minimumPwaVersion": "1.5.2",
-  "downloadUrl": "https://github.com/Lukikitas/foto-app/releases/download/android-camera-v1.0.2/fotoapp-camera-v1.0.2.apk",
-  "releaseNotes": "Corrige los reintentos de subida para que un par rechazado no frene las capturas siguientes; muestra pares con error y conserva los archivos locales.",
+  "downloadUrl": "https://github.com/Lukikitas/foto-app/releases/download/android-camera-v1.0.3/fotoapp-camera-v1.0.3.apk",
+  "releaseNotes": "Muestra el vencimiento de la sesión de 2 horas y evita nuevas capturas al vencer; conserva las correcciones de subida de la 1.0.2.",
   "mandatory": false
 }

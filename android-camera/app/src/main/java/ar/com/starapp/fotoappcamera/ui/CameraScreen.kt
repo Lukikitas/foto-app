@@ -2,6 +2,8 @@ package ar.com.starapp.fotoappcamera.ui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -48,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ar.com.starapp.fotoappcamera.camera.CameraXManager
 import ar.com.starapp.fotoappcamera.ui.theme.DarkSurface
@@ -65,7 +68,8 @@ import kotlin.math.roundToInt
 @Composable
 fun CameraScreen(
     viewModel: CameraViewModel,
-    onNavigateBackToPwa: (String) -> Unit
+    onNavigateBackToPwa: (String) -> Unit,
+    onOpenFotoApp: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -73,6 +77,9 @@ fun CameraScreen(
     val density = LocalDensity.current
 
     val cameraXManager = remember { CameraXManager(context) }
+    val externalCameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        viewModel.onExternalWideCaptureResult(saved)
+    }
     var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
 
     DisposableEffect(cameraXManager) {
@@ -84,6 +91,7 @@ fun CameraScreen(
     val pairsCount by viewModel.pairsCount.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
     val errorCount by viewModel.errorCount.collectAsState()
+    val sessionExpiresAt by viewModel.sessionExpiresAt.collectAsState()
     val lensMode by viewModel.lensMode.collectAsState()
     val zoomRatio by viewModel.zoomRatio.collectAsState()
     val flashMode by viewModel.flashMode.collectAsState()
@@ -95,6 +103,7 @@ fun CameraScreen(
     val diagnosticsOpen by viewModel.diagnosticsOpen.collectAsState()
     val diagnosticReport by viewModel.diagnosticReport.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val requiresNewSession by viewModel.requiresNewSession.collectAsState()
 
     // Focus indicator state
     var focusPoint by remember { mutableStateOf<Offset?>(null) }
@@ -121,6 +130,7 @@ fun CameraScreen(
                     scaleType = PreviewView.ScaleType.FIT_CENTER
                     previewViewRef = this
                     cameraXManager.init {
+                        viewModel.refreshCameraDiagnostics(context)
                         cameraXManager.startCamera(lifecycleOwner, this) { error ->
                             viewModel.reportCameraError(error)
                         }
@@ -197,7 +207,9 @@ fun CameraScreen(
             pairsCount = pairsCount,
             pendingCount = pendingCount,
             errorCount = errorCount,
+            sessionExpiresAt = sessionExpiresAt,
             lensMode = lensMode,
+            wideSupported = diagnosticReport?.ultrawideAvailable == true,
             zoomRatio = zoomRatio,
             flashMode = flashMode,
             isTorchOn = isTorchOn,
@@ -213,6 +225,17 @@ fun CameraScreen(
             onLensModeToggle = { mode ->
                 previewViewRef?.let { pv ->
                     viewModel.onLensModeChanged(mode, cameraXManager, lifecycleOwner, pv)
+                }
+            },
+            onExternalWideCapture = {
+                viewModel.beginExternalWideCapture()?.let { file ->
+                    try {
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                        externalCameraLauncher.launch(uri)
+                    } catch (error: Exception) {
+                        viewModel.onExternalWideCaptureResult(false)
+                        viewModel.reportCameraError(error)
+                    }
                 }
             },
             onFlashToggle = { viewModel.onFlashToggled(cameraXManager) },
@@ -267,8 +290,8 @@ fun CameraScreen(
         errorMessage?.let { msg ->
             Snackbar(
                 action = {
-                    TextButton(onClick = { viewModel.clearError() }) {
-                        Text("Cerrar", color = Color.White)
+                    TextButton(onClick = { if (requiresNewSession) onOpenFotoApp() else viewModel.clearError() }) {
+                        Text(if (requiresNewSession) "Abrir Foto-app" else "Cerrar", color = Color.White)
                     }
                 },
                 modifier = Modifier

@@ -39,6 +39,9 @@ import ar.com.starapp.fotoappcamera.ui.theme.TextMuted
 import ar.com.starapp.fotoappcamera.ui.theme.TextWhite
 import ar.com.starapp.fotoappcamera.ui.theme.YellowWarning
 import ar.com.starapp.fotoappcamera.viewmodel.CaptureStep
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun CameraOverlay(
@@ -47,7 +50,9 @@ fun CameraOverlay(
     pairsCount: Int,
     pendingCount: Int,
     errorCount: Int,
+    sessionExpiresAt: Long?,
     lensMode: LensMode,
+    wideSupported: Boolean,
     zoomRatio: Float,
     flashMode: Int,
     isTorchOn: Boolean,
@@ -57,6 +62,7 @@ fun CameraOverlay(
     onRetakeClick: () -> Unit,
     onBackToTicketClick: () -> Unit,
     onLensModeToggle: (LensMode) -> Unit,
+    onExternalWideCapture: () -> Unit,
     onFlashToggle: () -> Unit,
     onTorchToggle: () -> Unit,
     onFinishClick: () -> Unit,
@@ -156,6 +162,15 @@ fun CameraOverlay(
                 )
             }
 
+            if (sessionExpiresAt != null) {
+                val deadline = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(sessionExpiresAt))
+                Text(
+                    text = "Sesión vence a las $deadline · 2 horas desde Foto-app",
+                    color = YellowWarning,
+                    fontSize = 12.sp
+                )
+            }
+
             // Offline indicator if disconnected
             if (isOffline) {
                 Box(
@@ -252,10 +267,13 @@ fun CameraOverlay(
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(if (lensMode == LensMode.WIDE) RedPrimary else DarkSurface)
-                            .clickable { onLensModeToggle(LensMode.WIDE) }
+                            .clickable {
+                                if (wideSupported) onLensModeToggle(LensMode.WIDE)
+                                else onExternalWideCapture()
+                            }
                             .padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
-                        Text("0,5×", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(if (wideSupported) "0,5×" else "0,5× teléfono", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
                     Text(
