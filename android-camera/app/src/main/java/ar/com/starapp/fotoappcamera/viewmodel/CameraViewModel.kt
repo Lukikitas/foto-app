@@ -24,6 +24,7 @@ import ar.com.starapp.fotoappcamera.data.NativeCaptureSession
 import ar.com.starapp.fotoappcamera.data.SupabaseApiClient
 import ar.com.starapp.fotoappcamera.upload.UploadScheduler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -101,9 +102,15 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _requiresNewSession = MutableStateFlow(false)
+    val requiresNewSession: StateFlow<Boolean> = _requiresNewSession.asStateFlow()
 
     private var preferredEvidenceLens: LensMode = LensMode.NORMAL
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val countJobs = mutableListOf<Job>()
+    private var externalCaptureFile: File? = null
+    private var externalCaptureStep: CaptureStep? = null
+    private var evidenceFromExternalCamera = false
 
     init {
         monitorNetwork()
@@ -171,6 +178,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                     attachSession(existing)
                 } else {
                     _errorMessage.value = "Abrí la cámara desde la sección «Sacar foto» de Foto-app."
+                    _requiresNewSession.value = true
                 }
             }
         }
@@ -201,6 +209,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         if (activationResult.isFailure) {
             _errorMessage.value = activationResult.exceptionOrNull()?.message
                 ?: "No se pudo validar la sesión con Foto-app."
+            _requiresNewSession.value = true
             return
         }
 
@@ -210,6 +219,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
         if (expiresAtMillis == null || expiresAtMillis <= System.currentTimeMillis()) {
             _errorMessage.value = "No se pudo confirmar el vencimiento de la sesión. Abrí otra desde Foto-app."
+            _requiresNewSession.value = true
             return
         }
         val savedDeadline = withContext(Dispatchers.IO) {
@@ -217,6 +227,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
         if (!savedDeadline) {
             _errorMessage.value = "No se pudo guardar el vencimiento de la sesión en este dispositivo."
+            _requiresNewSession.value = true
             return
         }
 
@@ -233,17 +244,32 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun attachSession(session: NativeCaptureSession) {
+        countJobs.forEach { it.cancel() }
+        countJobs.clear()
+        if (_session.value?.sessionId != session.sessionId) {
+            _ticketFile.value = null
+            _evidenceFile.value = null
+            externalCaptureFile = null
+            externalCaptureStep = null
+            evidenceFromExternalCamera = false
+            _captureStep.value = CaptureStep.READY_FOR_TICKET
+            _lensMode.value = LensMode.NORMAL
+            preferredEvidenceLens = LensMode.NORMAL
+        }
         _session.value = session
         _sessionExpiresAt.value = expiryPreferences.getLong(session.sessionId, 0L).takeIf { it > 0L }
         _takenBy.value = session.takenBy
+        val blocked = captureBlockReason(session.state, _sessionExpiresAt.value, System.currentTimeMillis())
+        _requiresNewSession.value = blocked != null
+        _errorMessage.value = blocked
 
-        viewModelScope.launch {
+        countJobs += viewModelScope.launch {
             db.captureDao().getTotalPairsCount(session.sessionId).collect { _pairsCount.value = it }
         }
-        viewModelScope.launch {
+        countJobs += viewModelScope.launch {
             db.captureDao().getPendingPairsCount(session.sessionId).collect { _pendingCount.value = it }
         }
-        viewModelScope.launch {
+        countJobs += viewModelScope.launch {
             db.captureDao().getErrorPairsCount(session.sessionId).collect { _errorCount.value = it }
         }
 
@@ -259,6 +285,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         val blocked = captureBlockReason(sessionVal.state, _sessionExpiresAt.value, System.currentTimeMillis())
         if (blocked != null) {
             _errorMessage.value = blocked
+            _requiresNewSession.value = true
             return
         }
         val sessionDir = File(getApplication<Application>().filesDir, "sessions/${sessionVal.sessionId}")
@@ -285,6 +312,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 targetFile,
                 onSuccess = { file ->
                     _evidenceFile.value = file
+                    evidenceFromExternalCamera = false
                     _captureStep.value = CaptureStep.REVIEW_EVIDENCE
                 },
                 onError = { exc ->
@@ -296,7 +324,51 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun isWideSupported(): Boolean {
-        return _diagnosticReport.value?.ultrawideAvailable ?: true
+        return _diagnosticReport.value?.ultrawideAvailable == true
+    }
+
+    fun beginExternalWideCapture(): File? {
+        val step = _captureStep.value
+        if (step != CaptureStep.READY_FOR_TICKET && step != CaptureStep.READY_FOR_EVIDENCE) return null
+        val currentSession = _session.value ?: return null
+        val blocked = captureBlockReason(currentSession.state, _sessionExpiresAt.value, System.currentTimeMillis())
+        if (blocked != null) {
+            _errorMessage.value = blocked
+            _requiresNewSession.value = true
+            return null
+        }
+        val sessionDir = File(getApplication<Application>().filesDir, "sessions/${currentSession.sessionId}")
+        if (!sessionDir.exists() && !sessionDir.mkdirs()) {
+            _errorMessage.value = "No se pudo preparar el almacenamiento para la foto."
+            return null
+        }
+        val file = File(sessionDir, "${if (step == CaptureStep.READY_FOR_TICKET) "ticket" else "evidence"}_${System.currentTimeMillis()}.jpg")
+        externalCaptureFile = file
+        externalCaptureStep = step
+        _captureStep.value = if (step == CaptureStep.READY_FOR_TICKET) CaptureStep.CAPTURING_TICKET else CaptureStep.CAPTURING_EVIDENCE
+        return file
+    }
+
+    fun onExternalWideCaptureResult(saved: Boolean) {
+        val file = externalCaptureFile
+        val step = externalCaptureStep
+        externalCaptureFile = null
+        externalCaptureStep = null
+        if (file == null || step == null) return
+        if (saved && file.isFile && file.length() > 0L) {
+            if (step == CaptureStep.READY_FOR_TICKET) {
+                _ticketFile.value = file
+                _captureStep.value = CaptureStep.REVIEW_TICKET
+            } else {
+                _evidenceFile.value = file
+                evidenceFromExternalCamera = true
+                _captureStep.value = CaptureStep.REVIEW_EVIDENCE
+            }
+        } else {
+            file.delete()
+            _captureStep.value = step
+            if (saved) _errorMessage.value = "La cámara del teléfono no devolvió una foto válida."
+        }
     }
 
     fun onUsePhotoClicked(cameraXManager: CameraXManager, lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
@@ -324,6 +396,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             CaptureStep.REVIEW_EVIDENCE -> {
                 _evidenceFile.value?.delete()
                 _evidenceFile.value = null
+                evidenceFromExternalCamera = false
                 _captureStep.value = CaptureStep.READY_FOR_EVIDENCE
             }
             else -> {}
@@ -334,6 +407,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         if (_captureStep.value == CaptureStep.REVIEW_EVIDENCE || _captureStep.value == CaptureStep.READY_FOR_EVIDENCE) {
             _evidenceFile.value?.delete()
             _evidenceFile.value = null
+            evidenceFromExternalCamera = false
             _captureStep.value = CaptureStep.REVIEW_TICKET
         }
     }
@@ -361,7 +435,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                         takenBy = sessionVal.takenBy,
                         ticketFilePath = ticket.absolutePath,
                         evidenceFilePath = evidence.absolutePath,
-                        selectedLens = if (_lensMode.value == LensMode.WIDE) "wide" else "normal",
+                        selectedLens = when {
+                            evidenceFromExternalCamera -> "system_camera"
+                            _lensMode.value == LensMode.WIDE -> "wide"
+                            else -> "normal"
+                        },
                         uploadState = NativeCapturePair.STATE_LOCAL
                     )
 
@@ -372,6 +450,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 // Local save confirmed: reset file references and loop back to ticket step immediately
                 _ticketFile.value = null
                 _evidenceFile.value = null
+                evidenceFromExternalCamera = false
                 _captureStep.value = CaptureStep.READY_FOR_TICKET
 
                 // Always restore NORMAL (1×) lens for reading ticket
@@ -470,13 +549,17 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun openDiagnostics(context: Context) {
+    fun refreshCameraDiagnostics(context: Context) {
         _diagnosticReport.value = CameraDetector.buildDiagnosticReport(
             context = context,
             appVersion = "1.0.3",
             selectedLensMode = _lensMode.value,
             activeZoomRatio = _zoomRatio.value
         )
+    }
+
+    fun openDiagnostics(context: Context) {
+        refreshCameraDiagnostics(context)
         _diagnosticsOpen.value = true
     }
 

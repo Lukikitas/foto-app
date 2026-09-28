@@ -90,6 +90,10 @@ class MainActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onNavigateBackToPwa = { returnUrl ->
                                 navigateBackToPwa(returnUrl)
+                            },
+                            onOpenFotoApp = {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://delivery.star-app.com.ar/")))
+                                finish()
                             }
                         )
                     } else {

@@ -52,6 +52,7 @@ fun CameraOverlay(
     errorCount: Int,
     sessionExpiresAt: Long?,
     lensMode: LensMode,
+    wideSupported: Boolean,
     zoomRatio: Float,
     flashMode: Int,
     isTorchOn: Boolean,
@@ -61,6 +62,7 @@ fun CameraOverlay(
     onRetakeClick: () -> Unit,
     onBackToTicketClick: () -> Unit,
     onLensModeToggle: (LensMode) -> Unit,
+    onExternalWideCapture: () -> Unit,
     onFlashToggle: () -> Unit,
     onTorchToggle: () -> Unit,
     onFinishClick: () -> Unit,
@@ -265,10 +267,13 @@ fun CameraOverlay(
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(if (lensMode == LensMode.WIDE) RedPrimary else DarkSurface)
-                            .clickable { onLensModeToggle(LensMode.WIDE) }
+                            .clickable {
+                                if (wideSupported) onLensModeToggle(LensMode.WIDE)
+                                else onExternalWideCapture()
+                            }
                             .padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
-                        Text("0,5×", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(if (wideSupported) "0,5×" else "0,5× teléfono", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
                     Text(

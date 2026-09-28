@@ -11,6 +11,7 @@ class SessionCapturePolicyUnitTest {
     fun activeSessionCanCaptureOnlyBeforeItsFixedDeadline() {
         assertNull(captureBlockReason(NativeCaptureSession.STATE_ACTIVE, 10_000L, 9_999L))
         assertTrue(captureBlockReason(NativeCaptureSession.STATE_ACTIVE, 10_000L, 10_000L)!!.contains("venció"))
+        assertTrue(captureBlockReason(NativeCaptureSession.STATE_ACTIVE, null, 9_000L)!!.contains("No se conoce"))
     }
 
     @Test

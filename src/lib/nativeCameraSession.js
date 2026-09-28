@@ -137,25 +137,6 @@ export function clearStoredNativeSession(sessionId = null) {
   }
 }
 
-export async function getReusableNativeSession(takenBy, now = Date.now(), fetchPairs = fetchNativeSessionPairs) {
-  const author = (takenBy || '').trim().toLocaleLowerCase();
-  const candidates = getStoredNativeSessions().filter((entry) =>
-    entry.takenBy?.trim().toLocaleLowerCase() === author
-    && Number.isFinite(Date.parse(entry.expiresAt))
-    && Date.parse(entry.expiresAt) > now).reverse();
-  for (const session of candidates) {
-    try {
-      const remote = await fetchPairs(session.sessionId, session.sessionToken);
-      if (remote.state === 'created' || remote.state === 'active') {
-        return { ...session, intentUri: buildNativeCameraIntentUri(session) };
-      }
-    } catch {
-      // A session that cannot be verified must not be reopened for new photos.
-    }
-  }
-  return null;
-}
-
 export async function createNativeSession(takenBy, options = {}) {
   const author = (takenBy || '').trim();
   if (!author) {
