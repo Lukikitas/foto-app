@@ -86,8 +86,8 @@ export default function App() {
       <nav className="app-nav" aria-label="Navegacion principal">
         <div className="app-nav__top">
           <p className="app-nav__brand">
-            Delivery
-            <span>La Plata</span>
+            STAR-APP Delivery
+            <span>Local: La Plata</span>
           </p>
           <button
             type="button"

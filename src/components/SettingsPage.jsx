@@ -218,9 +218,19 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
         </section>
 
         <section className="settings__card settings__version-card">
-          <div className="settings__version-top"><div><span className="settings__version-kicker">Acerca de la app</span><h3>Delivery · La Plata</h3></div><span className="settings__version-mark" aria-hidden="true">D</span></div>
-          <div><span className="settings__version-kicker">Versión instalada</span><p className="settings__version-number">{APP_VERSION}</p></div>
-          <p>Una cámara más cómoda, reclamos bajo tu control y fotos que podés explorar con los dedos.</p>
+          <div className="settings__version-top">
+            <div>
+              <span className="settings__version-kicker">Acerca de la app</span>
+              <h3>STAR-APP Delivery</h3>
+              <span className="settings__version-local">Local: La Plata</span>
+            </div>
+            <span className="settings__version-mark" aria-hidden="true">★</span>
+          </div>
+          <div>
+            <span className="settings__version-kicker">Versión instalada</span>
+            <p className="settings__version-number">{APP_VERSION}</p>
+          </div>
+          <p>Revisión ágil de reclamos con control de importes, evidencia fotográfica y métricas en tiempo real.</p>
           <button ref={releaseButtonRef} type="button" className="btn btn--ghost"
             onClick={() => setReleaseOpen(true)}>Ver novedades →</button>
         </section>
