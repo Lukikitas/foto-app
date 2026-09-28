@@ -39,6 +39,9 @@ import ar.com.starapp.fotoappcamera.ui.theme.TextMuted
 import ar.com.starapp.fotoappcamera.ui.theme.TextWhite
 import ar.com.starapp.fotoappcamera.ui.theme.YellowWarning
 import ar.com.starapp.fotoappcamera.viewmodel.CaptureStep
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun CameraOverlay(
@@ -47,6 +50,7 @@ fun CameraOverlay(
     pairsCount: Int,
     pendingCount: Int,
     errorCount: Int,
+    sessionExpiresAt: Long?,
     lensMode: LensMode,
     zoomRatio: Float,
     flashMode: Int,
@@ -153,6 +157,15 @@ fun CameraOverlay(
                     color = YellowWarning,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            if (sessionExpiresAt != null) {
+                val deadline = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(sessionExpiresAt))
+                Text(
+                    text = "Sesión vence a las $deadline · 2 horas desde Foto-app",
+                    color = YellowWarning,
+                    fontSize = 12.sp
                 )
             }
 

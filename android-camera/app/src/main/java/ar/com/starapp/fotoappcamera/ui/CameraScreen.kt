@@ -84,6 +84,7 @@ fun CameraScreen(
     val pairsCount by viewModel.pairsCount.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
     val errorCount by viewModel.errorCount.collectAsState()
+    val sessionExpiresAt by viewModel.sessionExpiresAt.collectAsState()
     val lensMode by viewModel.lensMode.collectAsState()
     val zoomRatio by viewModel.zoomRatio.collectAsState()
     val flashMode by viewModel.flashMode.collectAsState()
@@ -197,6 +198,7 @@ fun CameraScreen(
             pairsCount = pairsCount,
             pendingCount = pendingCount,
             errorCount = errorCount,
+            sessionExpiresAt = sessionExpiresAt,
             lensMode = lensMode,
             zoomRatio = zoomRatio,
             flashMode = flashMode,

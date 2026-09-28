@@ -29,7 +29,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import java.time.Instant
 
 enum class CaptureStep {
     READY_FOR_TICKET,
@@ -48,6 +50,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _session = MutableStateFlow<NativeCaptureSession?>(null)
     val session: StateFlow<NativeCaptureSession?> = _session.asStateFlow()
+    private val expiryPreferences = application.getSharedPreferences("native_session_deadlines", Context.MODE_PRIVATE)
+    private val _sessionExpiresAt = MutableStateFlow<Long?>(null)
+    val sessionExpiresAt: StateFlow<Long?> = _sessionExpiresAt.asStateFlow()
 
     private val _captureStep = MutableStateFlow(CaptureStep.READY_FOR_TICKET)
     val captureStep: StateFlow<CaptureStep> = _captureStep.asStateFlow()
@@ -188,7 +193,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val tokenHash = SupabaseApiClient.calculateSha256(sessionToken)
-        val appVersion = "1.0.2"
+        val appVersion = "1.0.3"
         val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
 
         // Activate session in Supabase
@@ -199,11 +204,21 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        val takenByFromRemote = activationResult.getOrNull()
-            ?.get("takenBy")
-            ?.toString()
-            ?.replace("\"", "")
-            .orEmpty()
+        val activated = activationResult.getOrNull()
+        val takenByFromRemote = activated?.get("takenBy")?.jsonPrimitive?.content.orEmpty()
+        val expiresAtMillis = activated?.get("expiresAt")?.jsonPrimitive?.content
+            ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+        if (expiresAtMillis == null || expiresAtMillis <= System.currentTimeMillis()) {
+            _errorMessage.value = "No se pudo confirmar el vencimiento de la sesión. Abrí otra desde Foto-app."
+            return
+        }
+        val savedDeadline = withContext(Dispatchers.IO) {
+            expiryPreferences.edit().putLong(sessionId, expiresAtMillis).commit()
+        }
+        if (!savedDeadline) {
+            _errorMessage.value = "No se pudo guardar el vencimiento de la sesión en este dispositivo."
+            return
+        }
 
         val newSession = NativeCaptureSession(
             sessionId = sessionId,
@@ -219,6 +234,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun attachSession(session: NativeCaptureSession) {
         _session.value = session
+        _sessionExpiresAt.value = expiryPreferences.getLong(session.sessionId, 0L).takeIf { it > 0L }
         _takenBy.value = session.takenBy
 
         viewModelScope.launch {
@@ -240,6 +256,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         if (step != CaptureStep.READY_FOR_TICKET && step != CaptureStep.READY_FOR_EVIDENCE) return
 
         val sessionVal = _session.value ?: return
+        val blocked = captureBlockReason(sessionVal.state, _sessionExpiresAt.value, System.currentTimeMillis())
+        if (blocked != null) {
+            _errorMessage.value = blocked
+            return
+        }
         val sessionDir = File(getApplication<Application>().filesDir, "sessions/${sessionVal.sessionId}")
         sessionDir.mkdirs()
 
@@ -452,7 +473,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun openDiagnostics(context: Context) {
         _diagnosticReport.value = CameraDetector.buildDiagnosticReport(
             context = context,
-            appVersion = "1.0.2",
+            appVersion = "1.0.3",
             selectedLensMode = _lensMode.value,
             activeZoomRatio = _zoomRatio.value
         )

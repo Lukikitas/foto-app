@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 
 export default function NativeCameraInstallModal({ isOpen, onClose, onContinueWeb, onOpenIntent }) {
   const [manifest, setManifest] = useState({
-    versionName: '1.0.2',
-    downloadUrl: 'https://github.com/Lukikitas/foto-app/releases/download/android-camera-v1.0.2/fotoapp-camera-v1.0.2.apk',
+    versionName: '1.0.3',
+    downloadUrl: 'https://github.com/Lukikitas/foto-app/releases/download/android-camera-v1.0.3/fotoapp-camera-v1.0.3.apk',
     releaseNotes: 'Acceso nativo al lente gran angular y captura continua de tickets y pedidos.',
   });
 
