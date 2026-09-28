@@ -312,12 +312,14 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   const remainingUploaded = (updatedStatus.pairs || []).filter((p) => p.state === 'uploaded');
   const totalCount = (updatedStatus.pairs || []).length;
   const importedCount = (updatedStatus.pairs || []).filter((p) => p.state === 'imported').length;
+  const expiryTime = Date.parse(sessionRecord.expiresAt);
+  const expired = Number.isFinite(expiryTime) && expiryTime <= Date.now();
 
   // Verify definitive photos in photos table before ever declaring allReady or clearing session
   const verification = await verifyPhotosFn(sessionId, (updatedStatus.pairs || []).map((p) => p.id));
   const isAllImported = totalCount > 0 && importedCount === totalCount && remainingUploaded.length === 0;
   const isSessionFinished = updatedStatus.state === 'completed';
-  const allVerified = isAllImported && isSessionFinished && verification.verifiedCount >= totalCount;
+  const allVerified = isAllImported && (isSessionFinished || expired) && verification.verifiedCount >= totalCount;
 
   if (allVerified) {
     clearSessionFn(sessionId);
@@ -330,6 +332,7 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
     remainingCount: remainingUploaded.length,
     availableCount: remainingUploaded.length,
     sessionState: updatedStatus.state,
+    expired,
     verifiedCount: verification.verifiedCount,
     allReady: allVerified,
     errors: detailedErrors,
