@@ -1,5 +1,12 @@
 # React + Vite
 
+## Versión 1.5.1
+
+- **Importación y Traspaso de Cámara Android**: Detalle del paso exacto (`descargando_ticket`, `descargando_evidencia`, `guardando_local`, `confirmando_rpc`, `verificando_foto`) y error real por par; importación idempotente usando `pair.id`; ventana de recuperación extendida a 7 días (`recovery_expires_at`) manteniendo los 120 min para subir; verificación de la foto definitiva en `photos` antes de concluir la sesión; y comprobación del resultado de `finishSession` en `CameraViewModel.kt` sin perder la sesión local.
+- **Cola de Subida Web**: Estado `saving_local` («Guardando en este dispositivo…») hasta confirmar IndexedDB antes de pasar a `pending` («En cola»); eliminación del fallback silencioso a memoria en producción; timeout de 15s en OCR para evitar bloqueos del resto de los pares; reintentos de red transitorios; y confirmación explícita para descartar errores sin perder copias locales.
+- **Galería Paginada**: Paginación de 50 pedidos por página con conteo exacto en servidor (`totalCount`), filtros aplicados a la consulta completa en SQL y barra de navegación de páginas.
+- **Cámara Android Nativa v1.0.1**: Preservación de archivos locales tras subida a depósito temporal en `UploadWorker.kt`, diagnóstico técnico de lentes lógicos y físicos (`CameraDetector.kt`) sin dimensiones inventadas, detección y explicación técnica en Xiaomi 2311DRK48G (HyperOS) sin simulación de zoom digital 0,5×, y sesión de captura continua ticket + pedido con retorno directo sin cerrar la cámara.
+
 ## Versión 1.5
 
 Las cargas manuales preparan una lista compartida en Reclamos → Gestionar. Allí se puede corregir el agregador, fecha y detalles, elegir evidencia, quitar filas o descartar la lista. Solo **Guardar en Historial** confirma el lote; después Gestionar queda vacío. El Sheet automático conserva su importación directa y no reemplaza el borrador manual.
@@ -76,7 +83,7 @@ La integración se publica desactivada por defecto mediante `VITE_NATIVE_CAMERA_
 1. Aplicar `supabase/migrations/20260927150000_native_camera_sessions.sql`.
 2. Desplegar la función `native-camera-transfer` con la configuración de `supabase/config.toml`. Esta función valida la sesión y el token antes de subir o descargar cada foto; la app no escribe directamente en Storage.
 3. Configurar en GitHub los secretos `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` y `ANDROID_KEY_PASSWORD`. El certificado debe coincidir con la huella publicada en `public/.well-known/assetlinks.json`.
-4. Crear el tag `android-camera-v1.0.0`. El workflow `Publish Android Camera APK` compila, firma, verifica el certificado y publica el APK junto con su SHA-256.
+4. Crear el tag `android-camera-v1.0.1`. El workflow `Publish Android Camera APK` compila, firma, verifica el certificado y publica el APK junto con su SHA-256.
 5. Comprobar el enlace definido en `public/android-camera/latest.json` y realizar la prueba física en POCO X6 Pro y Moto G15.
 6. Activar la variable de repositorio `VITE_NATIVE_CAMERA_ENABLED=true` y publicar `main`.
 
