@@ -1,4 +1,5 @@
 import { detectOrderFromPhoto } from './orderOcr.js';
+import { supabase } from './supabase.js';
 import { compressImageInWorker as compressImage } from './compressImageInWorker.js';
 import {
   uploadFile,
@@ -173,19 +174,18 @@ export async function enqueue({
 
   // Idempotency: check if an item with this ID is already in the active queue
   const existing = queue.find((entry) => entry.id === itemId);
-  if (existing) {
-    if (existing.status !== 'done' && existing.status !== 'error') {
-      return existing.id;
-    }
-  }
+  if (existing && existing.status !== 'error') return existing.id;
 
   const defaultLabel = kind === 'order'
     ? (orderDigits ? `Pedido #${orderDigits}` : 'Leyendo el código…')
     : (title || file.name);
 
   // Status is explicitly "saving_local" until confirmed by IndexedDB
-  const item = {
+  const item = existing || {
     id: itemId,
+    createdAt: Date.now(),
+  };
+  Object.assign(item, {
     file,
     ticketFile,
     kind,
@@ -197,12 +197,11 @@ export async function enqueue({
     status: 'saving_local',
     initialPersistPending: true,
     error: null,
-    createdAt: Date.now(),
     storagePath,
     uploadAttempts: 0,
-  };
+  });
 
-  queue.push(item);
+  if (!existing) queue.push(item);
   notify();
   bindPersistListeners();
 
@@ -389,11 +388,39 @@ export async function syncQueueFromStore() {
     existing.set(hydrated.id, hydrated);
   }
 
-  for (const item of queue) {
-    if (item.initialPersistPending) continue;
-    if (storedIds.has(item.id) || item.status === 'done' || item.status === 'error' || item.status === 'saving_local') continue;
-    if (processingId === item.id && storedIds.has(item.id)) continue;
-    markItemDone(item);
+  const missing = queue.filter((item) => !item.initialPersistPending
+    && !storedIds.has(item.id)
+    && item.status !== 'done'
+    && item.status !== 'error'
+    && item.status !== 'saving_local'
+    && processingId !== item.id);
+  const paths = [...new Set(missing.map((item) => item.storagePath).filter(Boolean))];
+  const publishedPaths = new Set();
+  for (let index = 0; index < paths.length; index += 50) {
+    const { data, error } = await supabase.from('photos')
+      .select('file_path')
+      .in('file_path', paths.slice(index, index + 50));
+    if (error) {
+      storeRestorationError = `No se pudo verificar si las fotos llegaron al servidor: ${error.message}`;
+      notify();
+      throw error;
+    }
+    for (const photo of data || []) publishedPaths.add(photo.file_path);
+  }
+  for (const item of missing) {
+    if (publishedPaths.has(item.storagePath)) {
+      markItemDone(item);
+      continue;
+    }
+    try {
+      // The page still has the File in memory: restore its durable copy before
+      // allowing another upload. Never call a missing local record "done".
+      item.status = 'pending';
+      await persistItem(item, { holdLease: false, reportError: true });
+    } catch (error) {
+      item.status = 'error';
+      item.error = `No se pudo recuperar la copia local: ${error.message}`;
+    }
   }
 
   queue.sort((left, right) => left.createdAt - right.createdAt);
@@ -421,7 +448,9 @@ export function restorePersistedQueue() {
       void requestBackgroundQueueProcessing();
     }
     return snapshot();
-  })();
+  })().finally(() => {
+    restorePromise = null;
+  });
 
   return restorePromise;
 }

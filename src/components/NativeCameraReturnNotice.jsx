@@ -23,6 +23,7 @@ export default function NativeCameraReturnNotice({ onDone }) {
 
   const mountedRef = useRef(true);
   const timerRef = useRef(null);
+  const checkAndImportRef = useRef(null);
 
   const checkAndImport = useCallback(async (isManual = false) => {
     const active = getStoredNativeSession();
@@ -56,7 +57,7 @@ export default function NativeCameraReturnNotice({ onDone }) {
           const hasPermanentErrors = result.errors.some((e) => e.isPermanent);
           // Only poll automatically if there are no permanent blocking errors
           if (!hasPermanentErrors) {
-            timerRef.current = setTimeout(() => checkAndImport(false), 5000);
+            timerRef.current = setTimeout(() => checkAndImportRef.current?.(false), 5000);
           }
         } else {
           onDone?.();
@@ -72,7 +73,7 @@ export default function NativeCameraReturnNotice({ onDone }) {
             isPermanent: false,
           },
         ]);
-        timerRef.current = setTimeout(() => checkAndImport(false), 7000);
+        timerRef.current = setTimeout(() => checkAndImportRef.current?.(false), 7000);
       }
     } finally {
       if (mountedRef.current) {
@@ -84,10 +85,12 @@ export default function NativeCameraReturnNotice({ onDone }) {
 
   useEffect(() => {
     mountedRef.current = true;
-    checkAndImport(false);
+    checkAndImportRef.current = checkAndImport;
+    const startupTimer = setTimeout(() => checkAndImportRef.current?.(false), 0);
 
     return () => {
       mountedRef.current = false;
+      clearTimeout(startupTimer);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [checkAndImport]);

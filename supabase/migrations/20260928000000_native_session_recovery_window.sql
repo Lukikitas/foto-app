@@ -5,11 +5,12 @@ alter table public.native_capture_sessions
   add column if not exists upload_expires_at timestamptz,
   add column if not exists recovery_expires_at timestamptz;
 
--- Backfill existing sessions: preserve upload expiry, extend recovery to 7 days
+-- Keep existing Android copies recoverable after the old 120-minute deadline.
+-- The legacy Edge Function still reads expires_at, so extend it as well.
 update public.native_capture_sessions
-set upload_expires_at = coalesce(upload_expires_at, expires_at),
-    recovery_expires_at = coalesce(recovery_expires_at, greatest(expires_at + interval '7 days', now() + interval '7 days'))
-where recovery_expires_at is null;
+set expires_at = greatest(expires_at, created_at + interval '7 days'),
+    upload_expires_at = greatest(coalesce(upload_expires_at, expires_at), created_at + interval '7 days'),
+    recovery_expires_at = greatest(coalesce(recovery_expires_at, expires_at), created_at + interval '7 days');
 
 -- 1. Create native capture session with separate upload and recovery deadlines
 create or replace function public.create_native_capture_session(
@@ -17,8 +18,7 @@ create or replace function public.create_native_capture_session(
   p_token_hash text,
   p_taken_by text,
   p_protocol_version integer default 1,
-  p_expires_in_minutes integer default 120,
-  p_recovery_days integer default 7
+  p_expires_in_minutes integer default 120
 )
 returns jsonb
 language plpgsql
@@ -34,8 +34,8 @@ begin
     raise exception 'Parámetros inválidos para iniciar la sesión nativa.';
   end if;
 
-  v_upload_expires_at := now() + (coalesce(p_expires_in_minutes, 120) || ' minutes')::interval;
-  v_recovery_expires_at := now() + (coalesce(p_recovery_days, 7) || ' days')::interval;
+  v_upload_expires_at := now() + greatest(coalesce(p_expires_in_minutes, 120), 10080) * interval '1 minute';
+  v_recovery_expires_at := greatest(v_upload_expires_at, now() + interval '7 days');
 
   insert into public.native_capture_sessions (
     id,
@@ -288,7 +288,7 @@ begin
 end;
 $$;
 
-grant execute on function public.create_native_capture_session(uuid, text, text, integer, integer, integer) to anon, service_role;
+grant execute on function public.create_native_capture_session(uuid, text, text, integer, integer) to anon, service_role;
 grant execute on function public.activate_native_capture_session(uuid, text, text, text) to anon, service_role;
 grant execute on function public.register_native_capture_pair(uuid, text, integer, text, text, text, text, text, jsonb) to anon, service_role;
 grant execute on function public.get_native_session_pairs(uuid, text) to anon, service_role;

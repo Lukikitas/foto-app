@@ -1,6 +1,12 @@
 import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
 export const RELEASE_GROUPS = [
+  { title: 'Subidas y recuperación', notes: [
+    'La cámara Android conserva sesiones y fotos pendientes durante siete días para tolerar cortes de conexión y capturas prolongadas.',
+    'Si una foto Android quedó marcada como importada pero desapareció de la cola local, la app vuelve a recuperarla del depósito temporal.',
+    'La cola verifica la foto en el servidor antes de mostrarla como guardada y permite reintentar la lectura local.',
+    'El guardado local espera la confirmación real de IndexedDB antes de informar un error de tiempo de espera.',
+  ] },
   { title: 'Cámara y Captura', notes: [
     'Acceso directo siempre disponible para abrir la cámara Android nativa, la cámara web clásica o los ajustes del APK.',
     'Detalle paso a paso del traspaso de pares Android con reintentos manuales/automáticos e importación idempotente.',

@@ -6,7 +6,6 @@ import {
   triggerBlobDownload,
 } from './photoDownload.js';
 import {
-  fetchPhotos,
   PHOTO_GALLERY_KINDS,
   photoMatchesFilters,
 } from './photos.js';

@@ -3,6 +3,7 @@ import { beforeEach, test } from 'node:test';
 import {
   classifyStepError,
   isTransientError,
+  nativePhotoStoragePath,
   processNativeSessionReturn,
 } from './nativeCaptureBridge.js';
 
@@ -101,6 +102,7 @@ test('processNativeSessionReturn downloads pairs and enqueues them into existing
   // Verify idempotent ID passed to enqueue
   assert.equal(enqueuedItems[0].id, 'p1-uuid');
   assert.equal(enqueuedItems[1].id, 'p2-uuid');
+  assert.equal(enqueuedItems[0].storagePath, nativePhotoStoragePath('p1-uuid'));
 
   assert.equal(enqueuedItems[0].kind, 'order');
   assert.equal(enqueuedItems[0].meta.taken_by, 'Lucas');
@@ -111,6 +113,34 @@ test('processNativeSessionReturn downloads pairs and enqueues them into existing
 
   // Verify 4 total downloads (2 ticket + 2 evidence)
   assert.equal(downloads.length, 4);
+});
+
+test('recovers an imported pair when its local queue record disappeared before publication', async () => {
+  const enqueued = [];
+  const session = {
+    ...mockSessionPairs,
+    state: 'completed',
+    pairs: [{ ...mockSessionPairs.pairs[0], state: 'imported' }],
+  };
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: session.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+    },
+    {
+      fetchPairsFn: async () => session,
+      verifyPhotosFn: async () => ({ verifiedCount: 0, verifiedAll: false, verifiedPairIds: [] }),
+      listQueueFn: async () => [],
+      downloadFn: async () => new Blob(['dummy']),
+      enqueueFn: async (item) => { enqueued.push(item); return item.id; },
+      markImportedFn: async () => { throw new Error('Already imported pair must not be marked again.'); },
+      clearSessionFn: () => {},
+    },
+  );
+  assert.equal(result.allReady, false);
+  assert.equal(enqueued.length, 1);
+  assert.equal(enqueued[0].storagePath, 'orders/no_code/p1-uuid.jpg');
 });
 
 test('keeps a finishing session while Android still has files to upload', async () => {
