@@ -47,7 +47,15 @@ function NativeSessionNotice({ sessionId, onDone, onDismiss }) {
 
       if (mountedRef.current) {
         setSummary(result);
-        if (result.errors && result.errors.length > 0) {
+        const expiredWithoutReceivedPairs = result.expired && result.totalPairs === 0;
+        if (expiredWithoutReceivedPairs) {
+          setErrors([{
+            pairNumber: '—',
+            step: 'sesión',
+            error: 'La sesión venció sin pares recibidos. Si sacaste fotos, revisá los errores de subida en la cámara del teléfono.',
+            isPermanent: true,
+          }]);
+        } else if (result.errors && result.errors.length > 0) {
           setErrors(result.errors);
         } else {
           setErrors([]);
@@ -57,7 +65,7 @@ function NativeSessionNotice({ sessionId, onDone, onDismiss }) {
         if (!result.allReady) {
           const hasPermanentErrors = result.errors.some((e) => e.isPermanent);
           // Only poll automatically if there are no permanent blocking errors
-          if (!hasPermanentErrors) {
+          if (!hasPermanentErrors && !expiredWithoutReceivedPairs) {
             timerRef.current = setTimeout(() => checkAndImportRef.current?.(false), 5000);
           }
         } else {
@@ -129,11 +137,11 @@ function NativeSessionNotice({ sessionId, onDone, onDismiss }) {
           )}
           {!importing && summary && (
             <span>
-              {summary.totalPairs} pares tomados · {summary.importedCount} incorporados a la cola
+              {summary.totalPairs} pares recibidos del teléfono · {summary.importedCount} incorporados a la cola
               {summary.availableCount > 0 && ` · ${summary.availableCount} disponibles para incorporar`}
               {summary.allReady
                 ? ' · Todos listos y verificados en fotos.'
-                : summary.availableCount === 0 && summary.sessionState !== 'completed'
+                : summary.availableCount === 0 && summary.sessionState !== 'completed' && !summary.expired
                   ? ' · Esperando nuevas capturas del teléfono…'
                   : ''}
             </span>

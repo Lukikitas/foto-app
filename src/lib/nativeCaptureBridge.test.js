@@ -180,6 +180,76 @@ test('keeps a finishing session while Android still has files to upload', async 
   assert.equal(cleared, false);
 });
 
+test('an expired empty session stays visible without being called ready', async () => {
+  let cleared = false;
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: mockSessionPairs.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+    },
+    {
+      fetchPairsFn: async () => ({ sessionId: mockSessionPairs.sessionId, state: 'active', pairs: [] }),
+      verifyPhotosFn: async () => ({ verifiedCount: 0, verifiedAll: false }),
+      clearSessionFn: () => { cleared = true; },
+    },
+  );
+  assert.equal(result.expired, true);
+  assert.equal(result.allReady, false);
+  assert.equal(cleared, false);
+});
+
+test('retires an expired session after every received pair is verified even without Finish', async () => {
+  let cleared = false;
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: mockSessionPairs.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+    },
+    {
+      fetchPairsFn: async () => ({
+        ...mockSessionPairs,
+        state: 'active',
+        pairs: mockSessionPairs.pairs.map((pair) => ({ ...pair, state: 'imported' })),
+      }),
+      listQueueFn: async () => [],
+      verifyPhotosFn: async () => ({ verifiedCount: 2, verifiedAll: true, verifiedPairIds: ['p1-uuid', 'p2-uuid'] }),
+      clearSessionFn: () => { cleared = true; },
+    },
+  );
+  assert.equal(result.expired, true);
+  assert.equal(result.allReady, true);
+  assert.equal(cleared, true);
+});
+
+test('keeps an active session open for more captures before its deadline', async () => {
+  let cleared = false;
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: mockSessionPairs.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+      expiresAt: '2999-01-01T00:00:00.000Z',
+    },
+    {
+      fetchPairsFn: async () => ({
+        ...mockSessionPairs,
+        state: 'active',
+        pairs: mockSessionPairs.pairs.map((pair) => ({ ...pair, state: 'imported' })),
+      }),
+      listQueueFn: async () => [],
+      verifyPhotosFn: async () => ({ verifiedCount: 2, verifiedAll: true, verifiedPairIds: ['p1-uuid', 'p2-uuid'] }),
+      clearSessionFn: () => { cleared = true; },
+    },
+  );
+  assert.equal(result.expired, false);
+  assert.equal(result.allReady, false);
+  assert.equal(cleared, false);
+});
+
 test('does not mark allReady nor clear session until verified in photos', async () => {
   let cleared = false;
   const mockDownload = async () => new Blob(['dummy']);
