@@ -84,18 +84,32 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
     {notice && <div className="message message--success" role="status">{notice} <button className="btn btn--small btn--ghost" onClick={onOpenHistory}>Ver Historial</button></div>}
     {!connected && <p role="status">Sin conexión. Podés consultar la lista, pero los cambios necesitan conexión.</p>}
     {!draft ? <div className="gallery__state gallery__state--empty"><h3>Todo listo para una nueva carga</h3><p>Cargá datos, revisá los reclamos y elegí cuándo guardarlos en Historial.</p></div> : <>
-      <header className="draft-review__head"><div><span className="badge">Pendiente de guardar · Compartida</span><h3>{draft.data.complaints.length} reclamos para revisar</h3>
-        {summary && <p>{summary.added} nuevos · {summary.changed} modificados · {summary.unchanged} sin cambios</p>}
-        <p>Revisá el agregador, el monto y las fotos. Quitar una fila no borra reclamos del Historial.</p></div>
-        <div className="draft-review__row-actions"><button className="btn btn--ghost" disabled={disabled || Boolean(editing)} onClick={() => act(() => refresh(undefined, true))}>Actualizar coincidencias</button>
-        <button className="btn btn--ghost" disabled={disabled} onClick={() => { if (window.confirm('¿Descartar esta lista compartida? El Historial y las Métricas no se modificarán.')) void act(async () => { await discardDraft(draft); onResolved?.(); }); }}>Descartar lista</button></div>
+      <header className="draft-review__head">
+        <div className="draft-review__head-info">
+          <span className="badge">Pendiente de guardar · Compartida</span>
+          <h3>{draft.data.complaints.length} reclamos para revisar</h3>
+          {summary && (
+            <div className="draft-review__summary-pills">
+              <span>{summary.added} nuevos</span> · <span>{summary.changed} modificados</span> · <span>{summary.unchanged} sin cambios</span>
+            </div>
+          )}
+          <p>Revisá el agregador, el monto y las fotos. Quitar una fila no borra reclamos del Historial.</p>
+        </div>
+        <div className="draft-review__row-actions">
+          <button className="btn btn--ghost btn--small" disabled={disabled || Boolean(editing)} onClick={() => act(() => refresh(undefined, true))}>Actualizar coincidencias</button>
+          <button className="btn btn--ghost btn--small" disabled={disabled} onClick={() => { if (window.confirm('¿Descartar esta lista compartida? El Historial y las Métricas no se modificarán.')) void act(async () => { await discardDraft(draft); onResolved?.(); }); }}>Descartar lista</button>
+        </div>
       </header>
       <div className="draft-review__bulk">
-        <label><input type="checkbox" checked={selected.size > 0 && selected.size === draft.data.complaints.length} onChange={e => setSelected(e.target.checked ? new Set(draft.data.complaints.map((_,i) => i)) : new Set())} /> Seleccionar todas</label>
-        <label>Agregador <select value={bulk.aggregator} onChange={e => setBulk({ ...bulk, aggregator: e.target.value })}><option value="">Sin cambiar</option>{AGGREGATOR_OPTIONS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></label>
-        <label>Fecha <input type="date" value={bulk.day} onChange={e => setBulk({ ...bulk, day: e.target.value })} /></label>
-        <button className="btn btn--ghost btn--small" disabled={disabled || !selected.size || (!bulk.day && !bulk.aggregator)} onClick={() => patchRows((c,i) => selected.has(i) ? { ...c, ...(bulk.aggregator ? { aggregator: bulk.aggregator } : {}), ...(bulk.day ? { day: bulk.day, orderAtIso: null, timeOfDay: null, dateAssumed: false } : {}) } : c)}>Aplicar a seleccionados</button>
-        <button className="btn btn--ghost btn--small" disabled={disabled || !selected.size} onClick={() => act(async () => { await updateDraft(draft, { complaints: draft.data.complaints.filter((_,i) => !selected.has(i)) }); setSelected(new Set()); })}>Quitar seleccionados</button>
+        <div className="draft-review__bulk-group">
+          <label><input type="checkbox" checked={selected.size > 0 && selected.size === draft.data.complaints.length} onChange={e => setSelected(e.target.checked ? new Set(draft.data.complaints.map((_,i) => i)) : new Set())} /> Seleccionar todas</label>
+          <label>Agregador <select value={bulk.aggregator} onChange={e => setBulk({ ...bulk, aggregator: e.target.value })}><option value="">Sin cambiar</option>{AGGREGATOR_OPTIONS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></label>
+          <label>Fecha <input type="date" value={bulk.day} onChange={e => setBulk({ ...bulk, day: e.target.value })} /></label>
+        </div>
+        <div className="draft-review__bulk-actions">
+          <button className="btn btn--ghost btn--small" disabled={disabled || !selected.size || (!bulk.day && !bulk.aggregator)} onClick={() => patchRows((c,i) => selected.has(i) ? { ...c, ...(bulk.aggregator ? { aggregator: bulk.aggregator } : {}), ...(bulk.day ? { day: bulk.day, orderAtIso: null, timeOfDay: null, dateAssumed: false } : {}) } : c)}>Aplicar a seleccionados</button>
+          <button className="btn btn--ghost btn--small" disabled={disabled || !selected.size} onClick={() => act(async () => { await updateDraft(draft, { complaints: draft.data.complaints.filter((_,i) => !selected.has(i)) }); setSelected(new Set()); })}>Quitar seleccionados</button>
+        </div>
       </div>
       {validation && <p className="message message--error" role="alert">{validation}</p>}
       <div className="draft-review__rows">
@@ -104,17 +118,38 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
           let existing = null;
           try { existing = findDraftHistory(history, complaint); } catch { /* Validation above explains the conflict. */ }
           return <article className="draft-review__row" key={index}>
-            <label className="checkbox-label"><input type="checkbox" checked={selected.has(index)} onChange={() => setSelected(old => { const next = new Set(old); if (next.has(index)) next.delete(index); else next.add(index); return next; })} /><strong>{complaint.orderCode}</strong></label>
-            <div><span>{getAggregatorLabel(complaint.aggregator)} · {complaintDay(complaint) || 'Falta fecha'}</span><p>{complaint.reason || 'Sin motivo'}{complaint.comment ? ' · ' + complaint.comment : ''}</p>
-              <p className="draft-review__amount">Monto: {existing?.amount != null && existing.amount !== complaint.amount && complaint.amount != null ? <><s>{formatMoney(existing.amount)}</s> → </> : null}<strong>{complaint.amount == null ? (existing?.amount == null ? 'Sin monto' : formatMoney(existing.amount) + ' (se conserva)') : formatMoney(complaint.amount)}</strong></p>
+            <div className="draft-review__row-header">
+              <label className="checkbox-label draft-review__code-label">
+                <input type="checkbox" checked={selected.has(index)} onChange={() => setSelected(old => { const next = new Set(old); if (next.has(index)) next.delete(index); else next.add(index); return next; })} />
+                <strong>{complaint.orderCode}</strong>
+              </label>
+              <div className="draft-review__meta-tags">
+                <span className={`draft-review__tag draft-review__tag--${complaint.aggregator}`}>
+                  {getAggregatorLabel(complaint.aggregator)}
+                </span>
+                <span className="draft-review__tag">
+                  {complaintDay(complaint) || 'Falta fecha'}
+                </span>
+              </div>
+            </div>
+            <div className="draft-review__info">
+              <p className="draft-review__reason-text">
+                {complaint.reason || 'Sin motivo'}{complaint.comment ? ' · ' + complaint.comment : ''}
+              </p>
+              <div className="draft-review__amount">
+                <span>Monto:</span>
+                {existing?.amount != null && existing.amount !== complaint.amount && complaint.amount != null ? <><s>{formatMoney(existing.amount)}</s> → </> : null}
+                <strong>{complaint.amount == null ? (existing?.amount == null ? 'Sin monto' : formatMoney(existing.amount) + ' (se conserva)') : formatMoney(complaint.amount)}</strong>
+              </div>
             </div>
             <div className="draft-review__photo">
-              {row?.photo ? <button type="button" className="draft-review__thumbnail" onClick={() => setPhoto(row.photo)}><img src={row.photo.public_url} alt={'Foto del pedido ' + complaint.orderCode} loading="lazy" /></button> : <span>{row?.status === 'ambiguous' ? 'Elegí una foto: hay varias coincidencias' : 'Sin foto'}</span>}
-              {(row?.candidates?.length > 0 || row?.photo) && <select aria-label={'Foto de ' + complaint.orderCode} disabled={disabled} value={draft.data.pickedPhotoIds?.[complaint.id || complaintHistoryId(complaint)] || row?.photo?.id || ''} onChange={e => act(() => updateDraft(draft, { pickedPhotoIds: { ...draft.data.pickedPhotoIds, [complaint.id || complaintHistoryId(complaint)]: e.target.value || null } }))}>
+              {row?.photo ? <button type="button" className="draft-review__thumbnail" onClick={() => setPhoto(row.photo)} title="Ampliar foto"><img src={row.photo.public_url} alt={'Foto del pedido ' + complaint.orderCode} loading="lazy" /></button> : <span className="draft-review__no-photo">{row?.status === 'ambiguous' ? '⚠️ Varias fotos coincidentes' : '📷 Sin foto'}</span>}
+              {(row?.candidates?.length > 0 || row?.photo) && <select className="draft-review__photo-select" aria-label={'Foto de ' + complaint.orderCode} disabled={disabled} value={draft.data.pickedPhotoIds?.[complaint.id || complaintHistoryId(complaint)] || row?.photo?.id || ''} onChange={e => act(() => updateDraft(draft, { pickedPhotoIds: { ...draft.data.pickedPhotoIds, [complaint.id || complaintHistoryId(complaint)]: e.target.value || null } }))}>
                 <option value="">Sin selección manual</option>{[...new Map([...(row?.candidates || []), ...(row?.photo ? [row.photo] : [])].map(p => [p.id,p])).values()].map(p => <option value={p.id} key={p.id}>{p.name} · {p.created_at?.slice(0,10)}</option>)}
               </select>}
             </div>
-            <div className="draft-review__row-actions"><button className="btn btn--small btn--ghost" disabled={disabled} onClick={() => setEditing({ index, revision: draft.revision, value: { ...complaint, day: complaintDay(complaint), amount: complaint.amount ?? '' } })}>Corregir</button>
+            <div className="draft-review__row-actions">
+              <button className="btn btn--small btn--ghost" disabled={disabled} onClick={() => setEditing({ index, revision: draft.revision, value: { ...complaint, day: complaintDay(complaint), amount: complaint.amount ?? '' } })}>Corregir</button>
               <button className="btn btn--small btn--ghost" disabled={disabled} onClick={() => act(() => updateDraft(draft, { complaints: draft.data.complaints.filter((_,i) => i !== index) }))}>Quitar de la lista</button>
             </div>
           </article>;

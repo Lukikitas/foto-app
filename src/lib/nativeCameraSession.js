@@ -10,8 +10,16 @@ export const STORAGE_SESSION_KEY = 'foto_app_native_camera_session';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isNativeCameraFeatureEnabled() {
-  return typeof import.meta !== 'undefined'
-    && Boolean(import.meta.env?.VITE_NATIVE_CAMERA_ENABLED === 'true' || import.meta.env?.VITE_NATIVE_CAMERA_ENABLED === true);
+  if (typeof window !== 'undefined') {
+    const preference = localStorage.getItem('foto_app_native_camera_enabled');
+    if (preference === 'false') return false;
+    if (preference === 'true') return true;
+  }
+  if (typeof import.meta !== 'undefined') {
+    const envVal = import.meta.env?.VITE_NATIVE_CAMERA_ENABLED;
+    if (envVal === 'false' || envVal === false) return false;
+  }
+  return true;
 }
 
 export function isValidSessionId(value) {

@@ -1,5 +1,11 @@
 # React + Vite
 
+## Versión 1.5.2
+
+- **Acceso a Cámara Android**: Opciones de cámara nativa visibles y habilitadas por defecto mediante `VITE_NATIVE_CAMERA_ENABLED=true` y preferencia de usuario; accesos directos independientes para abrir la cámara Android nativa, la cámara web rápida o el diálogo de instalación del APK.
+- **Rediseño y Scroll de Gestionar**: Scroll independiente y fluido en PC (`.complaints--cruzar { overflow-y: auto }`) y celulares; tarjetas de reclamos (`.draft-review__row`) estructuradas con tags distintivos de agregador, motivos y fotos responsivas; barra de acciones masivas optimizada; y barra de guardado flotante (`.draft-review__commit`) con área protegida sobre la barra de navegación móvil.
+- **Prevención de Bloqueos en IndexedDB**: Liberación automática de conexiones ante cambios de versión (`onversionchange`) y reseteo inmediato de promesas caídas para evitar errores de espera o bloqueos con el Service Worker.
+
 ## Versión 1.5.1
 
 - **Importación y Traspaso de Cámara Android**: Detalle del paso exacto (`descargando_ticket`, `descargando_evidencia`, `guardando_local`, `confirmando_rpc`, `verificando_foto`) y error real por par; importación idempotente usando `pair.id`; ventana de recuperación extendida a 7 días (`recovery_expires_at`) manteniendo los 120 min para subir; verificación de la foto definitiva en `photos` antes de concluir la sesión; y comprobación del resultado de `finishSession` en `CameraViewModel.kt` sin perder la sesión local.

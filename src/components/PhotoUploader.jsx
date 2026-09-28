@@ -282,25 +282,34 @@ export default function PhotoUploader({ author, onAuthorChange }) {
               </div>
             </button>
 
-            {isNativeCameraFeatureEnabled() && (
-              <div className="uploader__native-options">
-                <button
-                  type="button"
-                  className="btn btn--small btn--ghost"
-                  onClick={openOrderCamera}
-                  disabled={!photographerReady}
-                >
-                  📷 Usar cámara web clásica
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--small btn--ghost"
-                  onClick={() => setNativeInstallOpen(true)}
-                >
-                  ⚙️ Instalar / Ajustes de cámara Android
-                </button>
-              </div>
-            )}
+            <div className="uploader__native-options">
+              <button
+                type="button"
+                className="btn btn--small btn--primary"
+                onClick={openNativeCamera}
+                disabled={!photographerReady || nativeLaunching}
+                title="Abrir la app de cámara Android nativa especializada"
+              >
+                {nativeLaunching ? 'Iniciando cámara…' : '📱 Abrir cámara Android'}
+              </button>
+              <button
+                type="button"
+                className="btn btn--small btn--ghost"
+                onClick={openOrderCamera}
+                disabled={!photographerReady}
+                title="Usar la cámara rápida integrada en el navegador"
+              >
+                📷 Usar cámara web clásica
+              </button>
+              <button
+                type="button"
+                className="btn btn--small btn--ghost"
+                onClick={() => setNativeInstallOpen(true)}
+                title="Descargar APK o ver configuración de cámara Android"
+              >
+                ⚙️ Instalar / Ajustes
+              </button>
+            </div>
 
             {/* Accesos rápidos secundarios (Cámara del cel / Galería) */}
             <div className="uploader__quick-row">

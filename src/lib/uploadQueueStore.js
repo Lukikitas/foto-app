@@ -183,13 +183,27 @@ function openQueueDb() {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => {
+        try { db.close(); } catch {}
+        dbPromise = null;
+      };
+      db.onclose = () => {
+        dbPromise = null;
+      };
+      db.onerror = () => {
+        dbPromise = null;
+      };
+      resolve(db);
+    };
     request.onerror = () => {
       dbPromise = null;
       reject(request.error || new Error('No se pudo abrir la base de datos IndexedDB.'));
     };
     request.onblocked = () => {
-      reject(new Error('IndexedDB bloqueada por otra pestaña.'));
+      dbPromise = null;
+      reject(new Error('IndexedDB bloqueada por otra pestaña o proceso de fondo.'));
     };
   });
 
