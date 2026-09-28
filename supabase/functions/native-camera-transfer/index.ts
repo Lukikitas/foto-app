@@ -94,7 +94,7 @@ Deno.serve(async (request) => {
 
   // GET: downloading/recovering registered files (subject to extended recovery deadline, e.g. 7 days)
   const recoveryDeadline = new Date(
-    session.recovery_expires_at || (new Date(session.expires_at).getTime() + 7 * 86400000)
+    session.recovery_expires_at || session.expires_at
   ).getTime();
   if (recoveryDeadline <= Date.now()) {
     return json({ error: 'El plazo de recuperación de archivos expiró.' }, 410);

@@ -5,12 +5,8 @@ alter table public.native_capture_sessions
   add column if not exists upload_expires_at timestamptz,
   add column if not exists recovery_expires_at timestamptz;
 
--- Keep existing Android copies recoverable after the old 120-minute deadline.
--- The legacy Edge Function still reads expires_at, so extend it as well.
-update public.native_capture_sessions
-set expires_at = greatest(expires_at, created_at + interval '7 days'),
-    upload_expires_at = greatest(coalesce(upload_expires_at, expires_at), created_at + interval '7 days'),
-    recovery_expires_at = greatest(coalesce(recovery_expires_at, expires_at), created_at + interval '7 days');
+-- Existing test sessions retain their original deadline. Only sessions created
+-- after this migration receive the new seven-day window.
 
 -- 1. Create native capture session with separate upload and recovery deadlines
 create or replace function public.create_native_capture_session(
@@ -251,7 +247,7 @@ begin
     raise exception 'Sesión no encontrada o credenciales no válidas.';
   end if;
 
-  v_recovery_expires := coalesce(v_session.recovery_expires_at, v_session.expires_at + interval '7 days');
+  v_recovery_expires := coalesce(v_session.recovery_expires_at, v_session.expires_at);
   if v_recovery_expires <= now() then
     raise exception 'El plazo de recuperación para esta sesión ha expirado.';
   end if;

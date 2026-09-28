@@ -7,10 +7,10 @@ declare
 begin
   select * into v_legacy from public.native_capture_sessions
   where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-  if v_legacy.expires_at < now() + interval '6 days'
-     or v_legacy.upload_expires_at < now() + interval '6 days'
-     or v_legacy.recovery_expires_at < now() + interval '6 days' then
-    raise exception 'A legacy session was not extended for recovery';
+  if v_legacy.expires_at >= now()
+     or v_legacy.upload_expires_at is not null
+     or v_legacy.recovery_expires_at is not null then
+    raise exception 'An existing test session was unexpectedly extended';
   end if;
 
   if exists (
