@@ -51,7 +51,7 @@ interface CaptureDao {
     @Query("SELECT COUNT(*) FROM native_capture_pairs WHERE sessionId = :sessionId AND uploadState IN ('local', 'preparing', 'uploading', 'error')")
     fun getPendingPairsCount(sessionId: String): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM native_capture_pairs WHERE sessionId = :sessionId AND uploadState = 'error'")
+    @Query("SELECT COUNT(*) FROM native_capture_pairs WHERE sessionId = :sessionId AND uploadState IN ('error', 'error_permanent')")
     fun getErrorPairsCount(sessionId: String): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM native_capture_pairs WHERE sessionId = :sessionId AND uploadState IN ('uploaded', 'imported')")

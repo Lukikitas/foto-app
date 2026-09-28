@@ -49,7 +49,7 @@ class UploadWorker(
             // Notification permission might not be granted; worker continues in background
         }
 
-        var anyFailed = false
+        var anyRetryableFailure = false
 
         for (pair in pendingPairs) {
             db.captureDao().updatePair(pair.copy(uploadState = NativeCapturePair.STATE_PREPARING))
@@ -60,11 +60,10 @@ class UploadWorker(
             if (!ticketFile.exists() || !evidenceFile.exists()) {
                 db.captureDao().updatePair(
                     pair.copy(
-                        uploadState = NativeCapturePair.STATE_ERROR,
+                        uploadState = NativeCapturePair.STATE_ERROR_PERMANENT,
                         errorMessage = "Los archivos locales no se encontraron."
                     )
                 )
-                anyFailed = true
                 continue
             }
 
@@ -127,19 +126,20 @@ class UploadWorker(
                 // Files are preserved locally in STATE_UPLOADED until final destination/publication
                 // is confirmed, ensuring no loss of the only local copy during transfer.
             } catch (e: Exception) {
+                val retryable = shouldRetryUploadFailure(e)
                 db.captureDao().updatePair(
                     pair.copy(
-                        uploadState = NativeCapturePair.STATE_ERROR,
+                        uploadState = if (retryable) NativeCapturePair.STATE_ERROR else NativeCapturePair.STATE_ERROR_PERMANENT,
                         retryCount = pair.retryCount + 1,
                         errorMessage = e.message,
                         updatedAt = System.currentTimeMillis()
                     )
                 )
-                anyFailed = true
+                if (retryable) anyRetryableFailure = true
             }
         }
 
-        if (anyFailed) {
+        if (anyRetryableFailure) {
             Result.retry()
         } else {
             Result.success()
