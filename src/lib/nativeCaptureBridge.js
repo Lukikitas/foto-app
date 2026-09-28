@@ -5,8 +5,16 @@ import {
   markNativePairsAsImported,
   hashTokenSha256,
 } from './nativeCameraSession.js';
+import { listQueueRecords } from './uploadQueueStore.js';
 
 const NATIVE_BUCKET = 'native-captures';
+
+// Keep the final path stable across refreshes and retries. The native pair ID is
+// also the queue ID, so the photo can be verified without relying on notes or
+// other user-editable metadata.
+export function nativePhotoStoragePath(pairId) {
+  return `orders/no_code/${pairId}.jpg`;
+}
 
 export function isTransientError(error) {
   if (!error) return false;
@@ -42,7 +50,7 @@ export function classifyStepError(err, step, pairNumber) {
   let friendlyReason = err.message || 'Error desconocido';
 
   if (err.status === 410 || friendlyReason.includes('expiró')) {
-    friendlyReason = 'La sesión expiró. El plazo de recuperación ha vencido.';
+    friendlyReason = 'La sesión venció: el plazo de 2 horas corre desde que se abrió la cámara, no desde la última foto. Abrí una sesión nueva.';
   } else if (err.status === 401 || err.status === 403) {
     friendlyReason = 'Credencial de sesión no autorizada o manipulada.';
   } else if (err.status === 404) {
@@ -115,26 +123,44 @@ export async function downloadStorageAsFile(
 }
 
 export async function verifySessionPhotosInDatabase(sessionId, pairIds = []) {
-  if (!sessionId) return { verifiedCount: 0, verifiedAll: false };
+  if (!sessionId || pairIds.length === 0) return { verifiedCount: 0, verifiedAll: false };
 
-  try {
-    // Check photos with file_path or metadata referencing sessionId
+  const expectedPaths = pairIds.map(nativePhotoStoragePath);
+  const foundIds = new Set();
+  for (let index = 0; index < expectedPaths.length; index += 50) {
     const { data, error } = await supabase
       .from('photos')
-      .select('id, file_path, notes, created_at')
-      .or(`file_path.ilike.%${sessionId}%,notes.ilike.%${sessionId}%`);
-
-    if (error || !data) return { verifiedCount: 0, verifiedAll: false };
-
-    const count = data.length;
-    return {
-      verifiedCount: count,
-      verifiedAll: pairIds.length > 0 ? count >= pairIds.length : false,
-      photos: data,
-    };
-  } catch {
-    return { verifiedCount: 0, verifiedAll: false };
+      .select('file_path')
+      .in('file_path', expectedPaths.slice(index, index + 50));
+    if (error) throw error;
+    for (const photo of data || []) {
+      const id = photo.file_path?.split('/').pop()?.replace(/\.jpg$/i, '');
+      if (id) foundIds.add(id);
+    }
   }
+
+  // Before stable paths were introduced, OCR placed identified native photos in
+  // an aggregator folder. The filename was still the pair ID; find those too.
+  const missingIds = pairIds.filter((id) => !foundIds.has(id));
+  for (let index = 0; index < missingIds.length; index += 30) {
+    const chunk = missingIds.slice(index, index + 30);
+    const { data, error } = await supabase
+      .from('photos')
+      .select('file_path')
+      .or(chunk.map((id) => `file_path.like.%/${id}.%`).join(','));
+    if (error) throw error;
+    for (const photo of data || []) {
+      const id = photo.file_path?.split('/').pop()?.split('.')[0];
+      if (chunk.includes(id)) foundIds.add(id);
+    }
+  }
+
+  const count = foundIds.size;
+  return {
+    verifiedCount: count,
+    verifiedAll: count === expectedPaths.length,
+    verifiedPairIds: pairIds.filter((id) => foundIds.has(id)),
+  };
 }
 
 export async function processNativeSessionReturn(sessionRecord, options = {}) {
@@ -146,13 +172,26 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   const markImportedFn = options.markImportedFn || markNativePairsAsImported;
   const clearSessionFn = options.clearSessionFn || clearStoredNativeSession;
   const verifyPhotosFn = options.verifyPhotosFn || verifySessionPhotosInDatabase;
+  const listQueueFn = options.listQueueFn || listQueueRecords;
   const maxAutomaticRetries = options.maxAutomaticRetries ?? 2;
 
   const sessionData = await fetchPairsFn(sessionId, sessionToken);
   const pairs = sessionData.pairs || [];
-  const pendingToImport = pairs.filter((p) => p.state === 'uploaded');
+  const alreadyImported = pairs.filter((p) => p.state === 'imported');
+  const verifiedBefore = alreadyImported.length
+    ? await verifyPhotosFn(sessionId, alreadyImported.map((p) => p.id))
+    : { verifiedPairIds: [] };
+  const verifiedIds = new Set(verifiedBefore.verifiedAll
+    ? alreadyImported.map((p) => p.id)
+    : (verifiedBefore.verifiedPairIds || []));
+  const queuedIds = new Set(alreadyImported.length
+    ? (await listQueueFn()).map((record) => record.id)
+    : []);
+  // A server-side "imported" flag only means that enqueue once succeeded. If
+  // local browser data was lost before publication, recover from native storage.
+  const pendingToImport = pairs.filter((p) => p.state === 'uploaded'
+    || (p.state === 'imported' && !verifiedIds.has(p.id) && !queuedIds.has(p.id)));
 
-  const importedIds = [];
   const detailedErrors = [];
 
   for (let i = 0; i < pendingToImport.length; i++) {
@@ -211,6 +250,7 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
         // Use idempotent ID based on pair.id so retries never duplicate queue items or photos
         await enqueueFn({
           id: pair.id,
+          storagePath: nativePhotoStoragePath(pair.id),
           file: evidenceFile,
           ticketFile,
           kind: 'order',
@@ -234,8 +274,9 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
           attempt,
         });
 
-        await markImportedFn(sessionId, sessionToken, [pair.id]);
-        importedIds.push(pair.id);
+        if (pair.state === 'uploaded') {
+          await markImportedFn(sessionId, sessionToken, [pair.id]);
+        }
         importedSuccessfully = true;
 
         onProgress?.({
@@ -279,7 +320,7 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   const allVerified = isAllImported && isSessionFinished && verification.verifiedCount >= totalCount;
 
   if (allVerified) {
-    clearSessionFn();
+    clearSessionFn(sessionId);
   }
 
   return {

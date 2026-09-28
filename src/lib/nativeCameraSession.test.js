@@ -6,6 +6,8 @@ import {
   clearStoredNativeSession,
   generateCryptoToken,
   getStoredNativeSession,
+  getStoredNativeSessions,
+  getReusableNativeSession,
   hashTokenSha256,
   isValidSessionId,
   isValidSessionToken,
@@ -117,4 +119,40 @@ test('local native session storage saves, retrieves and clears correctly', () =>
 
   clearStoredNativeSession();
   assert.equal(getStoredNativeSession(), null);
+});
+
+test('opening another camera session keeps earlier pending session tokens', () => {
+  const token = generateCryptoToken(32);
+  const first = {
+    sessionId: '123e4567-e89b-12d3-a456-426614174000',
+    sessionToken: token,
+    takenBy: 'Pepe',
+    createdAt: 1000,
+    expiresAt: new Date(60_000).toISOString(),
+  };
+  const second = {
+    ...first,
+    sessionId: '223e4567-e89b-12d3-a456-426614174000',
+    takenBy: 'Lucas',
+    createdAt: 2000,
+  };
+
+  saveStoredNativeSession(first);
+  saveStoredNativeSession(second);
+  assert.deepEqual(getStoredNativeSessions(), [first, second]);
+  assert.equal(getStoredNativeSession().sessionId, second.sessionId);
+  assert.equal(getReusableNativeSession('Pepe', 5000)?.sessionId, first.sessionId);
+  assert.equal(getReusableNativeSession('Pepe', 60_000), null);
+
+  clearStoredNativeSession(first.sessionId);
+  assert.deepEqual(getStoredNativeSessions(), [second]);
+});
+
+test('legacy single-session storage remains readable', () => {
+  const legacy = {
+    sessionId: '123e4567-e89b-12d3-a456-426614174000',
+    sessionToken: generateCryptoToken(32),
+  };
+  localStorage.setItem('foto_app_native_camera_session', JSON.stringify(legacy));
+  assert.deepEqual(getStoredNativeSessions(), [legacy]);
 });

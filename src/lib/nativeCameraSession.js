@@ -6,6 +6,8 @@ export const NATIVE_SCHEME = 'fotoapp';
 export const NATIVE_FALLBACK_URL = 'https://delivery.star-app.com.ar/instalar-camara';
 export const NATIVE_RETURN_URL_PREFIX = 'https://delivery.star-app.com.ar/camera-return';
 export const STORAGE_SESSION_KEY = 'foto_app_native_camera_session';
+export const STORAGE_SESSIONS_KEY = 'foto_app_native_camera_sessions';
+export const NATIVE_SESSIONS_CHANGED_EVENT = 'foto-app-native-sessions-changed';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -80,36 +82,71 @@ export function parseReturnSessionFromUrl(url = window.location.href) {
   return null;
 }
 
-export function getStoredNativeSession() {
-  try {
-    if (typeof localStorage === 'undefined') return null;
-    const raw = localStorage.getItem(STORAGE_SESSION_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw);
-    if (session && isValidSessionId(session.sessionId) && isValidSessionToken(session.sessionToken)) {
-      return session;
-    }
-  } catch {
-    // Ignore corrupt storage
+function validStoredSession(session) {
+  return session && isValidSessionId(session.sessionId) && isValidSessionToken(session.sessionToken);
+}
+
+export function getStoredNativeSessions() {
+  if (typeof localStorage === 'undefined') return [];
+  let stored = [];
+  let legacy = null;
+  try { stored = JSON.parse(localStorage.getItem(STORAGE_SESSIONS_KEY) || '[]'); } catch { /* Ignore corrupt list. */ }
+  try { legacy = JSON.parse(localStorage.getItem(STORAGE_SESSION_KEY) || 'null'); } catch { /* Ignore corrupt legacy record. */ }
+  const byId = new Map();
+  for (const session of Array.isArray(stored) ? stored : []) {
+    if (validStoredSession(session)) byId.set(session.sessionId, session);
   }
-  return null;
+  if (validStoredSession(legacy)) byId.set(legacy.sessionId, legacy);
+  return [...byId.values()].sort((left, right) => (left.createdAt || 0) - (right.createdAt || 0));
+}
+
+export function getStoredNativeSession() {
+  return getStoredNativeSessions().at(-1) || null;
 }
 
 export function saveStoredNativeSession(session) {
-  try {
-    if (typeof localStorage === 'undefined') return;
-    if (!session) {
-      localStorage.removeItem(STORAGE_SESSION_KEY);
-    } else {
-      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(session));
-    }
-  } catch {
-    // Storage quota or restrictions
+  if (!session) return clearStoredNativeSession();
+  if (!validStoredSession(session)) throw new Error('Sesión Android inválida.');
+  if (typeof localStorage === 'undefined') throw new Error('El navegador no permite guardar la sesión de la cámara.');
+  const sessions = getStoredNativeSessions().filter((entry) => entry.sessionId !== session.sessionId);
+  sessions.push(session);
+  localStorage.setItem(STORAGE_SESSIONS_KEY, JSON.stringify(sessions));
+  localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(session));
+  notifyNativeSessionsChanged();
+}
+
+function notifyNativeSessionsChanged() {
+  if (typeof window !== 'undefined' && typeof Event === 'function') {
+    window.dispatchEvent(new Event(NATIVE_SESSIONS_CHANGED_EVENT));
   }
 }
 
-export function clearStoredNativeSession() {
-  saveStoredNativeSession(null);
+export function clearStoredNativeSession(sessionId = null) {
+  if (typeof localStorage === 'undefined') return;
+  if (!sessionId) {
+    localStorage.removeItem(STORAGE_SESSIONS_KEY);
+    localStorage.removeItem(STORAGE_SESSION_KEY);
+    return;
+  }
+  const sessions = getStoredNativeSessions().filter((entry) => entry.sessionId !== sessionId);
+  if (sessions.length) {
+    localStorage.setItem(STORAGE_SESSIONS_KEY, JSON.stringify(sessions));
+    localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessions.at(-1)));
+  } else {
+    clearStoredNativeSession();
+  }
+}
+
+export function getReusableNativeSession(takenBy, now = Date.now()) {
+  const author = (takenBy || '').trim().toLocaleLowerCase();
+  const session = getStoredNativeSessions().findLast((entry) =>
+    entry.takenBy?.trim().toLocaleLowerCase() === author
+    && Number.isFinite(Date.parse(entry.expiresAt))
+    && Date.parse(entry.expiresAt) > now);
+  return session ? {
+    ...session,
+    intentUri: buildNativeCameraIntentUri(session),
+  } : null;
 }
 
 export async function createNativeSession(takenBy, options = {}) {

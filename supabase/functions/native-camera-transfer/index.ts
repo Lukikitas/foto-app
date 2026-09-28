@@ -48,16 +48,16 @@ Deno.serve(async (request) => {
 
   const { data: session, error: sessionError } = await db
     .from('native_capture_sessions')
-    .select('id, state, expires_at, upload_expires_at, recovery_expires_at')
+    .select('id, state, expires_at')
     .eq('id', sessionId)
     .eq('token_hash', tokenHash)
     .maybeSingle();
 
   if (sessionError || !session) return json({ error: 'Sesión no autorizada.' }, 401);
 
-  // POST: uploading new capture files (subject to upload deadline, e.g. 120 mins)
+  // Both upload and recovery use the two-hour deadline from session creation.
   if (request.method === 'POST') {
-    const uploadDeadline = new Date(session.upload_expires_at || session.expires_at).getTime();
+    const uploadDeadline = new Date(session.expires_at).getTime();
     if (uploadDeadline <= Date.now()) {
       return json({ error: 'El plazo para subir nuevas capturas expiró.' }, 410);
     }
@@ -92,10 +92,8 @@ Deno.serve(async (request) => {
     return json({ deleted: true, path: storagePath });
   }
 
-  // GET: downloading/recovering registered files (subject to extended recovery deadline, e.g. 7 days)
-  const recoveryDeadline = new Date(
-    session.recovery_expires_at || (new Date(session.expires_at).getTime() + 7 * 86400000)
-  ).getTime();
+  // GET: the same fixed deadline applies to transferring a saved capture.
+  const recoveryDeadline = new Date(session.expires_at).getTime();
   if (recoveryDeadline <= Date.now()) {
     return json({ error: 'El plazo de recuperación de archivos expiró.' }, 410);
   }

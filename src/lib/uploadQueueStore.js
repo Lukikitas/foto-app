@@ -4,7 +4,8 @@ import { itemNeedsOcr } from './uploadQueueProtocol.js';
 const DB_NAME = 'foto-app-upload-queue';
 const DB_VERSION = 1;
 const STORE_NAME = 'items';
-const IDB_TIMEOUT_MS = 6000;
+const IDB_OPEN_TIMEOUT_MS = 15000;
+const IDB_TRANSACTION_TIMEOUT_MS = 60000;
 
 const memoryRecords = new Map();
 let testStore = null;
@@ -131,9 +132,10 @@ function memoryBackend() {
   };
 }
 
-function withTimeout(promise, timeoutMs, opName) {
+function withTimeout(promise, timeoutMs, opName, onTimeout) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
+      onTimeout?.();
       reject(new Error(`Tiempo de espera agotado (${timeoutMs}ms) en IndexedDB al ${opName}.`));
     }, timeoutMs);
 
@@ -168,6 +170,7 @@ function completeTransaction(tx) {
 function openQueueDb() {
   if (dbPromise) return dbPromise;
 
+  let abandoned = false;
   const rawPromise = new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       reject(new Error('IndexedDB no está disponible en este entorno.'));
@@ -185,8 +188,12 @@ function openQueueDb() {
 
     request.onsuccess = () => {
       const db = request.result;
+      if (abandoned) {
+        db.close();
+        return;
+      }
       db.onversionchange = () => {
-        try { db.close(); } catch {}
+        try { db.close(); } catch { /* Connection was already closed. */ }
         dbPromise = null;
       };
       db.onclose = () => {
@@ -202,12 +209,15 @@ function openQueueDb() {
       reject(request.error || new Error('No se pudo abrir la base de datos IndexedDB.'));
     };
     request.onblocked = () => {
+      abandoned = true;
       dbPromise = null;
       reject(new Error('IndexedDB bloqueada por otra pestaña o proceso de fondo.'));
     };
   });
 
-  dbPromise = withTimeout(rawPromise, IDB_TIMEOUT_MS, 'abrir conexión').catch((err) => {
+  dbPromise = withTimeout(rawPromise, IDB_OPEN_TIMEOUT_MS, 'abrir conexión', () => {
+    abandoned = true;
+  }).catch((err) => {
     dbPromise = null;
     throw err;
   });
@@ -218,35 +228,32 @@ function openQueueDb() {
 function idbBackend() {
   return {
     async put(record) {
-      const op = (async () => {
-        const db = await openQueueDb();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const done = completeTransaction(tx);
-        tx.objectStore(STORE_NAME).put(record);
-        await done;
-      })();
-      return withTimeout(op, IDB_TIMEOUT_MS, `escribir foto #${record.id}`);
+      const db = await openQueueDb();
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const done = completeTransaction(tx);
+      tx.objectStore(STORE_NAME).put(record);
+      return withTimeout(done, IDB_TRANSACTION_TIMEOUT_MS, `escribir foto #${record.id}`, () => {
+        try { tx.abort(); } catch { /* The transaction already settled. */ }
+      });
     },
     async delete(id) {
-      const op = (async () => {
-        const db = await openQueueDb();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const done = completeTransaction(tx);
-        tx.objectStore(STORE_NAME).delete(id);
-        await done;
-      })();
-      return withTimeout(op, IDB_TIMEOUT_MS, `eliminar foto #${id}`);
+      const db = await openQueueDb();
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const done = completeTransaction(tx);
+      tx.objectStore(STORE_NAME).delete(id);
+      return withTimeout(done, IDB_TRANSACTION_TIMEOUT_MS, `eliminar foto #${id}`, () => {
+        try { tx.abort(); } catch { /* The transaction already settled. */ }
+      });
     },
     async list() {
-      const op = (async () => {
-        const db = await openQueueDb();
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const done = completeTransaction(tx);
-        const records = await requestResult(tx.objectStore(STORE_NAME).getAll());
-        await done;
-        return records;
-      })();
-      return withTimeout(op, IDB_TIMEOUT_MS, 'listar fotos');
+      const db = await openQueueDb();
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const done = completeTransaction(tx);
+      const op = Promise.all([requestResult(tx.objectStore(STORE_NAME).getAll()), done]);
+      const [records] = await withTimeout(op, IDB_TRANSACTION_TIMEOUT_MS, 'listar fotos', () => {
+        try { tx.abort(); } catch { /* The transaction already settled. */ }
+      });
+      return records;
     },
   };
 }
