@@ -1,6 +1,10 @@
 import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
 export const RELEASE_GROUPS = [
+  { title: 'Gestionar', notes: [
+    'Rediseño completo: filas compactas con scroll propio, miniatura de foto con zoom y acciones rápidas por reclamo.',
+    'Header fijo con barra de edición masiva integrada y botón "Guardar" siempre visible al pie.',
+  ] },
   { title: 'Cámara', notes: [
     'Zoom continuo con dos dedos y selección opcional del lente amplio en celulares compatibles.',
     'Guías ajustadas al encuadre real y preferencia de cámara para la foto del pedido.',
