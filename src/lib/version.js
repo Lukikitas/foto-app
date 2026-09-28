@@ -4,6 +4,7 @@ export const RELEASE_GROUPS = [
   { title: 'Subidas y recuperación', notes: [
     'Las sesiones Android muestran claramente que vencen dos horas después de abrir la cámara.',
     'Si una foto Android quedó marcada como importada pero desapareció de la cola local, la app vuelve a recuperarla del depósito temporal.',
+    'Abrir otra vez la cámara conserva las sesiones pendientes y reutiliza la sesión vigente del mismo autor.',
     'La cola verifica la foto en el servidor antes de mostrarla como guardada y permite reintentar la lectura local.',
     'El guardado local espera la confirmación real de IndexedDB antes de informar un error de tiempo de espera.',
   ] },

@@ -3,7 +3,7 @@ import OrderCamera from './OrderCamera';
 import PhotographerPicker from './PhotographerPicker';
 import NativeCameraInstallModal from './NativeCameraInstallModal';
 import NativeCameraReturnNotice from './NativeCameraReturnNotice';
-import { isNativeCameraFeatureEnabled, createNativeSession } from '../lib/nativeCameraSession';
+import { isNativeCameraFeatureEnabled, createNativeSession, getReusableNativeSession } from '../lib/nativeCameraSession';
 import { isValidOrderDigits } from '../lib/photos';
 import { getTakenByHistory, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
@@ -112,7 +112,7 @@ export default function PhotoUploader({ author, onAuthorChange }) {
     setNativeLaunching(true);
     setError(null);
     try {
-      const session = await createNativeSession(name);
+      const session = getReusableNativeSession(name) || await createNativeSession(name);
       window.location.href = session.intentUri;
     } catch (err) {
       setError(err.message || 'No se pudo iniciar la cámara nativa.');

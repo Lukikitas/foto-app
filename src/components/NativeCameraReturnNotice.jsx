@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   clearStoredNativeSession,
-  getStoredNativeSession,
+  getStoredNativeSessions,
+  NATIVE_SESSIONS_CHANGED_EVENT,
 } from '../lib/nativeCameraSession';
 import { processNativeSessionReturn } from '../lib/nativeCaptureBridge';
 
@@ -13,8 +14,8 @@ const STEP_LABELS = {
   verifying_photo: 'Verificando foto definitiva…',
 };
 
-export default function NativeCameraReturnNotice({ onDone }) {
-  const [session, setSession] = useState(getStoredNativeSession);
+function NativeSessionNotice({ sessionId, onDone, onDismiss }) {
+  const [session, setSession] = useState(() => getStoredNativeSessions().find((entry) => entry.sessionId === sessionId));
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -26,7 +27,7 @@ export default function NativeCameraReturnNotice({ onDone }) {
   const checkAndImportRef = useRef(null);
 
   const checkAndImport = useCallback(async (isManual = false) => {
-    const active = getStoredNativeSession();
+    const active = getStoredNativeSessions().find((entry) => entry.sessionId === sessionId);
     if (!active || !mountedRef.current) return;
 
     if (timerRef.current) {
@@ -81,7 +82,7 @@ export default function NativeCameraReturnNotice({ onDone }) {
         setManualRetrying(false);
       }
     }
-  }, [onDone]);
+  }, [onDone, sessionId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -98,9 +99,10 @@ export default function NativeCameraReturnNotice({ onDone }) {
   if (!session && !summary) return null;
 
   function dismiss() {
-    clearStoredNativeSession();
+    clearStoredNativeSession(sessionId);
     setSession(null);
     setSummary(null);
+    onDismiss?.(sessionId);
   }
 
   const hasErrors = errors.length > 0;
@@ -170,4 +172,31 @@ export default function NativeCameraReturnNotice({ onDone }) {
       </div>
     </div>
   );
+}
+
+export default function NativeCameraReturnNotice({ onDone }) {
+  const [sessionIds, setSessionIds] = useState(() =>
+    getStoredNativeSessions().map((session) => session.sessionId));
+
+  useEffect(() => {
+    const refresh = () => setSessionIds(getStoredNativeSessions().map((session) => session.sessionId));
+    window.addEventListener('storage', refresh);
+    window.addEventListener(NATIVE_SESSIONS_CHANGED_EVENT, refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener(NATIVE_SESSIONS_CHANGED_EVENT, refresh);
+    };
+  }, []);
+
+  return sessionIds.map((sessionId) => (
+    <NativeSessionNotice
+      key={sessionId}
+      sessionId={sessionId}
+      onDone={() => {
+        setSessionIds((current) => current.filter((id) => id !== sessionId));
+        onDone?.();
+      }}
+      onDismiss={() => setSessionIds((current) => current.filter((id) => id !== sessionId))}
+    />
+  ));
 }

@@ -320,7 +320,7 @@ export async function processNativeSessionReturn(sessionRecord, options = {}) {
   const allVerified = isAllImported && isSessionFinished && verification.verifiedCount >= totalCount;
 
   if (allVerified) {
-    clearSessionFn();
+    clearSessionFn(sessionId);
   }
 
   return {
