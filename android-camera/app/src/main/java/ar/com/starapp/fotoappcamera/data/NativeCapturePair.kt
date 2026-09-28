@@ -37,6 +37,7 @@ data class NativeCapturePair(
         const val STATE_UPLOADED = "uploaded"
         const val STATE_IMPORTED = "imported"
         const val STATE_ERROR = "error"
+        const val STATE_ERROR_PERMANENT = "error_permanent"
         const val STATE_DISCARDED = "discarded"
     }
 }

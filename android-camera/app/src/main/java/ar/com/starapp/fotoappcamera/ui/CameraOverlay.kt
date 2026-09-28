@@ -147,6 +147,15 @@ fun CameraOverlay(
                 )
             }
 
+            if (errorCount > 0) {
+                Text(
+                    text = "⚠️ $errorCount par(es) con error de subida. Aún no llegaron a la galería.",
+                    color = YellowWarning,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
             // Offline indicator if disconnected
             if (isOffline) {
                 Box(

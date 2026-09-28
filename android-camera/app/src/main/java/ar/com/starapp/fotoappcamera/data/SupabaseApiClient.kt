@@ -16,6 +16,8 @@ import java.io.FileInputStream
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
+class ApiHttpException(val statusCode: Int, message: String) : Exception(message)
+
 class SupabaseApiClient(
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val anonKey: String = DEFAULT_ANON_KEY,
@@ -117,7 +119,7 @@ class SupabaseApiClient(
             client.newCall(request).execute().use { response ->
                 val responseBody = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("Error al subir archivo a storage (${response.code}): $responseBody"))
+                    Result.failure(ApiHttpException(response.code, "Error al subir archivo a storage (${response.code}): $responseBody"))
                 } else {
                     Result.success(storagePath)
                 }
@@ -162,7 +164,7 @@ class SupabaseApiClient(
             client.newCall(request).execute().use { response ->
                 val responseBody = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("Error al registrar par (${response.code}): $responseBody"))
+                    Result.failure(ApiHttpException(response.code, "Error al registrar par (${response.code}): $responseBody"))
                 } else {
                     val parsed = json.decodeFromString<JsonObject>(responseBody)
                     Result.success(parsed)

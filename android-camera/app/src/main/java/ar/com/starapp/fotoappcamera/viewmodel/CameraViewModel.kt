@@ -188,7 +188,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val tokenHash = SupabaseApiClient.calculateSha256(sessionToken)
-        val appVersion = "1.0.1"
+        val appVersion = "1.0.2"
         val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
 
         // Activate session in Supabase
@@ -452,7 +452,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun openDiagnostics(context: Context) {
         _diagnosticReport.value = CameraDetector.buildDiagnosticReport(
             context = context,
-            appVersion = "1.0.1",
+            appVersion = "1.0.2",
             selectedLensMode = _lensMode.value,
             activeZoomRatio = _zoomRatio.value
         )
