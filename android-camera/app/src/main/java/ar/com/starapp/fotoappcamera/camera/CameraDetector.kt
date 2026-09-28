@@ -30,12 +30,29 @@ object CameraDetector {
         val result = mutableListOf<LogicalCameraInfo>()
 
         for (id in manager.cameraIdList) {
+            val cameraErrors = mutableListOf<String>()
             try {
                 val chars = manager.getCameraCharacteristics(id)
                 val facing = chars.get(CameraCharacteristics.LENS_FACING) ?: continue
 
                 // Hardware level
                 val hwLevel = hardwareLevelName(chars.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL))
+
+                // Capabilities & Multicamera support
+                val caps = chars.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES) ?: intArrayOf()
+                val isMultiCamera = caps.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA)
+                val capNames = caps.map { cap ->
+                    when (cap) {
+                        CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA -> "LOGICAL_MULTI_CAMERA"
+                        CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE -> "BACKWARD_COMPATIBLE"
+                        CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_RAW -> "RAW"
+                        else -> "CAP_$cap"
+                    }
+                }
+
+                // Logical focal lengths & sensor size
+                val logicalFocals = chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.toList() ?: emptyList()
+                val logicalSensorSize = chars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
 
                 // Zoom range
                 var minZoom = 1.0f
@@ -58,14 +75,30 @@ object CameraDetector {
                     for (physId in physicalIds) {
                         try {
                             val physChars = manager.getCameraCharacteristics(physId)
-                            val focals = physChars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
-                            val sensorSize = physChars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE) ?: SizeF(4.0f, 3.0f)
-                            val focal = focals?.firstOrNull() ?: 4.0f
+                            val focals = physChars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.toList() ?: emptyList()
+                            val sensorSize = physChars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
 
+                            // Do NOT invent dimensions if metadata is missing!
+                            if (sensorSize == null || focals.isEmpty() || focals.first() <= 0f || sensorSize.width <= 0f) {
+                                physicalLenses.add(
+                                    PhysicalLensInfo(
+                                        id = physId,
+                                        focalLengths = focals,
+                                        sensorWidthMm = sensorSize?.width,
+                                        sensorHeightMm = sensorSize?.height,
+                                        hfovDegrees = null,
+                                        hasValidMetadata = false,
+                                        isUltrawide = false,
+                                        displayLabel = "Sin metadatos",
+                                        errorNote = "Metadatos incompletos de hardware (sensorSize o focal ausente)"
+                                    )
+                                )
+                                continue
+                            }
+
+                            val focal = focals.first()
                             val hfov = calculateHfov(sensorSize.width, focal)
-                            // Ultrawide is typically considered when HFOV > 80 degrees
                             val isUltrawide = hfov >= 80.0f
-
                             val label = if (isUltrawide) {
                                 if (hfov >= 100.0f) "0,5×" else "Amplio"
                             } else {
@@ -75,22 +108,38 @@ object CameraDetector {
                             physicalLenses.add(
                                 PhysicalLensInfo(
                                     id = physId,
-                                    focalLength = focal,
+                                    focalLengths = focals,
                                     sensorWidthMm = sensorSize.width,
                                     sensorHeightMm = sensorSize.height,
                                     hfovDegrees = hfov,
+                                    hasValidMetadata = true,
                                     isUltrawide = isUltrawide,
                                     displayLabel = label
                                 )
                             )
-                        } catch (_: Exception) {
-                            // Ignore physical camera read failure
+                        } catch (e: Exception) {
+                            cameraErrors.add("Error al examinar lente físico $physId: ${e.message}")
+                            physicalLenses.add(
+                                PhysicalLensInfo(
+                                    id = physId,
+                                    focalLengths = emptyList(),
+                                    sensorWidthMm = null,
+                                    sensorHeightMm = null,
+                                    hfovDegrees = null,
+                                    hasValidMetadata = false,
+                                    isUltrawide = false,
+                                    displayLabel = "Error",
+                                    errorNote = "Excepción: ${e.message}"
+                                )
+                            )
                         }
                     }
                 }
 
-                val bestWide = physicalLenses.filter { it.isUltrawide }.maxByOrNull { it.hfovDegrees }?.id
-                val bestNormal = physicalLenses.filter { !it.isUltrawide }.minByOrNull { it.hfovDegrees }?.id
+                val bestWide = physicalLenses.filter { it.isUltrawide && it.hfovDegrees != null }
+                    .maxByOrNull { it.hfovDegrees!! }?.id
+                val bestNormal = physicalLenses.filter { !it.isUltrawide && it.hfovDegrees != null }
+                    .minByOrNull { it.hfovDegrees!! }?.id
 
                 result.add(
                     LogicalCameraInfo(
@@ -99,14 +148,19 @@ object CameraDetector {
                         minZoomRatio = minZoom,
                         maxZoomRatio = maxZoom,
                         supportsSubOneZoom = hasSubOne,
+                        isLogicalMultiCamera = isMultiCamera,
+                        availableCapabilities = capNames,
+                        availableFocalLengths = logicalFocals,
+                        physicalSensorSizeMm = logicalSensorSize,
                         physicalLenses = physicalLenses,
                         hardwareLevel = hwLevel,
                         bestWidePhysicalId = bestWide,
-                        bestNormalPhysicalId = bestNormal
+                        bestNormalPhysicalId = bestNormal,
+                        inspectionErrors = cameraErrors
                     )
                 )
-            } catch (_: Exception) {
-                // Ignore camera inspection failure
+            } catch (e: Exception) {
+                cameraErrors.add("Error al inspeccionar cámara lógica $id: ${e.message}")
             }
         }
 
@@ -125,11 +179,30 @@ object CameraDetector {
         val hasSubOne = backCamera?.supportsSubOneZoom == true
         val hasPhysicalWide = backCamera?.physicalLenses?.any { it.isUltrawide } == true
 
+        val isXiaomiOrPoco = Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
+            Build.MANUFACTURER.equals("POCO", ignoreCase = true) ||
+            Build.MODEL.contains("2311DRK48G", ignoreCase = true)
+
         val ultrawideAvailable = hasSubOne || hasPhysicalWide
         val ultrawideType = when {
             hasSubOne -> "sub_one_zoom"
             hasPhysicalWide -> "physical_camera"
             else -> "not_available"
+        }
+
+        val ultrawideExplanation = when {
+            hasSubOne -> "Lente gran angular accesible por rango de zoom óptico sub-1× (${backCamera?.minZoomRatio}×)."
+            hasPhysicalWide -> "Lente gran angular accesible por sensor físico independiente (ID: ${backCamera?.bestWidePhysicalId})."
+            isXiaomiOrPoco -> "HyperOS / Xiaomi no expone el sensor ultra gran angular a aplicaciones de terceros a través de APIs públicas de Camera2 (zoom mín: ${backCamera?.minZoomRatio ?: 1.0f}×, sin lente físico <1× reportado). Opción 0,5× deshabilitada sin simular zoom digital."
+            else -> "Este dispositivo no expone sensor ultra gran angular ni zoom sub-1× a través de Camera2."
+        }
+
+        val allWarnings = mutableListOf<String>()
+        cameras.forEach { cam ->
+            allWarnings.addAll(cam.inspectionErrors)
+            cam.physicalLenses.forEach { lens ->
+                lens.errorNote?.let { allWarnings.add("Lente físico [${lens.id}]: $it") }
+            }
         }
 
         return CameraDiagnosticReport(
@@ -140,7 +213,9 @@ object CameraDetector {
             selectedLensMode = selectedLensMode,
             activeZoomRatio = activeZoomRatio,
             ultrawideAvailable = ultrawideAvailable,
-            ultrawideType = ultrawideType
+            ultrawideType = ultrawideType,
+            ultrawideExplanation = ultrawideExplanation,
+            inspectionWarnings = allWarnings
         )
     }
 }

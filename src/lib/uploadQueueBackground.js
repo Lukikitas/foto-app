@@ -9,7 +9,15 @@ export async function requestBackgroundQueueProcessing(deps = globalThis) {
   if (!serviceWorker) return false;
 
   try {
-    const registration = await serviceWorker.ready;
+    const readyTimeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout esperando serviceWorker.ready')), 3000);
+    });
+
+    const registration = await Promise.race([
+      Promise.resolve(serviceWorker.ready),
+      readyTimeoutPromise,
+    ]);
+
     const worker = registration.active || serviceWorker.controller;
     if (!worker) return false;
     worker.postMessage({ type: UPLOAD_QUEUE_MESSAGE.process });

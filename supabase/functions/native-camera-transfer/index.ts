@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'apikey, content-type, x-session-id, x-token-hash, x-storage-path, x-content-sha256',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -34,7 +34,9 @@ async function sha256Hex(bytes: Uint8Array) {
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'Método no permitido.' }, 405);
+  if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'DELETE') {
+    return json({ error: 'Método no permitido.' }, 405);
+  }
 
   const sessionId = request.headers.get('x-session-id')?.trim() || '';
   const tokenHash = request.headers.get('x-token-hash')?.trim().toLowerCase() || '';
@@ -46,15 +48,20 @@ Deno.serve(async (request) => {
 
   const { data: session, error: sessionError } = await db
     .from('native_capture_sessions')
-    .select('id, state, expires_at')
+    .select('id, state, expires_at, upload_expires_at, recovery_expires_at')
     .eq('id', sessionId)
     .eq('token_hash', tokenHash)
     .maybeSingle();
 
   if (sessionError || !session) return json({ error: 'Sesión no autorizada.' }, 401);
-  if (new Date(session.expires_at).getTime() <= Date.now()) return json({ error: 'La sesión expiró.' }, 410);
 
+  // POST: uploading new capture files (subject to upload deadline, e.g. 120 mins)
   if (request.method === 'POST') {
+    const uploadDeadline = new Date(session.upload_expires_at || session.expires_at).getTime();
+    if (uploadDeadline <= Date.now()) {
+      return json({ error: 'El plazo para subir nuevas capturas expiró.' }, 410);
+    }
+
     if (!['active', 'finishing'].includes(session.state)) {
       return json({ error: 'La sesión no acepta más archivos.' }, 409);
     }
@@ -76,6 +83,21 @@ Deno.serve(async (request) => {
     });
     if (error) return json({ error: error.message }, 500);
     return json({ path: storagePath });
+  }
+
+  // DELETE: cleanup temporary storage only after confirmed final publication
+  if (request.method === 'DELETE') {
+    const { error } = await db.storage.from(BUCKET).remove([storagePath]);
+    if (error) return json({ error: error.message }, 500);
+    return json({ deleted: true, path: storagePath });
+  }
+
+  // GET: downloading/recovering registered files (subject to extended recovery deadline, e.g. 7 days)
+  const recoveryDeadline = new Date(
+    session.recovery_expires_at || (new Date(session.expires_at).getTime() + 7 * 86400000)
+  ).getTime();
+  if (recoveryDeadline <= Date.now()) {
+    return json({ error: 'El plazo de recuperación de archivos expiró.' }, 410);
   }
 
   const { data, error } = await db.storage.from(BUCKET).download(storagePath);

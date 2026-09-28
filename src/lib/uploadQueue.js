@@ -39,6 +39,16 @@ let restorePromise = null;
 let persistListenersBound = false;
 let handoffPromise = null;
 let leaseRetryTimer = null;
+let storeRestorationError = null;
+
+export function getQueueStoreError() {
+  return storeRestorationError;
+}
+
+export function clearQueueStoreError() {
+  storeRestorationError = null;
+  notify();
+}
 
 function snapshot() {
   return queue.map((item) => ({
@@ -47,11 +57,13 @@ function snapshot() {
     label: item.label,
     error: item.error,
     createdAt: item.createdAt,
+    uploadAttempts: item.uploadAttempts || 0,
   }));
 }
 
 function notify() {
   const data = snapshot();
+  data.storeError = storeRestorationError;
   listeners.forEach((fn) => fn(data));
 }
 
@@ -67,10 +79,11 @@ function persistItem(item, { holdLease = true, reportError = false } = {}) {
       return putQueueRecord(record);
     });
   const loggedJob = job.catch((error) => {
-    console.error(error);
+    console.error('persistItem error:', error);
+    throw error;
   });
-  persistLocks.set(item.id, loggedJob);
-  return reportError ? job : loggedJob;
+  persistLocks.set(item.id, loggedJob.catch(() => {}));
+  return reportError ? job : loggedJob.catch(() => {});
 }
 
 async function pausePageQueueAndHandoff() {
@@ -78,10 +91,17 @@ async function pausePageQueueAndHandoff() {
   pagePaused = true;
   pageAbort?.abort();
   handoffPromise = (async () => {
-    await Promise.all(queue
-      .filter((item) => item.status !== 'done')
-      .map((item) => persistItem(item, { holdLease: item.status === 'uploading' })));
-    await requestBackgroundQueueProcessing();
+    await Promise.all(
+      queue
+        .filter((item) => item.status !== 'done')
+        .map((item) => persistItem(item, { holdLease: item.status === 'uploading' }))
+    );
+    const handoffSuccess = await requestBackgroundQueueProcessing();
+    if (!handoffSuccess) {
+      // If service worker handoff fails, page retakes queue immediately
+      pagePaused = false;
+      processQueue();
+    }
   })();
   try {
     return await handoffPromise;
@@ -93,7 +113,11 @@ async function pausePageQueueAndHandoff() {
 async function resumePageQueue() {
   if (handoffPromise) await handoffPromise;
   pagePaused = false;
-  await syncQueueFromStore();
+  try {
+    await syncQueueFromStore();
+  } catch {
+    // Error is already stored in storeRestorationError and notified
+  }
   processQueue();
 }
 
@@ -114,9 +138,11 @@ function bindPersistListeners() {
   window.addEventListener('beforeunload', () => { void pausePageQueueAndHandoff(); });
   document.addEventListener('visibilitychange', handleQueueVisibilityChange);
   subscribeBackgroundQueueUpdates(() => {
-    void syncQueueFromStore().then(() => {
-      if (!pagePaused) processQueue();
-    });
+    void syncQueueFromStore()
+      .then(() => {
+        if (!pagePaused) processQueue();
+      })
+      .catch(() => {});
   });
 }
 
@@ -126,11 +152,14 @@ export function setUploadCompleteHandler(handler) {
 
 export function subscribe(listener) {
   listeners.add(listener);
-  listener(snapshot());
+  const data = snapshot();
+  data.storeError = storeRestorationError;
+  listener(data);
   return () => listeners.delete(listener);
 }
 
 export async function enqueue({
+  id,
   file,
   ticketFile,
   kind = 'order',
@@ -138,46 +167,67 @@ export async function enqueue({
   title = '',
   aggregator = '',
   meta,
+  storagePath = '',
 }) {
+  const itemId = id || crypto.randomUUID();
+
+  // Idempotency: check if an item with this ID is already in the active queue
+  const existing = queue.find((entry) => entry.id === itemId);
+  if (existing) {
+    if (existing.status !== 'done' && existing.status !== 'error') {
+      return existing.id;
+    }
+  }
+
+  const defaultLabel = kind === 'order'
+    ? (orderDigits ? `Pedido #${orderDigits}` : 'Leyendo el código…')
+    : (title || file.name);
+
+  // Status is explicitly "saving_local" until confirmed by IndexedDB
   const item = {
-    id: crypto.randomUUID(),
+    id: itemId,
     file,
     ticketFile,
     kind,
     orderDigits,
     title,
     aggregator,
-    label: kind === 'order'
-      ? orderDigits ? `Pedido #${orderDigits}` : 'Leyendo el código…'
-      : title || file.name,
-    meta,
-    status: 'pending',
+    label: defaultLabel,
+    meta: meta && typeof meta === 'object' ? { ...meta } : {},
+    status: 'saving_local',
     initialPersistPending: true,
     error: null,
     createdAt: Date.now(),
-    storagePath: '',
+    storagePath,
+    uploadAttempts: 0,
   };
 
   queue.push(item);
   notify();
   bindPersistListeners();
+
   try {
     await persistItem(item, { reportError: true });
+    // Once confirmed in IndexedDB, update to "pending" (En cola)
     item.initialPersistPending = false;
-  } catch {
+    item.status = 'pending';
+    notify();
+  } catch (err) {
     item.initialPersistPending = false;
     item.status = 'error';
-    item.error = 'No se guardó en este celular. No cierres la app: liberá espacio y reintentá.';
+    item.error = `No se guardó en este celular (${err.message}). No cierres la app: liberá espacio y reintentá.`;
     notify();
-    const error = new Error('No se guardó la foto. No cierres la app: reintentá desde la cola.');
+    const error = new Error('No se guardó la foto en el dispositivo. Reintentá desde la cola.');
     error.queueId = item.id;
     throw error;
   }
+
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     void requestBackgroundQueueProcessing();
   } else {
     processQueue();
   }
+
   return item.id;
 }
 
@@ -185,23 +235,26 @@ export function retryUpload(id) {
   const item = queue.find((entry) => entry.id === id);
   if (!item || item.status !== 'error') return;
 
-  item.status = 'pending';
+  item.status = 'saving_local';
   item.error = null;
   item.initialPersistPending = true;
   notify();
+
   void persistItem(item, { reportError: true })
     .then(() => {
       item.initialPersistPending = false;
+      item.status = 'pending';
+      notify();
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         void requestBackgroundQueueProcessing();
       } else {
         processQueue();
       }
     })
-    .catch(() => {
+    .catch((err) => {
       item.initialPersistPending = false;
       item.status = 'error';
-      item.error = 'No se guardó en este celular. No cierres la app: liberá espacio y reintentá.';
+      item.error = `No se guardó en este celular (${err.message}). Reintentá.`;
       notify();
     });
 }
@@ -238,10 +291,12 @@ async function processQueue() {
   const next = queue.find((entry) => entry.status === 'pending'
     && !entry.initialPersistPending
     && !isForeignLeaseActive(entry, getQueueOwner(), now));
+
   if (leaseRetryTimer) {
     clearTimeout(leaseRetryTimer);
     leaseRetryTimer = null;
   }
+
   if (!next) {
     const blocked = queue.filter((entry) => entry.status === 'pending'
       && isForeignLeaseActive(entry, getQueueOwner(), now));
@@ -249,7 +304,7 @@ async function processQueue() {
       const delay = Math.max(100, Math.min(...blocked.map((entry) => entry.leaseUntil)) - now + 50);
       leaseRetryTimer = setTimeout(() => {
         leaseRetryTimer = null;
-        void syncQueueFromStore().then(() => processQueue());
+        void syncQueueFromStore().then(() => processQueue()).catch(() => {});
       }, delay);
     }
     return;
@@ -258,6 +313,7 @@ async function processQueue() {
   processing = true;
   processingId = next.id;
   pageAbort = typeof AbortController === 'function' ? new AbortController() : null;
+
   try {
     const result = await processQueueItem(next, {
       detectOrderFromPhoto,
@@ -276,6 +332,7 @@ async function processQueue() {
       signal: pageAbort?.signal,
       onComplete: (photo) => markItemDone(next, photo),
     });
+
     if (result?.yielded && next.status !== 'done' && next.status !== 'error') {
       next.status = 'pending';
       next.error = null;
@@ -284,7 +341,7 @@ async function processQueue() {
       if (pagePaused) void requestBackgroundQueueProcessing();
     }
   } catch (error) {
-    console.error(error);
+    console.error('processQueue error:', error);
   } finally {
     processing = false;
     processingId = null;
@@ -297,9 +354,12 @@ export async function syncQueueFromStore() {
   let records;
   try {
     records = await listQueueRecords();
+    storeRestorationError = null;
   } catch (error) {
-    console.error(error);
-    return snapshot();
+    storeRestorationError = `Error al leer las fotos guardadas en el dispositivo: ${error.message}`;
+    console.error(storeRestorationError, error);
+    notify();
+    throw error;
   }
 
   const storedIds = new Set(records.map((record) => record.id));
@@ -322,6 +382,7 @@ export async function syncQueueFromStore() {
       current.ticketFile = hydrated.ticketFile;
       current.leaseOwner = hydrated.leaseOwner;
       current.leaseUntil = hydrated.leaseUntil;
+      current.uploadAttempts = hydrated.uploadAttempts || 0;
       continue;
     }
     queue.push(hydrated);
@@ -330,7 +391,7 @@ export async function syncQueueFromStore() {
 
   for (const item of queue) {
     if (item.initialPersistPending) continue;
-    if (storedIds.has(item.id) || item.status === 'done' || item.status === 'error') continue;
+    if (storedIds.has(item.id) || item.status === 'done' || item.status === 'error' || item.status === 'saving_local') continue;
     if (processingId === item.id && storedIds.has(item.id)) continue;
     markItemDone(item);
   }
@@ -349,7 +410,11 @@ export function restorePersistedQueue() {
 
   restorePromise = (async () => {
     bindPersistListeners();
-    await syncQueueFromStore();
+    try {
+      await syncQueueFromStore();
+    } catch {
+      // Error is set in storeRestorationError and listeners notified
+    }
     if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
       processQueue();
     } else {
@@ -372,6 +437,7 @@ export function resetUploadQueueForTests() {
   onCompleteHandler = null;
   persistListenersBound = false;
   handoffPromise = null;
+  storeRestorationError = null;
   if (leaseRetryTimer) clearTimeout(leaseRetryTimer);
   leaseRetryTimer = null;
   notify();

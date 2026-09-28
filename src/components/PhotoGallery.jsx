@@ -58,6 +58,10 @@ export default function PhotoGallery({
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [liveNotice, setLiveNotice] = useState(null);
   const [pendingNewPhoto, setPendingNewPhoto] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 50;
 
   const appliedFiltersRef = useRef(appliedFilters);
   const selectedIdsRef = useRef(selectedIds);
@@ -95,7 +99,7 @@ export default function PhotoGallery({
   }, []);
 
   const loadPhotos = useCallback(
-    async (nextFilters, { silent = false, keepSelection = false } = {}) => {
+    async (nextFilters, { silent = false, keepSelection = false, page = 1 } = {}) => {
       const filtersToLoad = nextFilters ?? appliedFiltersRef.current;
 
       if (!silent) {
@@ -103,8 +107,16 @@ export default function PhotoGallery({
       }
       setError(null);
       try {
-        const data = await fetchPhotos({ ...filtersToLoad, kind });
+        const data = await fetchPhotos({
+          ...filtersToLoad,
+          kind,
+          page,
+          pageSize: PAGE_SIZE,
+        });
         setPhotos(data);
+        setTotalCount(data.totalCount ?? data.length);
+        setCurrentPage(data.page ?? page);
+        setTotalPages(data.totalPages ?? 1);
         setAppliedFilters(filtersToLoad);
         if (!keepSelection) {
           setSelectedIds(new Set());
@@ -124,15 +136,19 @@ export default function PhotoGallery({
     (photo) => {
       if (!photoMatchesFilters(photo, { ...appliedFiltersRef.current, kind })) return;
 
+      setTotalCount((prev) => prev + 1);
+
       if (selectedIdsRef.current.size > 0) {
         setPendingNewPhoto(photo);
         return;
       }
 
-      prependPhoto(photo);
+      if (currentPage === 1) {
+        prependPhoto(photo);
+      }
       showLiveNotice(`Nuevo ${itemLabel} - ${getPhotoTitle(photo)}`);
     },
-    [itemLabel, kind, prependPhoto, showLiveNotice],
+    [currentPage, itemLabel, kind, prependPhoto, showLiveNotice],
   );
 
   const handleRealtimeUpdate = useCallback((photo) => {
@@ -157,6 +173,7 @@ export default function PhotoGallery({
 
   const handleRealtimeDelete = useCallback((id) => {
     setPhotos((prev) => prev.filter((photo) => photo.id !== id));
+    setTotalCount((prev) => Math.max(0, prev - 1));
     setSelectedIds((prev) => {
       if (!prev.has(id)) return prev;
       const next = new Set(prev);
@@ -388,9 +405,10 @@ export default function PhotoGallery({
         <div className="gallery__toolbar-left">
           {!loading && (
             <p className="gallery__count">
-              {photos.length} {itemLabel}{photos.length !== 1 ? 's' : ''}
+              {totalCount} {itemLabel}{totalCount !== 1 ? 's' : ''}
               {hasActiveFilters ? ' · filtradas' : ''}
               {hasSelection ? ` · ${selectedIds.size} sel.` : ''}
+              {totalPages > 1 ? ` · pág. ${currentPage}/${totalPages}` : ''}
             </p>
           )}
           <span
@@ -698,6 +716,40 @@ export default function PhotoGallery({
                   onDeleted={handleDeleted}
                 />
               ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div
+          className="gallery__pagination"
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '1rem',
+            marginTop: '1.5rem',
+            marginBottom: '1.5rem',
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn--small btn--ghost"
+            onClick={() => loadPhotos(appliedFiltersRef.current, { page: Math.max(1, currentPage - 1) })}
+            disabled={currentPage <= 1 || loading}
+          >
+            ← Anterior
+          </button>
+          <span style={{ fontSize: '0.9em', color: '#555' }}>
+            Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong> ({totalCount} {itemLabel}{totalCount !== 1 ? 's' : ''})
+          </span>
+          <button
+            type="button"
+            className="btn btn--small btn--ghost"
+            onClick={() => loadPhotos(appliedFiltersRef.current, { page: Math.min(totalPages, currentPage + 1) })}
+            disabled={currentPage >= totalPages || loading}
+          >
+            Siguiente →
+          </button>
         </div>
       )}
 

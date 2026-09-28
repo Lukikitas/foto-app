@@ -1,7 +1,7 @@
-import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
-import { AGGREGATORS, detectAggregator, getPhotoAggregator } from './aggregators';
-import { supabase } from './supabase';
-import { releaseCloudTicket } from './cloudOrderRecovery';
+import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date.js';
+import { AGGREGATORS, detectAggregator, getPhotoAggregator } from './aggregators.js';
+import { supabase } from './supabase.js';
+import { releaseCloudTicket } from './cloudOrderRecovery.js';
 import { downloadPhoto } from './photoDownload.js';
 import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
 import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
@@ -124,11 +124,24 @@ export async function fetchPhotos({
   takenBy,
   notes,
   columns,
+  page = 1,
+  pageSize = 50,
+  fetchAll = false,
 } = {}) {
   let query = supabase
     .from('photos')
-    .select(columns || '*')
+    .select(columns || PHOTO_COLUMNS, { count: 'exact' })
     .order('created_at', { ascending: false });
+
+  if (kind === PHOTO_GALLERY_KINDS.orders) {
+    query = query.not('file_path', 'like', 'files/%');
+  } else if (kind === PHOTO_GALLERY_KINDS.files) {
+    query = query.like('file_path', 'files/%');
+  }
+
+  if (codeNotFound) {
+    query = query.eq('name', UNIDENTIFIED_ORDER_NAME);
+  }
 
   const trimmedSearch = search?.trim();
   if (trimmedSearch) {
@@ -171,10 +184,16 @@ export async function fetchPhotos({
     query = query.ilike('notes', `%${trimmedNotes}%`);
   }
 
-  const { data, error } = await query;
+  if (!fetchAll && pageSize > 0) {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
+  }
+
+  const { data, count, error } = await query;
 
   if (error) throw error;
-  return (data ?? []).filter((photo) =>
+  const filtered = (data ?? []).filter((photo) =>
     photoMatchesFilters(photo, {
       kind,
       search,
@@ -190,6 +209,14 @@ export async function fetchPhotos({
       notes,
     }),
   );
+
+  const exactCount = typeof count === 'number' ? count : filtered.length;
+  filtered.totalCount = exactCount;
+  filtered.page = page;
+  filtered.pageSize = pageSize;
+  filtered.totalPages = pageSize > 0 ? Math.ceil(exactCount / pageSize) : 1;
+
+  return filtered;
 }
 
 export function sanitizePhotoSearchToken(token) {

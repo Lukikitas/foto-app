@@ -4,6 +4,7 @@ import { itemNeedsOcr } from './uploadQueueProtocol.js';
 const DB_NAME = 'foto-app-upload-queue';
 const DB_VERSION = 1;
 const STORE_NAME = 'items';
+const IDB_TIMEOUT_MS = 6000;
 
 const memoryRecords = new Map();
 let testStore = null;
@@ -44,6 +45,7 @@ export function serializeQueueRecord(item) {
     storagePath: item.storagePath || '',
     leaseOwner: item.leaseOwner || null,
     leaseUntil: item.leaseUntil || 0,
+    uploadAttempts: item.uploadAttempts || 0,
   };
 }
 
@@ -85,6 +87,7 @@ export function hydrateQueueRecord(record) {
     storagePath: record.storagePath || '',
     leaseOwner: record.leaseOwner || null,
     leaseUntil: record.leaseUntil || 0,
+    uploadAttempts: record.uploadAttempts || 0,
   };
 }
 
@@ -122,28 +125,55 @@ function memoryBackend() {
     async list() {
       return [...memoryRecords.values()];
     },
+    async clear() {
+      memoryRecords.clear();
+    },
   };
+}
+
+function withTimeout(promise, timeoutMs, opName) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Tiempo de espera agotado (${timeoutMs}ms) en IndexedDB al ${opName}.`));
+    }, timeoutMs);
+
+    promise.then(
+      (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
 }
 
 function requestResult(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(request.error || new Error('Error en consulta IndexedDB.'));
   });
 }
 
 function completeTransaction(tx) {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error || new Error('No se pudo guardar la cola.'));
+    tx.onerror = () => reject(tx.error || new Error('Transacción fallida en IndexedDB.'));
+    tx.onabort = () => reject(tx.error || new Error('Transacción abortada en IndexedDB.'));
   });
 }
 
 function openQueueDb() {
   if (dbPromise) return dbPromise;
 
-  dbPromise = new Promise((resolve, reject) => {
+  const rawPromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('IndexedDB no está disponible en este entorno.'));
+      return;
+    }
+
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = () => {
@@ -156,8 +186,16 @@ function openQueueDb() {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => {
       dbPromise = null;
-      reject(request.error);
+      reject(request.error || new Error('No se pudo abrir la base de datos IndexedDB.'));
     };
+    request.onblocked = () => {
+      reject(new Error('IndexedDB bloqueada por otra pestaña.'));
+    };
+  });
+
+  dbPromise = withTimeout(rawPromise, IDB_TIMEOUT_MS, 'abrir conexión').catch((err) => {
+    dbPromise = null;
+    throw err;
   });
 
   return dbPromise;
@@ -166,33 +204,54 @@ function openQueueDb() {
 function idbBackend() {
   return {
     async put(record) {
-      const db = await openQueueDb();
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const done = completeTransaction(tx);
-      tx.objectStore(STORE_NAME).put(record);
-      await done;
+      const op = (async () => {
+        const db = await openQueueDb();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const done = completeTransaction(tx);
+        tx.objectStore(STORE_NAME).put(record);
+        await done;
+      })();
+      return withTimeout(op, IDB_TIMEOUT_MS, `escribir foto #${record.id}`);
     },
     async delete(id) {
-      const db = await openQueueDb();
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const done = completeTransaction(tx);
-      tx.objectStore(STORE_NAME).delete(id);
-      await done;
+      const op = (async () => {
+        const db = await openQueueDb();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const done = completeTransaction(tx);
+        tx.objectStore(STORE_NAME).delete(id);
+        await done;
+      })();
+      return withTimeout(op, IDB_TIMEOUT_MS, `eliminar foto #${id}`);
     },
     async list() {
-      const db = await openQueueDb();
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const done = completeTransaction(tx);
-      const records = await requestResult(tx.objectStore(STORE_NAME).getAll());
-      await done;
-      return records;
+      const op = (async () => {
+        const db = await openQueueDb();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const done = completeTransaction(tx);
+        const records = await requestResult(tx.objectStore(STORE_NAME).getAll());
+        await done;
+        return records;
+      })();
+      return withTimeout(op, IDB_TIMEOUT_MS, 'listar fotos');
     },
   };
 }
 
+function isBrowserProduction() {
+  // If window/document exists and not in unit testing store mode
+  return typeof window !== 'undefined' && !testStore;
+}
+
 function activeBackend() {
   if (testStore) return testStore;
-  if (typeof indexedDB === 'undefined') return memoryBackend();
+  if (typeof indexedDB === 'undefined') {
+    if (isBrowserProduction()) {
+      throw new Error(
+        'IndexedDB no está disponible en este navegador o modo incógnito. Las fotos no se pueden almacenar localmente sin IndexedDB.'
+      );
+    }
+    return memoryBackend();
+  }
   return idbBackend();
 }
 

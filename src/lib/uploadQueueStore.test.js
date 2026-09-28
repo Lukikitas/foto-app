@@ -11,9 +11,16 @@ import {
   shouldRestoreQueueRecord,
   useQueueStoreForTests,
 } from './uploadQueueStore.js';
+import {
+  applyLease,
+  getQueueOwner,
+  isForeignLeaseActive,
+  setQueueOwnerForTests,
+} from './uploadQueueProtocol.js';
 
 afterEach(() => {
   useQueueStoreForTests(null);
+  setQueueOwnerForTests(null);
 });
 
 function sampleItem(overrides = {}) {
@@ -140,4 +147,39 @@ test('fileFromStoredBlob rebuilds a File from a saved blob', () => {
   const file = fileFromStoredBlob(blob, 'ticket.jpg', 'image/jpeg');
   assert.equal(file.name, 'ticket.jpg');
   assert.equal(file.type, 'image/jpeg');
+});
+
+test('two distinct tabs with unique owners block each other out', () => {
+  setQueueOwnerForTests('page-tab1');
+  const record = applyLease({ id: 'item-10' }, getQueueOwner(), Date.now(), 20_000);
+
+  // For tab1, it's own lease
+  assert.equal(isForeignLeaseActive(record, 'page-tab1'), false);
+
+  // For tab2, it is a foreign active lease
+  assert.equal(isForeignLeaseActive(record, 'page-tab2'), true);
+
+  // For sw, it is a foreign active lease
+  assert.equal(isForeignLeaseActive(record, 'sw'), true);
+});
+
+test('browser production rejects missing IndexedDB without falling back silently to memory', async () => {
+  // Simulate browser environment without IndexedDB
+  const origWindow = globalThis.window;
+  const origIndexedDB = globalThis.indexedDB;
+  try {
+    globalThis.window = {};
+    delete globalThis.indexedDB;
+    useQueueStoreForTests(null);
+
+    await assert.rejects(
+      async () => {
+        await listQueueRecords();
+      },
+      /IndexedDB no está disponible/
+    );
+  } finally {
+    globalThis.window = origWindow;
+    globalThis.indexedDB = origIndexedDB;
+  }
 });

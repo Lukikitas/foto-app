@@ -13,11 +13,31 @@ export const QUEUE_OWNER = {
   sw: 'sw',
 };
 
+let customTabOwner = null;
+
+export function setQueueOwnerForTests(owner) {
+  customTabOwner = owner;
+}
+
 export function getQueueOwner() {
+  if (customTabOwner) return customTabOwner;
+
   const Scope = globalThis.ServiceWorkerGlobalScope;
   if (typeof Scope !== 'undefined' && globalThis instanceof Scope) {
     return QUEUE_OWNER.sw;
   }
+
+  // Each page session / tab gets a distinct identifier: page-<unique>
+  if (typeof window !== 'undefined') {
+    if (!window.__fotoAppTabOwnerId) {
+      const randomStr = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID().slice(0, 8)
+        : Math.random().toString(36).slice(2, 10);
+      window.__fotoAppTabOwnerId = `page-${randomStr}`;
+    }
+    return window.__fotoAppTabOwnerId;
+  }
+
   return QUEUE_OWNER.page;
 }
 
@@ -30,7 +50,7 @@ export function isDocumentHidden() {
 }
 
 export function isActiveQueueStatus(status) {
-  return status === 'pending' || status === 'analyzing' || status === 'uploading';
+  return status === 'saving_local' || status === 'pending' || status === 'analyzing' || status === 'uploading';
 }
 
 export function isForeignLeaseActive(record, owner, now = Date.now()) {
@@ -65,9 +85,10 @@ export function fileExtension(file, fallback = 'jpg') {
 export function buildStoragePath(item, file) {
   if (item?.storagePath) return item.storagePath;
   const ext = fileExtension(file, file?.type?.startsWith('image/') ? 'jpg' : 'bin');
-  const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+  const id = item?.id || (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
-    : `${Date.now()}`;
+    : `${Date.now()}`);
+
   if (item?.kind === 'file') return `files/${id}.${ext}`;
   if (item?.orderDigits && item?.aggregator) return `orders/${item.aggregator}/${id}.${ext}`;
   if (item?.orderDigits) return `orders/sin_agregador/${id}.${ext}`;

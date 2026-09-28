@@ -3,8 +3,6 @@ package ar.com.starapp.fotoappcamera.camera
 import android.content.Context
 import android.os.Build
 import android.view.Surface
-import androidx.camera.camera2.interop.Camera2CameraControl
-import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraInfo
@@ -22,6 +20,13 @@ import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+data class ActiveLensState(
+    val lensMode: LensMode,
+    val currentZoom: Float,
+    val boundPhysicalCameraId: String?,
+    val displayDescription: String
+)
+
 class CameraXManager(private val context: Context) {
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -32,6 +37,7 @@ class CameraXManager(private val context: Context) {
 
     private var activeLensMode: LensMode = LensMode.NORMAL
     private var logicalCameraInfo: LogicalCameraInfo? = null
+    private var currentlyBoundPhysicalId: String? = null
     private var flashMode: Int = ImageCapture.FLASH_MODE_OFF
     private var torchEnabled: Boolean = false
 
@@ -50,7 +56,10 @@ class CameraXManager(private val context: Context) {
         previewView: PreviewView,
         onError: (Throwable) -> Unit
     ) {
-        val provider = cameraProvider ?: return
+        val provider = cameraProvider ?: run {
+            onError(IllegalStateException("ProcessCameraProvider no está inicializado."))
+            return
+        }
 
         try {
             provider.unbindAll()
@@ -68,18 +77,28 @@ class CameraXManager(private val context: Context) {
             val selectorBuilder = CameraSelector.Builder()
                 .requireLensFacing(CameraSelector.LENS_FACING_BACK)
 
-            // If we have a physical wide camera ID and user is in WIDE mode
+            currentlyBoundPhysicalId = null
+
+            // Validate and apply physical wide camera ID if in WIDE mode
             if (activeLensMode == LensMode.WIDE && logicalCameraInfo?.bestWidePhysicalId != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val candidateId = logicalCameraInfo!!.bestWidePhysicalId!!
+                val isValidPhysicalWide = logicalCameraInfo!!.physicalLenses.any {
+                    it.id == candidateId && it.isUltrawide && it.hasValidMetadata
+                }
+
+                if (isValidPhysicalWide && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     try {
-                        selectorBuilder.setPhysicalCameraId(logicalCameraInfo!!.bestWidePhysicalId!!)
-                    } catch (_: Exception) {
-                        // Fallback to logical selector if physical is rejected
+                        selectorBuilder.setPhysicalCameraId(candidateId)
+                        currentlyBoundPhysicalId = candidateId
+                    } catch (e: Exception) {
+                        onError(IllegalStateException("No se pudo configurar la cámara física gran angular ($candidateId): ${e.message}", e))
                     }
                 }
             }
 
             val cameraSelector = selectorBuilder.build()
+
+            // Both Preview and ImageCapture are bound to the identical CameraSelector ensuring same lens
             currentCamera = provider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
@@ -105,9 +124,13 @@ class CameraXManager(private val context: Context) {
             applyZoomForCurrentMode()
         } else if (info?.bestWidePhysicalId != null) {
             // Rebind with physical camera ID
-            startCamera(lifecycleOwner, previewView) {}
+            startCamera(lifecycleOwner, previewView) { exc ->
+                // If binding physical fails, fall back to normal mode
+                activeLensMode = LensMode.NORMAL
+                startCamera(lifecycleOwner, previewView) {}
+            }
         } else {
-            // Fallback: apply min zoom ratio available
+            // If device has no ultrawide, remain on normal zoom
             applyZoomForCurrentMode()
         }
     }
@@ -127,7 +150,7 @@ class CameraXManager(private val context: Context) {
     fun setZoomRatio(ratio: Float) {
         val control = currentCamera?.cameraControl ?: return
         val clamped = ratio.coerceIn(
-            logicalCameraInfo?.minZoomRatio ?: 0.5f,
+            logicalCameraInfo?.minZoomRatio ?: 1.0f,
             logicalCameraInfo?.maxZoomRatio ?: 4.0f
         )
         control.setZoomRatio(clamped)
@@ -135,6 +158,21 @@ class CameraXManager(private val context: Context) {
 
     fun getZoomRatio(): Float {
         return currentCamera?.cameraInfo?.zoomState?.value?.zoomRatio ?: 1.0f
+    }
+
+    fun getActuallyActiveLensState(): ActiveLensState {
+        val zoom = getZoomRatio()
+        val desc = when {
+            currentlyBoundPhysicalId != null -> "Lente físico gran angular [$currentlyBoundPhysicalId] (${"%.2f".format(zoom)}×)"
+            activeLensMode == LensMode.WIDE && (logicalCameraInfo?.supportsSubOneZoom == true) -> "Zoom gran angular nativo (${"%.2f".format(zoom)}×)"
+            else -> "Lente normal 1× (${"%.2f".format(zoom)}×)"
+        }
+        return ActiveLensState(
+            lensMode = activeLensMode,
+            currentZoom = zoom,
+            boundPhysicalCameraId = currentlyBoundPhysicalId,
+            displayDescription = desc
+        )
     }
 
     fun focusOnPoint(factory: MeteringPointFactory, x: Float, y: Float) {
@@ -177,7 +215,6 @@ class CameraXManager(private val context: Context) {
             cameraExecutor,
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                    // Correct EXIF orientation in background thread
                     ImageExifUtils.fixOrientationAndSave(outputFile, outputFile)
                     onSuccess(outputFile)
                 }

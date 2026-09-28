@@ -188,7 +188,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val tokenHash = SupabaseApiClient.calculateSha256(sessionToken)
-        val appVersion = "1.0.0"
+        val appVersion = "1.0.1"
         val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
 
         // Activate session in Supabase
@@ -274,12 +274,17 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun isWideSupported(): Boolean {
+        return _diagnosticReport.value?.ultrawideAvailable ?: true
+    }
+
     fun onUsePhotoClicked(cameraXManager: CameraXManager, lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
         when (_captureStep.value) {
             CaptureStep.REVIEW_TICKET -> {
-                // Switch to evidence step and apply remembered lens preference for evidence
+                // Switch to evidence step and apply remembered lens preference for evidence if supported
                 _captureStep.value = CaptureStep.READY_FOR_EVIDENCE
-                onLensModeChanged(preferredEvidenceLens, cameraXManager, lifecycleOwner, previewView)
+                val targetLens = if (isWideSupported()) preferredEvidenceLens else LensMode.NORMAL
+                onLensModeChanged(targetLens, cameraXManager, lifecycleOwner, previewView)
             }
             CaptureStep.REVIEW_EVIDENCE -> {
                 saveCurrentPairAndReset(cameraXManager, lifecycleOwner, previewView)
@@ -324,35 +329,51 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         _captureStep.value = CaptureStep.SAVING_PAIR
 
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val currentMax = db.captureDao().getMaxPairNumber(sessionVal.sessionId) ?: 0
-                val pairNumber = currentMax + 1
+            try {
+                withContext(Dispatchers.IO) {
+                    val currentMax = db.captureDao().getMaxPairNumber(sessionVal.sessionId) ?: 0
+                    val pairNumber = currentMax + 1
 
-                val pair = NativeCapturePair(
-                    sessionId = sessionVal.sessionId,
-                    pairNumber = pairNumber,
-                    takenBy = sessionVal.takenBy,
-                    ticketFilePath = ticket.absolutePath,
-                    evidenceFilePath = evidence.absolutePath,
-                    selectedLens = if (_lensMode.value == LensMode.WIDE) "wide" else "normal",
-                    uploadState = NativeCapturePair.STATE_LOCAL
-                )
+                    val pair = NativeCapturePair(
+                        sessionId = sessionVal.sessionId,
+                        pairNumber = pairNumber,
+                        takenBy = sessionVal.takenBy,
+                        ticketFilePath = ticket.absolutePath,
+                        evidenceFilePath = evidence.absolutePath,
+                        selectedLens = if (_lensMode.value == LensMode.WIDE) "wide" else "normal",
+                        uploadState = NativeCapturePair.STATE_LOCAL
+                    )
 
-                db.captureDao().insertPair(pair)
-                UploadScheduler.triggerUpload(getApplication(), sessionVal.sessionId, sessionVal.tokenHash)
+                    db.captureDao().insertPair(pair)
+                    UploadScheduler.triggerUpload(getApplication(), sessionVal.sessionId, sessionVal.tokenHash)
+                }
+
+                // Local save confirmed: reset file references and loop back to ticket step immediately
+                _ticketFile.value = null
+                _evidenceFile.value = null
+                _captureStep.value = CaptureStep.READY_FOR_TICKET
+
+                // Always restore NORMAL (1×) lens for reading ticket
+                onLensModeChanged(LensMode.NORMAL, cameraXManager, lifecycleOwner, previewView)
+            } catch (e: Exception) {
+                // Do NOT remain stuck in SAVING_PAIR!
+                _errorMessage.value = "Error al guardar el par en este dispositivo: ${e.message}"
+                // Revert step to REVIEW_EVIDENCE so photos are preserved for retrying
+                _captureStep.value = CaptureStep.REVIEW_EVIDENCE
             }
-
-            // Immediately reset to ticket step (< 1 sec)
-            _ticketFile.value = null
-            _evidenceFile.value = null
-            _captureStep.value = CaptureStep.READY_FOR_TICKET
-
-            // Reset lens to NORMAL for ticket reading
-            onLensModeChanged(LensMode.NORMAL, cameraXManager, lifecycleOwner, previewView)
         }
     }
 
     fun onLensModeChanged(mode: LensMode, cameraXManager: CameraXManager, lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
+        if (mode == LensMode.WIDE && !isWideSupported()) {
+            _errorMessage.value = _diagnosticReport.value?.ultrawideExplanation
+                ?: "Gran angular no disponible para aplicaciones de terceros en este dispositivo."
+            _lensMode.value = LensMode.NORMAL
+            cameraXManager.switchLensMode(LensMode.NORMAL, lifecycleOwner, previewView)
+            _zoomRatio.value = cameraXManager.getZoomRatio()
+            return
+        }
+
         _lensMode.value = mode
         if (_captureStep.value == CaptureStep.READY_FOR_EVIDENCE || _captureStep.value == CaptureStep.REVIEW_EVIDENCE) {
             preferredEvidenceLens = mode
@@ -406,11 +427,20 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         val sessionVal = _session.value ?: return
 
         viewModelScope.launch {
+            val finishResult = withContext(Dispatchers.IO) {
+                api.finishSession(sessionVal.sessionId, sessionVal.tokenHash)
+            }
+
+            if (finishResult.isFailure) {
+                val err = finishResult.exceptionOrNull()?.message ?: "Error desconocido"
+                _errorMessage.value = "No se pudo finalizar la sesión en el servidor ($err). La sesión local se mantiene activa."
+                return@launch
+            }
+
             withContext(Dispatchers.IO) {
                 db.captureDao().updateSession(
                     sessionVal.copy(state = NativeCaptureSession.STATE_FINISHING)
                 )
-                api.finishSession(sessionVal.sessionId, sessionVal.tokenHash)
                 UploadScheduler.triggerUpload(getApplication(), sessionVal.sessionId, sessionVal.tokenHash)
             }
 
@@ -422,7 +452,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun openDiagnostics(context: Context) {
         _diagnosticReport.value = CameraDetector.buildDiagnosticReport(
             context = context,
-            appVersion = "1.0.0",
+            appVersion = "1.0.1",
             selectedLensMode = _lensMode.value,
             activeZoomRatio = _zoomRatio.value
         )

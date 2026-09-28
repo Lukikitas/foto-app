@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
-import { processNativeSessionReturn } from './nativeCaptureBridge.js';
+import {
+  classifyStepError,
+  isTransientError,
+  processNativeSessionReturn,
+} from './nativeCaptureBridge.js';
 
 let mockSessionPairs;
 let mockImportedPairs;
@@ -66,6 +70,9 @@ test('processNativeSessionReturn downloads pairs and enqueues them into existing
     return { markedCount: ids.length, remainingPending: 0 };
   };
 
+  let sessionCleared = false;
+  const mockVerifyPhotos = async () => ({ verifiedCount: 2, verifiedAll: true });
+
   const result = await processNativeSessionReturn(
     {
       sessionId: mockSessionPairs.sessionId,
@@ -77,14 +84,23 @@ test('processNativeSessionReturn downloads pairs and enqueues them into existing
       enqueueFn: mockEnqueue,
       fetchPairsFn,
       markImportedFn,
-      clearSessionFn: () => {},
+      clearSessionFn: () => {
+        sessionCleared = true;
+      },
+      verifyPhotosFn: mockVerifyPhotos,
     },
   );
 
   assert.equal(result.importedCount, 2);
   assert.equal(result.remainingCount, 0);
   assert.equal(result.sessionState, 'completed');
+  assert.equal(result.allReady, true);
+  assert.equal(sessionCleared, true);
   assert.equal(enqueuedItems.length, 2);
+
+  // Verify idempotent ID passed to enqueue
+  assert.equal(enqueuedItems[0].id, 'p1-uuid');
+  assert.equal(enqueuedItems[1].id, 'p2-uuid');
 
   assert.equal(enqueuedItems[0].kind, 'order');
   assert.equal(enqueuedItems[0].meta.taken_by, 'Lucas');
@@ -124,6 +140,7 @@ test('keeps a finishing session while Android still has files to upload', async 
       clearSessionFn: () => {
         cleared = true;
       },
+      verifyPhotosFn: async () => ({ verifiedCount: 0, verifiedAll: false }),
     },
   );
 
@@ -131,4 +148,97 @@ test('keeps a finishing session while Android still has files to upload', async 
   assert.equal(result.totalPairs, 0);
   assert.equal(result.remainingCount, 0);
   assert.equal(cleared, false);
+});
+
+test('does not mark allReady nor clear session until verified in photos', async () => {
+  let cleared = false;
+  const mockDownload = async () => new Blob(['dummy']);
+  const mockEnqueue = async () => 'queue-id';
+  const fetchPairsFn = async () => ({
+    ...mockSessionPairs,
+    pairs: mockSessionPairs.pairs.map((p) => ({ ...p, state: 'imported' })),
+    state: 'completed',
+  });
+  const markImportedFn = async () => ({ markedCount: 2, remainingPending: 0 });
+
+  // Verification says 0 photos in photos table yet (still in uploadQueue)
+  const mockVerifyPhotos = async () => ({ verifiedCount: 0, verifiedAll: false });
+
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: mockSessionPairs.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+    },
+    {
+      downloadFn: mockDownload,
+      enqueueFn: mockEnqueue,
+      fetchPairsFn,
+      markImportedFn,
+      clearSessionFn: () => {
+        cleared = true;
+      },
+      verifyPhotosFn: mockVerifyPhotos,
+    },
+  );
+
+  assert.equal(result.allReady, false);
+  assert.equal(cleared, false);
+});
+
+test('stops retrying immediately on permanent errors and exposes exact step', async () => {
+  const recordedSteps = [];
+  const permanentErr = new Error('Archivo no encontrado');
+  permanentErr.status = 404;
+
+  const mockDownload = async (bucket, path) => {
+    if (path.includes('ticket')) {
+      throw permanentErr;
+    }
+    return new Blob(['dummy']);
+  };
+
+  const fetchPairsFn = async () => mockSessionPairs;
+
+  const result = await processNativeSessionReturn(
+    {
+      sessionId: mockSessionPairs.sessionId,
+      sessionToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      takenBy: 'Lucas',
+    },
+    {
+      downloadFn: mockDownload,
+      enqueueFn: async () => {},
+      fetchPairsFn,
+      markImportedFn: async () => {},
+      clearSessionFn: () => {},
+      verifyPhotosFn: async () => ({ verifiedCount: 0, verifiedAll: false }),
+      maxAutomaticRetries: 3,
+      onProgress: (p) => {
+        if (p.step) recordedSteps.push(p.step);
+      },
+    },
+  );
+
+  assert.equal(result.errors.length, 2);
+  assert.equal(result.errors[0].step, 'downloading_ticket');
+  assert.equal(result.errors[0].isPermanent, true);
+  assert.equal(result.errors[0].pairNumber, 1);
+});
+
+test('distinguishes transient vs permanent errors accurately', () => {
+  assert.equal(isTransientError({ status: 500 }), true);
+  assert.equal(isTransientError({ status: 503 }), true);
+  assert.equal(isTransientError(new Error('Failed to fetch')), true);
+  assert.equal(isTransientError(new Error('NetworkError')), true);
+
+  assert.equal(isTransientError({ status: 401 }), false);
+  assert.equal(isTransientError({ status: 403 }), false);
+  assert.equal(isTransientError({ status: 404 }), false);
+  assert.equal(isTransientError({ status: 410 }), false);
+
+  const classified = classifyStepError(new Error('QuotaExceededError'), 'saving_local', 3);
+  assert.equal(classified.step, 'saving_local');
+  assert.equal(classified.pairNumber, 3);
+  assert.match(classified.error, /IndexedDB/);
 });

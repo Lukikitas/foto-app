@@ -124,9 +124,8 @@ class UploadWorker(
                     )
                 )
 
-                // Once both files are safely stored and registered remotely, free device space.
-                ticketFile.delete()
-                evidenceFile.delete()
+                // Files are preserved locally in STATE_UPLOADED until final destination/publication
+                // is confirmed, ensuring no loss of the only local copy during transfer.
             } catch (e: Exception) {
                 db.captureDao().updatePair(
                     pair.copy(

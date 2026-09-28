@@ -13,6 +13,32 @@ function isInterrupted(error, shouldYield, signal) {
   return isAbortError(error);
 }
 
+export function isTransientUploadError(error) {
+  if (!error) return false;
+  const msg = (error.message || String(error)).toLowerCase();
+  const status = error.status || error.statusCode;
+
+  if (status) {
+    if (status === 401 || status === 403 || status === 400 || status === 413 || status === 422) {
+      return false; // Permanent auth, bad request, payload too large, or validation error
+    }
+    if (status >= 500 && status <= 599) return true;
+    if (status === 408 || status === 429) return true;
+  }
+
+  if (
+    msg.includes('network') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('fetch failed') ||
+    msg.includes('timeout') ||
+    msg.includes('connection')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function processQueueItem(item, options = {}) {
   const {
     detectOrderFromPhoto,
@@ -72,12 +98,19 @@ export async function processQueueItem(item, options = {}) {
       item.label = 'Leyendo el código…';
       notify();
       await persist(item);
+
       try {
-        detectedOrder = await detectOrderFromPhoto(item.ticketFile, {
+        // Enforce 15s maximum for OCR so a blocked OCR does not hold up the queue
+        const ocrPromise = detectOrderFromPhoto(item.ticketFile, {
           signal,
           requireStrong: true,
           fallbackFiles: item.file?.type?.startsWith('image/') ? [item.file] : [],
         });
+        const ocrTimeout = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Tiempo límite de OCR agotado (15s)')), 15000);
+        });
+
+        detectedOrder = await Promise.race([ocrPromise, ocrTimeout]);
       } catch (error) {
         if (isInterrupted(error, shouldYield, signal) || isDocumentHidden()) {
           return yieldNow();
@@ -85,6 +118,7 @@ export async function processQueueItem(item, options = {}) {
         onOcrError(error);
         detectedOrder = null;
       }
+
       if (detectedOrder?.displayCode) {
         item.orderDigits = detectedOrder.displayCode;
         item.aggregator = detectedOrder.aggregator;
@@ -140,6 +174,7 @@ export async function processQueueItem(item, options = {}) {
       if (!photo?.id) throw new Error('No se pudo conservar el ticket sin identificar.');
       await retainUnresolvedTicket(photo.id, item.ticketFile);
     }
+
     if (!item.orderDigits && item.kind === 'order' && photo?.id && recoverOrderCodeInCloud) {
       try {
         if (item.ticketFile && keepTicketForRecovery) {
@@ -163,6 +198,7 @@ export async function processQueueItem(item, options = {}) {
         console.warn('No se pudo completar el OCR en la nube; la foto queda pendiente de revisión.', cloudError);
       }
     }
+
     releaseTicket(item);
     item.status = 'done';
     item.error = null;
@@ -173,6 +209,18 @@ export async function processQueueItem(item, options = {}) {
   } catch (error) {
     if (isInterrupted(error, shouldYield, signal)) return yieldNow();
     if (item.status === 'analyzing' && isDocumentHidden()) return yieldNow();
+
+    item.uploadAttempts = (item.uploadAttempts || 0) + 1;
+    const isTransient = isTransientUploadError(error);
+
+    if (isTransient && item.uploadAttempts <= 3) {
+      item.status = 'pending';
+      item.error = null;
+      notify();
+      await persist(item, { holdLease: false });
+      return { yielded: true, transientRetry: true };
+    }
+
     const analyzing = item.status === 'analyzing';
     item.status = 'error';
     item.error = error.message || (analyzing ? OCR_ENGINE_ERROR : 'Error al subir la foto.');
