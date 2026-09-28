@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [restore-e44b86f]
   workflow_dispatch:
 
 permissions:
