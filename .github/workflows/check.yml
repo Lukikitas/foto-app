@@ -45,9 +45,5 @@ jobs:
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260927090000_reviewed_complaint_imports.sql
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260927150000_native_camera_sessions.sql
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260927150000_native_camera_sessions.sql
-      - run: psql -v ON_ERROR_STOP=1 -f tests/database/native-session-legacy-fixture.sql
-      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260928000000_native_session_recovery_window.sql
-      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260928000000_native_session_recovery_window.sql
       - run: psql -v ON_ERROR_STOP=1 -f tests/database/reviewed-imports.sql
       - run: psql -v ON_ERROR_STOP=1 -f tests/database/native-camera-sessions.sql
-      - run: psql -v ON_ERROR_STOP=1 -f tests/database/native-session-recovery.sql

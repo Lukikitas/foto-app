@@ -50,7 +50,7 @@ export function classifyStepError(err, step, pairNumber) {
   let friendlyReason = err.message || 'Error desconocido';
 
   if (err.status === 410 || friendlyReason.includes('expiró')) {
-    friendlyReason = 'El servidor rechazó esta sesión por vencimiento. Conservá las fotos en el teléfono y reintentá cuando se actualice el servidor.';
+    friendlyReason = 'La sesión venció: el plazo de 2 horas corre desde que se abrió la cámara, no desde la última foto. Abrí una sesión nueva.';
   } else if (err.status === 401 || err.status === 403) {
     friendlyReason = 'Credencial de sesión no autorizada o manipulada.';
   } else if (err.status === 404) {

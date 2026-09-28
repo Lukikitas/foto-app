@@ -128,9 +128,7 @@ export async function createNativeSession(takenBy, options = {}) {
     p_token_hash: tokenHash,
     p_taken_by: author,
     p_protocol_version: protocolVersion,
-    // A capture session can remain active while Android uploads in the background.
-    // Keep the upload window long enough for delayed connectivity and continuous capture.
-    p_expires_in_minutes: options.expiresInMinutes ?? 7 * 24 * 60,
+    p_expires_in_minutes: options.expiresInMinutes || 120,
   });
 
   if (error) {

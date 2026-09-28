@@ -105,6 +105,10 @@ export default function NativeCameraReturnNotice({ onDone }) {
 
   const hasErrors = errors.length > 0;
   const currentStepLabel = progress?.step ? (STEP_LABELS[progress.step] || progress.step) : '';
+  const expiresAt = session?.expiresAt ? new Date(session.expiresAt) : null;
+  const expiryLabel = expiresAt && !Number.isNaN(expiresAt.getTime())
+    ? expiresAt.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+    : null;
 
   return (
     <div
@@ -131,6 +135,11 @@ export default function NativeCameraReturnNotice({ onDone }) {
                   ? ' · Esperando nuevas capturas del teléfono…'
                   : ''}
             </span>
+          )}
+          {expiryLabel && !summary?.allReady && (
+            <div className="native-return-notice__expiry">
+              Vencimiento de la sesión: {expiryLabel} (2 horas desde que abriste la cámara).
+            </div>
           )}
           {hasErrors && (
             <div className="native-return-notice__errors" style={{ marginTop: '0.4rem', fontSize: '0.9em' }}>
