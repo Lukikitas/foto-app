@@ -121,7 +121,7 @@ test('local native session storage saves, retrieves and clears correctly', () =>
   assert.equal(getStoredNativeSession(), null);
 });
 
-test('opening another camera session keeps earlier pending session tokens', () => {
+test('opening another camera session keeps earlier pending session tokens', async () => {
   const token = generateCryptoToken(32);
   const first = {
     sessionId: '123e4567-e89b-12d3-a456-426614174000',
@@ -141,11 +141,29 @@ test('opening another camera session keeps earlier pending session tokens', () =
   saveStoredNativeSession(second);
   assert.deepEqual(getStoredNativeSessions(), [first, second]);
   assert.equal(getStoredNativeSession().sessionId, second.sessionId);
-  assert.equal(getReusableNativeSession('Pepe', 5000)?.sessionId, first.sessionId);
-  assert.equal(getReusableNativeSession('Pepe', 60_000), null);
+  assert.equal((await getReusableNativeSession('Pepe', 5000, async () => ({ state: 'active' })))?.sessionId, first.sessionId);
+  assert.equal(await getReusableNativeSession('Pepe', 60_000), null);
 
   clearStoredNativeSession(first.sessionId);
   assert.deepEqual(getStoredNativeSessions(), [second]);
+});
+
+test('a finished Android session is not reused for new captures', async () => {
+  const session = {
+    sessionId: '123e4567-e89b-12d3-a456-426614174000',
+    sessionToken: generateCryptoToken(32),
+    takenBy: 'Pepe',
+    createdAt: 1000,
+    expiresAt: new Date(60_000).toISOString(),
+  };
+  saveStoredNativeSession(session);
+  const checked = [];
+  const reusable = await getReusableNativeSession('Pepe', 5000, async (id) => {
+    checked.push(id);
+    return { state: 'finishing' };
+  });
+  assert.deepEqual(checked, [session.sessionId]);
+  assert.equal(reusable, null);
 });
 
 test('legacy single-session storage remains readable', () => {

@@ -82,6 +82,23 @@ test('processQueueItem reads the ticket and then uploads with a stable path', as
   assert.match(item.storagePath, /^orders\/pedidosya\//);
 });
 
+test('a failed first queue write stops processing and leaves a visible retry', async () => {
+  const item = sampleItem();
+  let uploadCalls = 0;
+  let notifications = 0;
+  const deps = mockDeps({
+    persist: async () => { throw new Error('IndexedDB bloqueada'); },
+    notify: () => { notifications += 1; },
+    uploadPhoto: async () => { uploadCalls += 1; },
+  });
+
+  await assert.rejects(processQueueItem(item, deps), /IndexedDB bloqueada/);
+  assert.equal(item.status, 'error');
+  assert.match(item.error, /IndexedDB bloqueada/);
+  assert.equal(uploadCalls, 0);
+  assert.equal(notifications, 1);
+});
+
 test('processQueueItem yields instead of failing when the page is handed off', async () => {
   const item = sampleItem();
   let started = false;
