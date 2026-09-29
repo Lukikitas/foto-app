@@ -186,7 +186,7 @@ export default function MetricsDashboard({
           )}
         </section>
         <section className="metrics-sheet__group">
-          <h3>Plata</h3>
+          <h3>Dinero</h3>
           <SheetStat
             label="$ quejas"
             value={formatMoney(item.complaintAmount)}

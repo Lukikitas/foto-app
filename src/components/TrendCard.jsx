@@ -7,6 +7,7 @@ import {
   trendSvgToPngBlob,
   TREND_VIEWS,
 } from '../lib/trendChart';
+import { getAggregatorLabel } from '../lib/aggregators';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
 import { getTheme } from '../lib/theme';
 import { triggerBlobDownload } from '../lib/photoDownload';
@@ -75,10 +76,16 @@ export default function TrendCard({
   if (!series.hasData) return null;
 
   const { totals, compared, target } = series;
+  const aggLabel = series.aggregator === 'all' ? null : getAggregatorLabel(series.aggregator);
+  const hasPrevious = Boolean(
+    series.previous &&
+    (series.previous.orders > 0 || series.previous.complaints > 0 || series.previous.complaintAmount > 0),
+  );
+  const previousHint = hasPrevious ? null : 'sin datos previos';
   const summaryLabel =
     `Tendencia del ${formatDayLabel(series.from)} al ${formatDayLabel(series.to)}: ` +
     `${formatNumber(totals.orders)} pedidos, ${formatNumber(totals.complaints)} quejas, ` +
-    `${formatPct(totals.complaintPct)} de quejas.`;
+    `${formatPct(totals.complaintPct)} de quejas${aggLabel ? ` (${aggLabel})` : ''}.`;
 
   async function handlePngExport() {
     setBusy(true);
@@ -86,7 +93,8 @@ export default function TrendCard({
     try {
       const { width, height } = trendChartSize(view);
       const background = palette === 'dark' ? '#1f1f1f' : '#f7f3ee';
-      const blob = await trendSvgToPngBlob(svg, { width, height, scale: 2, background });
+      const exportSvg = buildTrendChartSvg(series, { palette, view, header: true });
+      const blob = await trendSvgToPngBlob(exportSvg, { width, height, scale: 2, background });
       triggerBlobDownload(blob, `tendencia-${series.from}-a-${series.to}.png`);
     } catch (exportError) {
       setError(exportError.message || 'No se pudo exportar la imagen.');
@@ -104,10 +112,14 @@ export default function TrendCard({
     <section className="trend-card" aria-label="Tendencia del período">
       <header className="trend-card__header">
         <div>
-          <h3>Tendencia del período</h3>
+          <h3>
+            Tendencia del período
+            {aggLabel ? <span className="trend-card__agg">{aggLabel}</span> : null}
+          </h3>
           <p className="trend-card__period">
             {formatDayLabel(series.from)}
             {series.from !== series.to ? ` → ${formatDayLabel(series.to)}` : ''}
+            {aggLabel ? ` · ${aggLabel}` : ''}
             {` · ${formatNumber(totals.complaints)} quejas · ${formatPct(totals.complaintPct)}`}
           </p>
         </div>
@@ -150,12 +162,22 @@ export default function TrendCard({
       </header>
 
       <div className="trend-card__chips">
-        <SummaryChip label="Pedidos" value={formatNumber(totals.orders)} hint={`${formatDelta(compared.orders)} vs anterior`} />
-        <SummaryChip label="Quejas" value={formatNumber(totals.complaints)} hint={`${formatDelta(compared.complaints)} vs anterior`} />
+        <SummaryChip
+          label="Pedidos"
+          value={formatNumber(totals.orders)}
+          hint={hasPrevious ? `${formatDelta(compared.orders)} vs anterior` : previousHint}
+        />
+        <SummaryChip
+          label="Quejas"
+          value={formatNumber(totals.complaints)}
+          hint={hasPrevious ? `${formatDelta(compared.complaints)} vs anterior` : previousHint}
+        />
         <SummaryChip
           label="% quejas"
           value={formatPct(totals.complaintPct)}
-          hint={`objetivo ${formatPct(target)} · ${formatDelta(compared.complaintPct, { pct: true })}`}
+          hint={hasPrevious
+            ? `objetivo ${formatPct(target)} · ${formatDelta(compared.complaintPct, { pct: true })}`
+            : `objetivo ${formatPct(target)}`}
           tone={totals.complaintPct > target ? 'bad' : 'good'}
         />
         <SummaryChip
@@ -167,7 +189,7 @@ export default function TrendCard({
         <SummaryChip
           label="$ perdido"
           value={formatMoney(totals.lostAmount)}
-          hint={`${formatDelta(compared.lostAmount, { money: true })} vs anterior`}
+          hint={hasPrevious ? `${formatDelta(compared.lostAmount, { money: true })} vs anterior` : previousHint}
           tone={totals.lostAmount > 0 ? 'bad' : undefined}
         />
       </div>

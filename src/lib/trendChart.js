@@ -14,7 +14,7 @@ import { getAggregatorLabel } from './aggregators.js';
 
 export const TREND_VIEWS = [
   { id: 'operation', label: 'Operación' },
-  { id: 'money', label: 'Plata' },
+  { id: 'money', label: 'Dinero' },
 ];
 
 // Fixed colors per surface so the same markup renders identically in the app
@@ -64,7 +64,9 @@ export const TREND_PALETTES = {
 const FONT_FAMILY = 'system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
 
 export function trendChartSize(view = 'operation') {
-  return { width: 760, height: view === 'money' ? 380 : 430 };
+  // Wide landscape ratios so the SVG fills the card width without letterbox
+  // gaps: height = containerWidth × (height / width).
+  return { width: 1120, height: view === 'money' ? 270 : 300 };
 }
 
 function pickTotals(row, fallback = {}) {
@@ -181,16 +183,12 @@ export function buildTrendSeries(store, history, { from = '', to = '', aggregato
   };
 }
 
-function legendItem(x, y, color, label, { line = false, dashed = false } = {}) {
+function legendItem(x, y, color, label, { line = false, dashed = false, textColor = color } = {}) {
   const swatch = line
     ? `<line x1="${x}" y1="${y + 5}" x2="${x + 14}" y2="${y + 5}" stroke="${color}" stroke-width="2.5"${dashed ? ' stroke-dasharray="5 4"' : ''} />`
     : `<rect x="${x}" y="${y}" width="11" height="11" rx="2" fill="${color}" />`;
-  const text = `<text x="${x + 19}" y="${y + 9.5}" font-size="10.5" fill="${esc(color)}" font-weight="600">${esc(label)}</text>`;
+  const text = `<text x="${x + 19}" y="${y + 9.5}" font-size="10.5" fill="${esc(textColor)}" font-weight="600">${esc(label)}</text>`;
   return { markup: swatch + text, nextX: x + 19 + label.length * 6.2 + 16 };
-}
-
-function rotatedCaption(x, yMid, label, fill) {
-  return `<text x="${x}" y="${yMid}" transform="rotate(-90 ${x} ${yMid})" text-anchor="middle" font-size="9" fill="${fill}">${esc(label)}</text>`;
 }
 
 function chartHeader(series, palette, chartWidth) {
@@ -211,14 +209,14 @@ function emptyChart(palette) {
   </svg>`;
 }
 
-function operationChart(series, palette) {
+function operationChart(series, palette, { header = false } = {}) {
   const { width, height } = trendChartSize('operation');
   const rows = series.rows;
   const n = rows.length;
-  const margin = { left: 46, right: 46, top: 62, bottom: 34 };
+  const margin = { left: 44, right: 44, top: header ? 62 : 34, bottom: 26 };
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
-  const gap = 22;
+  const gap = 12;
   const panelAH = Math.round((plotH - gap) * 0.4);
   const panelBH = plotH - gap - panelAH;
   const panelA = { x: margin.left, y: margin.top, w: plotW, h: panelAH };
@@ -235,10 +233,10 @@ function operationChart(series, palette) {
 
   const parts = [];
   parts.push(`<rect width="${width}" height="${height}" fill="${palette.bg}" />`);
-  parts.push(chartHeader(series, palette, width));
+  if (header) parts.push(chartHeader(series, palette, width));
 
-  let legendX = 46;
-  const legendY = 34;
+  let legendX = 44;
+  const legendY = header ? 36 : 8;
   const legendItems = [
     { color: palette.orders, label: 'Pedidos' },
     { color: palette.complaints, label: 'Quejas' },
@@ -246,13 +244,13 @@ function operationChart(series, palette) {
     { color: palette.target, label: `Objetivo ${formatPct(series.target, 1)}`, line: true, dashed: true },
   ];
   for (const item of legendItems) {
-    const entry = legendItem(legendX, legendY, item.color, item.label, item);
+    const entry = legendItem(legendX, legendY, item.color, item.label, { ...item, textColor: palette.text });
     parts.push(entry.markup);
     legendX = entry.nextX;
   }
 
-  for (let i = 0; i <= 4; i += 1) {
-    const ratio = i / 4;
+  for (let i = 0; i <= 2; i += 1) {
+    const ratio = i / 2;
     const yA = panelA.y + panelA.h - ratio * panelA.h;
     const yB = panelB.y + panelB.h - ratio * panelB.h;
     parts.push(`<line x1="${panelA.x}" y1="${yA}" x2="${panelA.x + panelA.w}" y2="${yA}" stroke="${palette.grid}" stroke-width="1" />`);
@@ -261,9 +259,6 @@ function operationChart(series, palette) {
     parts.push(`<text x="${panelB.x - 6}" y="${yB + 3.5}" font-size="9" fill="${palette.axis}" text-anchor="end">${formatNumber(Math.round(maxComplaints * ratio))}</text>`);
     parts.push(`<text x="${panelB.x + panelB.w + 6}" y="${yB + 3.5}" font-size="9" fill="${palette.pct}">${formatPct(maxPct * ratio, 1)}</text>`);
   }
-  parts.push(rotatedCaption(13, panelA.y + panelA.h / 2, 'pedidos', palette.axis));
-  parts.push(rotatedCaption(13, panelB.y + panelB.h / 2, 'quejas', palette.axis));
-  parts.push(rotatedCaption(width - 12, panelB.y + panelB.h / 2, '% quejas', palette.pct));
 
   rows.forEach((row, index) => {
     const cx = panelA.x + slot * (index + 0.5);
@@ -305,8 +300,8 @@ function operationChart(series, palette) {
 
   const targetY = panelB.y + panelB.h - (series.target / maxPct) * panelB.h;
   parts.push(`<line x1="${panelB.x}" y1="${targetY.toFixed(1)}" x2="${panelB.x + panelB.w}" y2="${targetY.toFixed(1)}" stroke="${palette.target}" stroke-width="1.75" stroke-dasharray="6 4" />`);
-  const targetLabelY = targetY - 5 < panelB.y + 10 ? targetY + 13 : targetY - 5;
-  parts.push(`<text x="${panelB.x + panelB.w - 4}" y="${targetLabelY.toFixed(1)}" font-size="9" font-weight="700" fill="${palette.target}" text-anchor="end">objetivo ${esc(formatPct(series.target, 1))}</text>`);
+  const targetLabelY = targetY - 6 < panelB.y + 10 ? targetY + 13 : targetY - 6;
+  parts.push(`<text x="${panelB.x + 6}" y="${targetLabelY.toFixed(1)}" font-size="9" font-weight="700" fill="${palette.target}" stroke="${palette.bg}" stroke-width="3" paint-order="stroke">objetivo ${esc(formatPct(series.target, 1))}</text>`);
 
   const peak = series.peaks.worstPct;
   if (peak && peak.complaintPct != null) {
@@ -314,18 +309,18 @@ function operationChart(series, palette) {
     if (point) {
       const labelY = Math.max(panelB.y + 12, point.cy - 9);
       parts.push(`<circle cx="${point.cx.toFixed(1)}" cy="${point.cy.toFixed(1)}" r="5.5" fill="none" stroke="${palette.complaints}" stroke-width="1.75" />`);
-      parts.push(`<text x="${point.cx.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="9" font-weight="700" fill="${palette.complaints}" text-anchor="middle">pico ${esc(formatPct(peak.complaintPct, 1))}</text>`);
+      parts.push(`<text x="${point.cx.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="9" font-weight="700" fill="${palette.complaints}" stroke="${palette.bg}" stroke-width="3" paint-order="stroke" text-anchor="middle">pico ${esc(formatPct(peak.complaintPct, 1))}</text>`);
     }
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="${FONT_FAMILY}">${parts.join('')}</svg>`;
 }
 
-function moneyChart(series, palette) {
+function moneyChart(series, palette, { header = false } = {}) {
   const { width, height } = trendChartSize('money');
   const rows = series.rows;
   const n = rows.length;
-  const margin = { left: 58, right: 24, top: 62, bottom: 34 };
+  const margin = { left: 56, right: 20, top: header ? 62 : 34, bottom: 26 };
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
 
@@ -337,23 +332,23 @@ function moneyChart(series, palette) {
 
   const parts = [];
   parts.push(`<rect width="${width}" height="${height}" fill="${palette.bg}" />`);
-  parts.push(chartHeader(series, palette, width));
+  if (header) parts.push(chartHeader(series, palette, width));
 
-  let legendX = 46;
-  const legendY = 34;
+  let legendX = 44;
+  const legendY = header ? 36 : 8;
   const legendItems = [
     { color: palette.recovered, label: '$ recuperado' },
     { color: palette.dispute, label: '$ en disputa' },
     { color: palette.lost, label: '$ perdido' },
   ];
   for (const item of legendItems) {
-    const entry = legendItem(legendX, legendY, item.color, item.label);
+    const entry = legendItem(legendX, legendY, item.color, item.label, { textColor: palette.text });
     parts.push(entry.markup);
     legendX = entry.nextX;
   }
 
-  for (let i = 0; i <= 4; i += 1) {
-    const ratio = i / 4;
+  for (let i = 0; i <= 2; i += 1) {
+    const ratio = i / 2;
     const y = margin.top + plotH - ratio * plotH;
     parts.push(`<line x1="${margin.left}" y1="${y}" x2="${margin.left + plotW}" y2="${y}" stroke="${palette.grid}" stroke-width="1" />`);
     parts.push(`<text x="${margin.left - 6}" y="${y + 3.5}" font-size="9" fill="${palette.axis}" text-anchor="end">${formatAxisMoney(maxAmount * ratio)}</text>`);
@@ -388,16 +383,16 @@ function moneyChart(series, palette) {
     }
   });
   parts.push(`<line x1="${margin.left}" y1="${margin.top + plotH}" x2="${margin.left + plotW}" y2="${margin.top + plotH}" stroke="${palette.axis}" stroke-width="1" />`);
-  parts.push(rotatedCaption(14, margin.top + plotH / 2, 'plata en quejas', palette.axis));
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="${FONT_FAMILY}">${parts.join('')}</svg>`;
 }
 
-/** Self-contained SVG markup (no CSS variables) for app, report and PNG export. */
-export function buildTrendChartSvg(series, { palette = 'print', view = 'operation' } = {}) {
+/** Self-contained SVG markup (no CSS variables) for app, report and PNG export.
+ * The built-in title/period header is only useful for standalone images. */
+export function buildTrendChartSvg(series, { palette = 'print', view = 'operation', header = false } = {}) {
   const colors = TREND_PALETTES[palette] || TREND_PALETTES.print;
   if (!series || !series.rows?.length || !series.hasData) return emptyChart(colors);
-  return view === 'money' ? moneyChart(series, colors) : operationChart(series, colors);
+  return view === 'money' ? moneyChart(series, colors, { header }) : operationChart(series, colors, { header });
 }
 
 export function buildTrendCsv(series) {

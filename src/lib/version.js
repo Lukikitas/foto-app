@@ -5,7 +5,7 @@ export const RELEASE_GROUPS = [
     title: 'Métricas: tendencia',
     notes: [
       'Nuevo gráfico de tendencia diaria en el resumen de Métricas: pedidos y quejas por día, con la línea del % de quejas y la del objetivo, marcando el día pico.',
-      'Vista alternativa «Plata» con las quejas de cada día apiladas en recuperado, en disputa y pérdida.',
+      'Vista alternativa «Dinero» con las quejas de cada día apiladas en recuperado, en disputa y pérdida.',
       'El gráfico se puede exportar solo como imagen PNG o CSV, y se incluye en el informe PDF con un botón para activarlo o quitarlo.',
       'Resumen con totales del período y comparación contra el período anterior de igual duración.',
     ],

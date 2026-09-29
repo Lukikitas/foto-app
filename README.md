@@ -4,7 +4,7 @@
 
 ### Gráfico de tendencia en Métricas
 
-Nuevo gráfico de tendencia diaria en el resumen de Métricas. La vista «Operación» muestra pedidos y quejas por día con la línea del % de quejas, la línea punteada del objetivo y el día pico marcado; la vista «Plata» apila por día el monto recuperado, en disputa y perdido. Incluye chips de resumen con totales y comparación contra el período anterior de igual duración.
+Nuevo gráfico de tendencia diaria en el resumen de Métricas. La vista «Operación» muestra pedidos y quejas por día con la línea del % de quejas, la línea punteada del objetivo y el día pico marcado; la vista «Dinero» apila por día el monto recuperado, en disputa y perdido. Incluye chips de resumen con totales y comparación contra el período anterior de igual duración.
 
 El gráfico se exporta solo desde la tarjeta (PNG a doble resolución o CSV con todos los campos del período). También se incluye en el informe: la pantalla Informe lo muestra como primera sección y la ventana «Exportar informe en PDF» tiene el botón «Gráfico de tendencia» para activarlo o quitarlo antes de imprimir o abrir en pestaña. Los colores son fijos por tema (claro, oscuro e impresión), sin variables CSS, para que el PNG y el PDF se vean idénticos.
 

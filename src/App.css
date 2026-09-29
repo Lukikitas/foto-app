@@ -7135,6 +7135,21 @@ button.metrics-agg:focus-visible {
   font-size: 1rem;
 }
 
+.trend-card__agg {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
 .trend-card__period {
   margin: 0.2rem 0 0;
   font-size: 0.8rem;
@@ -7202,6 +7217,7 @@ button.metrics-agg:focus-visible {
   width: 100%;
   min-width: 34rem;
   height: auto;
+  max-height: min(55svh, 30rem);
   border-radius: var(--radius);
 }
 
