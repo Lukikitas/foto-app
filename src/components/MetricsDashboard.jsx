@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import { groupHistoryFlags } from '../lib/complaintHistory';
+import TrendCard from './TrendCard';
 import {
   AWT_AGGREGATOR,
   METRIC_AGGREGATORS,
@@ -262,6 +263,10 @@ export default function MetricsDashboard({
             Cargar el primer día
           </button>
         </div>
+      )}
+
+      {hasData && (
+        <TrendCard store={store} history={history} range={range} aggregator={aggregator} />
       )}
 
       {series.length > 0 && (

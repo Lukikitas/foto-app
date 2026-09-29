@@ -1,5 +1,21 @@
 # React + Vite
 
+## Versión 1.6
+
+### Gráfico de tendencia en Métricas
+
+Nuevo gráfico de tendencia diaria en el resumen de Métricas. La vista «Operación» muestra pedidos y quejas por día con la línea del % de quejas, la línea punteada del objetivo y el día pico marcado; la vista «Plata» apila por día el monto recuperado, en disputa y perdido. Incluye chips de resumen con totales y comparación contra el período anterior de igual duración.
+
+El gráfico se exporta solo desde la tarjeta (PNG a doble resolución o CSV con todos los campos del período). También se incluye en el informe: la pantalla Informe lo muestra como primera sección y la ventana «Exportar informe en PDF» tiene el botón «Gráfico de tendencia» para activarlo o quitarlo antes de imprimir o abrir en pestaña. Los colores son fijos por tema (claro, oscuro e impresión), sin variables CSS, para que el PNG y el PDF se vean idénticos.
+
+### Desempeño de personal
+
+Nuevo apartado «Desempeño» dentro de Métricas. Muestra por persona: fotos tomadas, % del total, pedidos fotografiados, quejas atribuidas, % de quejas sobre sus pedidos, $ reclamados y $ recuperados; el ranking es ordenable por cualquier columna (por defecto: fotos) con barras proporcionales por fila. Debajo, la distribución hora por hora (0–23, solo franjas con datos, más «Sin hora») de pedidos y quejas con el % de cada uno sobre el total y el % de quejas sobre pedidos de la franja.
+
+Las quejas se atribuyen a quien tomó la foto del pedido (por id de foto, con respaldo por nombre de código); las que no tienen foto asignada aparecen como «Sin asignar» y se aclaran al pie. Los pedidos hora por hora salen de las fotos de pedidos del período en horario argentino, ya que el Excel de PedidosYa solo trae totales diarios. Hay descarga en CSV con ambas tablas.
+
+Validación: `npm test` (242 pruebas), `npm run lint`, `npm run build`.
+
 ## Versión 1.5
 
 Las cargas manuales preparan una lista compartida en Reclamos → Gestionar. Allí se puede corregir el agregador, fecha y detalles, elegir evidencia, quitar filas o descartar la lista. Solo **Guardar en Historial** confirma el lote; después Gestionar queda vacío. El Sheet automático conserva su importación directa y no reemplaza el borrador manual.

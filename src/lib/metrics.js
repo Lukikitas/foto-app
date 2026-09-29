@@ -21,6 +21,7 @@ export function getAggregatorShortLabel(aggregator) {
 export const METRIC_PAGE_TABS = [
   { id: 'overview', label: 'Resumen' },
   { id: 'complaints', label: 'Quejas' },
+  { id: 'staff', label: 'Desempeño' },
   { id: 'report', label: 'Informe' },
   { id: 'entry', label: 'Cargar' },
 ];

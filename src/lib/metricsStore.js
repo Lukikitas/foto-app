@@ -54,7 +54,7 @@ export function getMetricsView() {
   try {
     const value = localStorage.getItem(VIEW_KEY);
     if (value === 'dashboard') return 'overview';
-    if (value === 'entry' || value === 'overview' || value === 'complaints' || value === 'report') {
+    if (value === 'entry' || value === 'overview' || value === 'complaints' || value === 'report' || value === 'staff') {
       return value;
     }
     return 'overview';

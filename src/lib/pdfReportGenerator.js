@@ -2,6 +2,7 @@ import { getAggregatorLabel } from './aggregators.js';
 import { COMPLAINT_STATUS_LABELS } from './complaintHistory.js';
 import { extraFieldKeys } from './complaintReport.js';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from './metrics.js';
+import { buildTrendChartSvg } from './trendChart.js';
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -18,7 +19,7 @@ function escapeHtml(str) {
  * with exact A4 print styles, vector colors, typography,
  * executive KPI cards, distribution bars, and analytical tables.
  */
-export function generateReportHtml(report, { includeDetail = false } = {}) {
+export function generateReportHtml(report, { includeDetail = false, trend = null } = {}) {
   const totals = report?.totals || {};
   const items = report?.items || [];
   const extras = extraFieldKeys(items).slice(0, 4);
@@ -336,6 +337,21 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
+    }
+
+    /* Trend Figure */
+    .trend-figure {
+      width: 100%;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .trend-figure svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
     }
 
     .insight-col {
@@ -681,6 +697,14 @@ export function generateReportHtml(report, { includeDetail = false } = {}) {
         <small>${topReason ? `${formatNumber(topReason.count)} quejas · ${formatMoney(topReason.complaintAmount)}` : 'Sin datos'}</small>
       </div>
     </section>
+
+    ${trend && trend.hasData ? `
+    <!-- Trend Chart -->
+    <section class="report-section">
+      <h2 class="report-section-title">Tendencia del Período</h2>
+      <div class="trend-figure">${buildTrendChartSvg(trend, { palette: 'print', view: 'operation' })}</div>
+    </section>
+    ` : ''}
 
     <!-- Table 1: Por Agregador -->
     ${report.aggregators?.length > 0 ? `

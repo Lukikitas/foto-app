@@ -21,6 +21,7 @@ import MetricsComplaintsList from './MetricsComplaintsList';
 import MetricsDashboard, { MetricsPeriodBar } from './MetricsDashboard';
 import MetricsEntry from './MetricsEntry';
 import MetricsReport from './MetricsReport';
+import MetricsStaff from './MetricsStaff';
 
 function useMetricsPeriod() {
   const savedPeriod = getSavedPeriod();
@@ -203,6 +204,8 @@ export default function MetricsPage() {
           )}
           {view === 'entry' ? (
             <MetricsEntry store={store} saving={saving} onSave={persist} onImportBusy={setSaving} />
+          ) : view === 'staff' ? (
+            <MetricsStaff history={history} range={range} aggregator={aggregator} />
           ) : view === 'complaints' ? (
             <MetricsComplaintsList
               history={history}
@@ -216,7 +219,7 @@ export default function MetricsPage() {
               onNotice={setNotice}
             />
           ) : view === 'report' ? (
-            <MetricsReport history={history} range={range} aggregator={aggregator} />
+            <MetricsReport history={history} range={range} aggregator={aggregator} store={store} />
           ) : (
             <MetricsDashboard
               store={store}

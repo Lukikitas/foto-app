@@ -11,8 +11,10 @@ import {
 } from '../lib/complaintReport';
 import { downloadTextFile } from '../lib/complaints';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
+import { buildTrendSeries } from '../lib/trendChart';
 import { openReportInNewTab } from '../lib/pdfReportGenerator';
 import ReportPdfModal from './ReportPdfModal';
+import TrendCard from './TrendCard';
 
 function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
   if (!rows.length) return null;
@@ -51,13 +53,17 @@ function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
   );
 }
 
-export default function MetricsReport({ history, range, aggregator }) {
+export default function MetricsReport({ history, range, aggregator, store }) {
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const report = useMemo(
     () => buildComplaintReport(history, { from: range.from, to: range.to, aggregator }),
     [history, range, aggregator],
+  );
+  const trend = useMemo(
+    () => (store ? buildTrendSeries(store, history, { from: range.from, to: range.to, aggregator }) : null),
+    [store, history, range, aggregator],
   );
   const totals = report.totals;
   const extras = useMemo(() => extraFieldKeys(report.items).slice(0, 6), [report.items]);
@@ -200,7 +206,11 @@ export default function MetricsReport({ history, range, aggregator }) {
       </header>
 
       {showPdfModal && (
-        <ReportPdfModal report={report} onClose={() => setShowPdfModal(false)} />
+        <ReportPdfModal report={report} trend={trend} onClose={() => setShowPdfModal(false)} />
+      )}
+
+      {trend?.hasData && (
+        <TrendCard store={store} history={history} range={range} aggregator={aggregator} series={trend} allowExport={false} />
       )}
 
       {!totals.count ? (

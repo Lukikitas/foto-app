@@ -2,21 +2,27 @@ import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
 export const RELEASE_GROUPS = [
   {
-    title: 'Corrección de errores',
+    title: 'Métricas: tendencia',
     notes: [
-      'Corrección definitiva del bloqueo de scroll: la lista de reclamos en "Gestionar" ahora cuenta con scroll interno independiente y fluido en cualquier resolución.',
-      'Se eliminó la superposición del botón "Guardar en Historial" que tapaba los renglones finales de la lista.',
-      'Se reemplazó el recuadro rojo de fotos faltantes por una pastilla neutra y sutil "Sin foto".',
+      'Nuevo gráfico de tendencia diaria en el resumen de Métricas: pedidos y quejas por día, con la línea del % de quejas y la del objetivo, marcando el día pico.',
+      'Vista alternativa «Plata» con las quejas de cada día apiladas en recuperado, en disputa y pérdida.',
+      'El gráfico se puede exportar solo como imagen PNG o CSV, y se incluye en el informe PDF con un botón para activarlo o quitarlo.',
+      'Resumen con totales del período y comparación contra el período anterior de igual duración.',
     ],
   },
   {
-    title: 'Rediseño y mejoras en "Gestionar"',
+    title: 'Desempeño de personal',
     notes: [
-      'Nueva tabla de alta densidad: columnas optimizadas para código, agregador con pastilla de color, fecha, detalle completo del motivo, monto y evidencia.',
-      'Buscador instantáneo en tiempo real por número de pedido, motivo o producto.',
-      'Filtros rápidos de un clic para ver todos, PedidosYa, Rappi, con foto o sin foto.',
-      'Cálculo en tiempo real del monto total acumulado en la cabecera y botón directo para guardar sin desplazarse.',
-      'Barra de edición masiva con cálculo del importe seleccionado al cambiar agregador, fecha o quitar en lote.',
+      'Nuevo apartado «Desempeño» en Métricas: ranking por persona con fotos, % del total, pedidos, quejas, % de quejas y montos reclamados/recuperados.',
+      'Distribución hora por hora de pedidos y quejas con sus respectivos porcentajes y el % de quejas sobre pedidos de cada franja.',
+      'Las quejas se atribuyen a quien tomó la foto del pedido; las que quedan sin foto aparecen como «Sin asignar».',
+      'Descarga en CSV del ranking y de la distribución horaria del período.',
+    ],
+  },
+  {
+    title: 'Correcciones',
+    notes: [
+      'Se limpiaron las advertencias de validación en la revisión de listas compartidas.',
     ],
   },
 ];

@@ -3912,6 +3912,21 @@
   border-radius: var(--radius-lg);
 }
 
+/* Long metric tables scroll inside a fixed-height window with a sticky head. */
+.metrics-dash > .metrics-table-wrap,
+.metrics-report .metrics-table-wrap {
+  max-height: min(72svh, 36rem);
+  overflow: auto;
+}
+
+.metrics-dash > .metrics-table-wrap .metrics-table thead th,
+.metrics-report .metrics-table-wrap .metrics-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
 .metrics-table {
   width: 100%;
   border-collapse: collapse;
@@ -4906,6 +4921,10 @@ button.metrics-agg:focus-visible {
     grid-column: 1 / -1;
   }
 
+  .metrics-report > .trend-card {
+    grid-column: 1 / -1;
+  }
+
   .complaints {
     gap: 0.3rem;
     height: 100%;
@@ -5028,9 +5047,14 @@ button.metrics-agg:focus-visible {
     grid-column: 1;
   }
 
+  .metrics-dash > .trend-card {
+    grid-column: 1 / -1;
+    grid-row: 4;
+  }
+
   .metrics-dash > .metrics-table-wrap {
     grid-column: 2;
-    grid-row: 1 / span 4;
+    grid-row: 1 / span 3;
     max-height: min(78svh, 48rem);
     overflow: auto;
   }
@@ -7085,3 +7109,268 @@ button.metrics-agg:focus-visible {
   .settings__grid { grid-template-columns: 1fr; }
   .settings__card { padding: 1.1rem; }
 }
+
+/* ==========================================================================
+   Trend card (Métricas → Resumen / Informe)
+   ========================================================================== */
+.trend-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.trend-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.trend-card__header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.trend-card__period {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.trend-card__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.trend-card__actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.trend-card__chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.trend-chip {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.trend-chip p {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.trend-chip strong {
+  font-size: 1.05rem;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-chip span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.trend-chip--good strong { color: var(--success); }
+.trend-chip--bad strong { color: var(--danger); }
+.trend-chip--good { border-color: var(--success-border); }
+.trend-chip--bad { border-color: var(--danger-border); }
+
+.trend-card__figure {
+  overflow-x: auto;
+}
+
+.trend-card__figure svg {
+  display: block;
+  width: 100%;
+  min-width: 34rem;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+
+/* ==========================================================================
+   Desempeño de personal (Métricas → Personal)
+   ========================================================================== */
+.staff {
+  display: grid;
+  gap: 1rem;
+}
+
+.staff__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.staff__title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text-h);
+}
+
+.staff__lead {
+  margin: 0.25rem 0 0;
+  max-width: 46rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.staff__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+.staff__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.staff__toolbar-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.staff__table {
+  min-width: 44rem;
+}
+
+.staff__sort {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.staff__sort.is-active {
+  color: var(--accent);
+}
+
+.staff__th--num,
+.staff__td--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.staff__th--bar {
+  text-align: left;
+}
+
+.staff__td--num.is-bad {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.staff__td--bar {
+  min-width: 7rem;
+}
+
+.staff__td-value {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-bar {
+  display: block;
+  width: 100%;
+  height: 0.38rem;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.staff-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.staff__person {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.staff__person--none {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.staff__row--unassigned td {
+  background: var(--accent-bg);
+}
+
+.staff__hourly {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.staff__subtitle {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-h);
+}
+
+.staff__footnote {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+/* Trend figure inside the report modal preview */
+.report-pdf-trend svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+@media (max-width: 640px) {
+  .trend-card {
+    padding: 0.8rem;
+  }
+
+  .trend-card__header {
+    flex-direction: column;
+  }
+
+  .staff__header {
+    flex-direction: column;
+  }
+}
+

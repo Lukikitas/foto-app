@@ -164,7 +164,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
   const totalAmount = useMemo(() => {
     return complaintsList.reduce((acc, c) => {
       let ext = null;
-      try { ext = findDraftHistory(history, c); } catch {}
+      try { ext = findDraftHistory(history, c); } catch { /* Sin historial previo. */ }
       const val = c.amount != null ? c.amount : (ext?.amount != null ? ext.amount : 0);
       return acc + (Number(val) || 0);
     }, 0);
@@ -176,7 +176,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
       const c = complaintsList[idx];
       if (!c) continue;
       let ext = null;
-      try { ext = findDraftHistory(history, c); } catch {}
+      try { ext = findDraftHistory(history, c); } catch { /* Sin historial previo. */ }
       const val = c.amount != null ? c.amount : (ext?.amount != null ? ext.amount : 0);
       sum += Number(val) || 0;
     }
@@ -445,7 +445,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
                     const complaint = complaintsList[index];
                     const row = rows[index];
                     let existing = null;
-                    try { existing = findDraftHistory(history, complaint); } catch {}
+                    try { existing = findDraftHistory(history, complaint); } catch { /* Sin historial previo. */ }
                     const complaintId = complaint.id || complaintHistoryId(complaint);
                     const hasCandidates = (row?.candidates?.length > 0 || row?.photo);
                     const amountChanged = existing?.amount != null && existing.amount !== complaint.amount && complaint.amount != null;

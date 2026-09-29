@@ -3,10 +3,12 @@ import { getAggregatorLabel } from '../lib/aggregators';
 import { COMPLAINT_STATUS_LABELS } from '../lib/complaintHistory';
 import { extraFieldKeys } from '../lib/complaintReport';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
+import { buildTrendChartSvg } from '../lib/trendChart';
 import { openReportInNewTab, printReportDocument } from '../lib/pdfReportGenerator';
 
-export default function ReportPdfModal({ report, onClose }) {
+export default function ReportPdfModal({ report, trend = null, onClose }) {
   const [includeDetail, setIncludeDetail] = useState(false);
+  const [includeTrend, setIncludeTrend] = useState(true);
   const totals = report?.totals || {};
   const items = report?.items || [];
   const extras = extraFieldKeys(items).slice(0, 4);
@@ -37,11 +39,11 @@ export default function ReportPdfModal({ report, onClose }) {
   const pctRecovered = totalAmount ? ((totals.recoveredAmount || 0) / totalAmount) * 100 : 0;
 
   function handlePrint() {
-    printReportDocument(report, { includeDetail });
+    printReportDocument(report, { includeDetail, trend: includeTrend ? trend : null });
   }
 
   function handleOpenNewTab() {
-    openReportInNewTab(report, { includeDetail });
+    openReportInNewTab(report, { includeDetail, trend: includeTrend ? trend : null });
   }
 
   return (
@@ -70,6 +72,17 @@ export default function ReportPdfModal({ report, onClose }) {
               >
                 Completo con Detalle ({formatNumber(items.length)})
               </button>
+              {trend?.hasData && (
+                <button
+                  type="button"
+                  className={`report-modal__scope-btn${includeTrend ? ' is-active' : ''}`}
+                  aria-pressed={includeTrend}
+                  onClick={() => setIncludeTrend((prev) => !prev)}
+                  title="Incluir o quitar el gráfico de tendencia del informe"
+                >
+                  Gráfico de tendencia
+                </button>
+              )}
             </div>
 
             <button type="button" className="btn btn--primary" onClick={handlePrint} title="Imprimir o guardar directamente como PDF">
@@ -212,6 +225,17 @@ export default function ReportPdfModal({ report, onClose }) {
                 <small>{topReason ? `${formatNumber(topReason.count)} quejas · ${formatMoney(topReason.complaintAmount)}` : 'Sin datos'}</small>
               </div>
             </section>
+
+            {/* Optional Section: Trend Chart */}
+            {includeTrend && trend?.hasData && (
+              <section className="report-pdf-section">
+                <h2 className="report-pdf-section__title">Tendencia del Período</h2>
+                <div
+                  className="report-pdf-trend"
+                  dangerouslySetInnerHTML={{ __html: buildTrendChartSvg(trend, { palette: 'print', view: 'operation' }) }}
+                />
+              </section>
+            )}
 
             {/* Section: Por Agregador */}
             {report.aggregators?.length > 0 && (
