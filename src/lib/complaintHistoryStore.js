@@ -32,11 +32,25 @@ export function cachedComplaintHistory() {
 export function subscribeComplaintHistory(listener) {
   listeners.add(listener); return () => listeners.delete(listener);
 }
+// Revisión del último documento leído: el sondeo cada 5s puede cortar el
+// parseo completo del historial (costoso con lotes grandes) si no cambió.
+let lastRevision = null;
+
 export async function loadComplaintHistory({ force = false, strict = false } = {}) {
   if (memoryStore && !force && !strict) return memoryStore;
   if (loadPromise) return loadPromise;
   loadPromise = readDocument('history', emptyHistory)
-    .then(doc => remember(parseHistory(doc.data)))
+    .then(doc => {
+      if (memoryStore && typeof doc?.revision === 'number' && doc.revision === lastRevision) {
+        return memoryStore;
+      }
+      if (typeof doc?.revision === 'number') lastRevision = doc.revision;
+      const parsed = parseHistory(doc.data);
+      // Misma fecha de actualización = mismo contenido: devolvemos la referencia
+      // en memoria para no serializar a localStorage ni re-renderizar suscritos.
+      if (memoryStore && memoryStore.updatedAt === parsed.updatedAt) return memoryStore;
+      return remember(parsed);
+    })
     .catch(error => { if (strict) throw error; if (memoryStore) return memoryStore; throw error; })
     .finally(() => { loadPromise = null; });
   return loadPromise;

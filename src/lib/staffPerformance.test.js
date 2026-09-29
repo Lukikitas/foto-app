@@ -132,6 +132,70 @@ test('argentinaHour converts ISO instants to Argentina hours', () => {
   assert.equal(argentinaHour('not-a-date'), null);
 });
 
+test('staff report attributes a complaint whose photo lives outside the fetched window', () => {
+  // La foto PEYA no está en `photos` (fuera de la ventana) pero llega como extra.
+  const report = buildStaffReport({
+    photos: [{
+      id: 'p1',
+      name: '4696',
+      file_path: 'orders/pedidosya/4696.jpg',
+      created_at: '2026-09-01T13:05:00-03:00',
+      taken_by: 'Sofi',
+    }],
+    extraPhotos: [{
+      id: 'p9',
+      name: 'PEYA-2286878556',
+      file_path: 'orders/pedidosya/peya.jpg',
+      created_at: '2026-08-30T21:40:00-03:00',
+      taken_by: 'Lu',
+    }],
+    historyItems: HISTORY_ITEMS,
+  });
+  const lu = report.people.find((row) => row.key === 'lu');
+  const unassigned = report.people.find((row) => row.isUnassigned);
+  assert.ok(lu, 'la foto de fuera del período debe atribuir la queja');
+  assert.equal(lu.complaints, 1);
+  assert.equal(unassigned.complaints, 1, 'solo la queja sin foto queda sin asignar');
+});
+
+test('staff report matches photos ignoring aggregator prefix differences', () => {
+  const report = buildStaffReport({
+    photos: [{ id: 'px', name: '4696', file_path: 'orders/rappi/4696.jpg', created_at: '2026-09-01T15:00:00-03:00', taken_by: 'Ana' }],
+    historyItems: [{
+      compact: 'RAPPI4696',
+      orderCode: 'RAPPI-4696',
+      photoId: null,
+      photoName: null,
+      timeOfDay: null,
+      amount: 100,
+      status: 'queja',
+      day: '2026-09-01',
+    }],
+  });
+  const ana = report.people.find((row) => row.key === 'ana');
+  assert.ok(ana, 'el código numérico debe matchear aunque el reclamo tenga prefijo');
+  assert.equal(ana.complaints, 1);
+});
+
+test('staff report never attributes a photo of a different aggregator', () => {
+  const report = buildStaffReport({
+    photos: [{ id: 'px', name: 'PEYA-4696', file_path: 'orders/pedidosya/4696.jpg', created_at: '2026-09-01T15:00:00-03:00', taken_by: 'Ana' }],
+    historyItems: [{
+      compact: 'RAPPI4696',
+      orderCode: 'RAPPI-4696',
+      photoId: null,
+      photoName: null,
+      timeOfDay: null,
+      amount: 100,
+      status: 'queja',
+      day: '2026-09-01',
+    }],
+  });
+  const unassigned = report.people.find((row) => row.isUnassigned);
+  assert.ok(unassigned, 'PEYA-4696 no puede atribuir una queja de RAPPI-4696');
+  assert.equal(unassigned.complaints, 1);
+});
+
 test('staff report tolerates empty input without NaN', () => {
   const report = buildStaffReport();
   assert.deepEqual(report.people, []);

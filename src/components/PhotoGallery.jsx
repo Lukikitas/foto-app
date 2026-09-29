@@ -30,6 +30,11 @@ const EMPTY_FILTERS = {
   notes: '',
 };
 
+// La galería pinta todas las filas que recibe, así que mantiene el tope que
+// antes imponía el servidor (1000) para no tumbar el render con tablas grandes.
+// Los rangos sin tope (métricas, cruce) usan fetchPhotos sin maxRows.
+const GALLERY_MAX_ROWS = 1000;
+
 function sortPhotosNewestFirst(items) {
   return [...items].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -103,7 +108,7 @@ export default function PhotoGallery({
       }
       setError(null);
       try {
-        const data = await fetchPhotos({ ...filtersToLoad, kind });
+        const data = await fetchPhotos({ ...filtersToLoad, kind, maxRows: GALLERY_MAX_ROWS });
         setPhotos(data);
         setAppliedFilters(filtersToLoad);
         if (!keepSelection) {

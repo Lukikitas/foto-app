@@ -1,6 +1,7 @@
 import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { AGGREGATORS, detectAggregator, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
+import { fetchAllPages } from './paginate';
 import { releaseCloudTicket } from './cloudOrderRecovery';
 import { downloadPhoto } from './photoDownload.js';
 import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
@@ -124,57 +125,67 @@ export async function fetchPhotos({
   takenBy,
   notes,
   columns,
+  // La API corta en 1000 filas por consulta; sin paginar, los rangos largos
+  // (p. ej. un mes entero en Desempeño) se truncan en silencio.
+  maxRows = Infinity,
 } = {}) {
-  let query = supabase
-    .from('photos')
-    .select(columns || '*')
-    .order('created_at', { ascending: false });
-
   const trimmedSearch = search?.trim();
-  if (trimmedSearch) {
-    query = query.ilike('name', `%${trimmedSearch}%`);
-  }
-
-  if (dateFrom) {
-    query = query.gte(
-      'created_at',
-      timeFrom ? startOfDateTime(dateFrom, timeFrom) : startOfDay(dateFrom),
-    );
-  }
-
-  if (dateTo) {
-    query = query.lte(
-      'created_at',
-      timeTo ? endOfDateTime(dateTo, timeTo) : endOfDay(dateTo),
-    );
-  }
-
-  if (hasComplaint) {
-    query = query.eq('has_complaint', true);
-  }
-
-  if (isRefutado) {
-    query = query.eq('is_refutado', true);
-  }
-
-  if (aggregator && AGGREGATORS[aggregator]) {
-    query = query.or(`aggregator.eq.${aggregator},file_path.like.orders/${aggregator}/%,file_path.like.orders/no_code/%`);
-  }
-
   const trimmedTakenBy = takenBy?.trim();
-  if (trimmedTakenBy) {
-    query = query.ilike('taken_by', `%${trimmedTakenBy}%`);
-  }
-
   const trimmedNotes = notes?.trim();
-  if (trimmedNotes) {
-    query = query.ilike('notes', `%${trimmedNotes}%`);
-  }
 
-  const { data, error } = await query;
+  const buildQuery = () => {
+    let query = supabase
+      .from('photos')
+      .select(columns || '*')
+      // Orden estable (created_at solo puede empatar) para que las páginas no
+      // se pisen ni se salten filas.
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
-  if (error) throw error;
-  return (data ?? []).filter((photo) =>
+    if (trimmedSearch) {
+      query = query.ilike('name', `%${trimmedSearch}%`);
+    }
+
+    if (dateFrom) {
+      query = query.gte(
+        'created_at',
+        timeFrom ? startOfDateTime(dateFrom, timeFrom) : startOfDay(dateFrom),
+      );
+    }
+
+    if (dateTo) {
+      query = query.lte(
+        'created_at',
+        timeTo ? endOfDateTime(dateTo, timeTo) : endOfDay(dateTo),
+      );
+    }
+
+    if (hasComplaint) {
+      query = query.eq('has_complaint', true);
+    }
+
+    if (isRefutado) {
+      query = query.eq('is_refutado', true);
+    }
+
+    if (aggregator && AGGREGATORS[aggregator]) {
+      query = query.or(`aggregator.eq.${aggregator},file_path.like.orders/${aggregator}/%,file_path.like.orders/no_code/%`);
+    }
+
+    if (trimmedTakenBy) {
+      query = query.ilike('taken_by', `%${trimmedTakenBy}%`);
+    }
+
+    if (trimmedNotes) {
+      query = query.ilike('notes', `%${trimmedNotes}%`);
+    }
+
+    return query;
+  };
+
+  const data = await fetchAllPages(buildQuery, { maxRows });
+
+  return data.filter((photo) =>
     photoMatchesFilters(photo, {
       kind,
       search,
@@ -200,7 +211,9 @@ export function sanitizePhotoSearchToken(token) {
     .replace(/^-|-$/g, '');
 }
 
-export async function fetchOrderPhotosMatchingNames(tokens, { dateFrom, dateTo } = {}) {
+// 2000 por consulta: los tokens suelen ser códigos específicos (pocos matches);
+// los tokens cortos de respaldo no desbordan la memoria ni el matcheo.
+export async function fetchOrderPhotosMatchingNames(tokens, { dateFrom, dateTo, maxRows = 2000 } = {}) {
   const clean = [...new Set(
     tokens
       .map((token) => sanitizePhotoSearchToken(token))
@@ -212,19 +225,19 @@ export async function fetchOrderPhotosMatchingNames(tokens, { dateFrom, dateTo }
   const photos = [];
   for (let index = 0; index < clean.length; index += 20) {
     const chunk = clean.slice(index, index + 20);
-    let query = supabase
-      .from('photos')
-      .select(PHOTO_COLUMNS)
-      .or(chunk.map((token) => `name.ilike.%${token}%`).join(','))
-      .order('created_at', { ascending: false })
-      .limit(1000);
+    const buildQuery = () => {
+      let query = supabase
+        .from('photos')
+        .select(PHOTO_COLUMNS)
+        .or(chunk.map((token) => `name.ilike.%${token}%`).join(','))
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
 
-    if (dateFrom) query = query.gte('created_at', startOfDay(dateFrom));
-    if (dateTo) query = query.lte('created_at', endOfDay(dateTo));
-
-    const { data, error } = await query;
-    if (error) throw error;
-    photos.push(...(data ?? []).filter(isOrderPhoto));
+      if (dateFrom) query = query.gte('created_at', startOfDay(dateFrom));
+      if (dateTo) query = query.lte('created_at', endOfDay(dateTo));
+      return query;
+    };
+    photos.push(...(await fetchAllPages(buildQuery, { maxRows })).filter(isOrderPhoto));
   }
 
   const byId = new Map();

@@ -49,6 +49,12 @@ function csvPct(value) {
   return value == null ? '' : Number(value).toFixed(2);
 }
 
+const AGGREGATOR_PREFIX = /^(RAPPITURBO|RAPPI|PEYA|MPD)/;
+
+function codePrefix(value) {
+  return AGGREGATOR_PREFIX.exec(String(value || ''))?.[1] || '';
+}
+
 /**
  * Builds the staff performance report: per-person photo/complaint stats and
  * an hourly distribution of orders (order photos) and complaints (history).
@@ -58,11 +64,43 @@ function csvPct(value) {
 export function buildStaffReport({ photos = [], historyItems = [], extraPhotos = [] } = {}) {
   const photoById = new Map();
   const photoByCompact = new Map();
+  const photoByDigits = new Map();
+  const photoByPrefixedDigits = new Map();
   for (const photo of [...photos, ...extraPhotos]) {
     if (photo?.id) photoById.set(photo.id, photo);
     const compact = compactCode(photo?.name);
     if (compact && !photoByCompact.has(compact)) photoByCompact.set(compact, photo);
+    const digits = compact.replace(/\D/g, '');
+    if (!digits) continue;
+    if (!photoByDigits.has(digits)) photoByDigits.set(digits, photo);
+    const prefix = codePrefix(compact);
+    // PEYA-1234 y RAPPI-1234 comparten dígitos: se indexan por prefijo propio
+    // para no cruzarlos en la búsqueda numérica.
+    if (prefix && !photoByPrefixedDigits.has(`${prefix}:${digits}`)) {
+      photoByPrefixedDigits.set(`${prefix}:${digits}`, photo);
+    }
   }
+  // Los nombres de foto traen prefijo (PEYA-1234) y el reclamo puede guardarlo
+  // sin prefijo (1234): si no coincide exacto, se compara solo lo numérico,
+  // respetando el agregador cuando ambos lados tienen prefijo.
+  const findPhotoByCode = (code) => {
+    if (!code) return null;
+    const compact = compactCode(code);
+    const exact = photoByCompact.get(compact);
+    if (exact) return exact;
+    const digits = compact.replace(/\D/g, '');
+    if (!digits) return null;
+    const prefix = codePrefix(compact);
+    if (prefix) {
+      const samePrefix = photoByPrefixedDigits.get(`${prefix}:${digits}`);
+      if (samePrefix) return samePrefix;
+    }
+    const found = photoByDigits.get(digits);
+    if (!found) return null;
+    const photoPrefix = codePrefix(found.name);
+    if (photoPrefix && prefix && photoPrefix !== prefix) return null;
+    return found;
+  };
 
   const people = new Map();
   function touchPerson(name) {
@@ -101,10 +139,9 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
   for (const item of historyItems) {
     let photo = null;
     if (item?.photoId && photoById.has(item.photoId)) photo = photoById.get(item.photoId);
-    if (!photo && item?.photoName) {
-      photo = photoByCompact.get(compactCode(item.photoName)) || null;
-    }
-    if (!photo && item?.compact) photo = photoByCompact.get(item.compact) || null;
+    if (!photo && item?.photoName) photo = findPhotoByCode(item.photoName);
+    if (!photo && item?.compact) photo = findPhotoByCode(item.compact);
+    if (!photo && item?.orderCode) photo = findPhotoByCode(item.orderCode);
 
     const row = touchPerson(photo?.taken_by);
     row.complaints += 1;

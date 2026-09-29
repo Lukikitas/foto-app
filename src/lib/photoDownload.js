@@ -18,6 +18,21 @@ const MIME_TO_EXT = {
 
 const photoBlobCache = new Map();
 
+// Caché acotada (LRU por orden de inserción): guardar todos los BLOBs del
+// período agotaba la memoria del navegador. Si se evicta uno, la descarga
+// vuelve a pedirlo a la red sin perder funcionalidad.
+const MAX_CACHED_BLOBS = 32;
+
+function rememberBlob(url, blob) {
+  photoBlobCache.delete(url);
+  photoBlobCache.set(url, blob);
+  while (photoBlobCache.size > MAX_CACHED_BLOBS) {
+    const oldest = photoBlobCache.keys().next().value;
+    photoBlobCache.delete(oldest);
+  }
+  return blob;
+}
+
 export function fileExtensionFromName(value = '') {
   const clean = String(value || '').split('?')[0].split('#')[0];
   const parts = clean.split('.');
@@ -106,8 +121,7 @@ export async function prefetchPhotoBlob(url) {
   if (photoBlobCache.has(url)) return photoBlobCache.get(url);
   try {
     const blob = await fetchPhotoBlob(url);
-    photoBlobCache.set(url, blob);
-    return blob;
+    return rememberBlob(url, blob);
   } catch {
     return null;
   }
@@ -183,7 +197,7 @@ export async function downloadPhoto(photo, usedNames = new Set(), filenameOverri
   try {
     const cached = photoBlobCache.get(url);
     const blob = cached || (await fetchPhotoBlob(url));
-    if (!cached) photoBlobCache.set(url, blob);
+    if (!cached) rememberBlob(url, blob);
     filename = ensureExtensionFromBlob(filename, blob);
     triggerBlobDownload(blob, filename);
   } catch {

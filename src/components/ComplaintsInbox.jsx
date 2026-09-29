@@ -19,6 +19,7 @@ import { EVIDENCE_IMAGE_OPTIONS } from '../lib/compressImage';
 import { compressImageInWorker } from '../lib/compressImageInWorker';
 import {
   attachHistoryToRows,
+  buildPhotoIndex,
   COMPLAINT_STATUS_LABELS,
   COMPLAINT_STATUSES,
   complaintDay,
@@ -101,6 +102,14 @@ const FILTERS = [
 ];
 
 const PORTAL_LINKS = [PARTNER_PORTALS.pedidosya, PARTNER_PORTALS.rappi];
+
+// Cuántas filas del historial se pintan por pantalla. Con lotes grandes, pintar
+// miles de tarjetas con fotos de golpe dejaba la pantalla en negro (se salía de
+// memoria); se renderiza en tandas con «Mostrar más».
+const HISTORY_PAGE_SIZE = 100;
+const HISTORY_PAGE_STEP = 200;
+// Prefetch acotado: solo las primeras filas visibles, no todo el período.
+const HISTORY_PREFETCH_LIMIT = 60;
 const HISTORY_AGGREGATORS = [{ id: 'all', label: 'Todos' }, ...AGGREGATOR_OPTIONS];
 const IMPORT_AGGREGATORS = [{ id: '', label: 'Por código' }, ...AGGREGATOR_OPTIONS];
 
@@ -192,12 +201,14 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE);
   const masterCheckboxRef = useRef(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setSelectedIds(new Set());
       setLastClickedIndex(null);
+      setHistoryLimit(HISTORY_PAGE_SIZE);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [inboxView, filter, historyPreset, historyAggregator, historySort]);
@@ -317,12 +328,14 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   );
 
   const historyBaseRows = useMemo(() => {
+    // Índice de fotos una sola vez: antes era un find por reclamo (O(n²)).
+    const photoIndex = buildPhotoIndex(photos);
     return listHistoryItems(historyStore, {
       aggregator: historyAggregator,
       search: historySearch,
       from: historyPeriod.from,
       to: historyPeriod.to,
-    }).map((item) => historyItemToRow(item, photos));
+    }).map((item) => historyItemToRow(item, photoIndex));
   }, [historyStore, historyAggregator, historySearch, photos, historyPeriod]);
 
   const historyRows = useMemo(
@@ -365,20 +378,31 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     }
   }, [historyRows, historySort]);
 
+  const requestedPhotoIdsRef = useRef(new Set());
+
   useEffect(() => {
     if (inboxView !== 'historial') return undefined;
-    const ids = listHistoryItems(historyStore, {
-      from: historyPeriod.from,
-      to: historyPeriod.to,
-    })
-      .map((item) => item.photoId)
-      .filter(Boolean);
+    const requested = requestedPhotoIdsRef.current;
+    const ids = [...new Set(
+      listHistoryItems(historyStore, {
+        from: historyPeriod.from,
+        to: historyPeriod.to,
+      })
+        .map((item) => item.photoId)
+        .filter((id) => id && !requested.has(id)),
+    )];
+    // Solo los ids nunca pedidos: re-pedir los mismos en cada cambio de
+    // historial (o los borrados, que nunca vuelven) disparaba bucles de consultas.
     if (ids.length === 0) return undefined;
 
     let cancelled = false;
     fetchPhotosByIds(ids)
       .then((data) => {
-        if (cancelled || !data.length) return;
+        // El marcado se hace al responder (no al montar): en StrictMode el
+        // efecto se monta-duplica y marcar antes cancelaría las dos corridas.
+        if (cancelled) return;
+        ids.forEach((id) => requested.add(id));
+        if (!data.length) return;
         setPhotos((current) => {
           const map = new Map(current.map((photo) => [photo.id, photo]));
           data.forEach((photo) => map.set(photo.id, photo));
@@ -392,12 +416,16 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   }, [inboxView, historyStore, historyPeriod.from, historyPeriod.to]);
 
   useEffect(() => {
-    historyBaseRows.forEach((row) => {
+    // Prefetch acotado: descargar los BLOBs de todo el período (miles de fotos)
+    // reventaba la memoria del renderer.
+    historyBaseRows.slice(0, HISTORY_PREFETCH_LIMIT).forEach((row) => {
       if (row.photo?.public_url) prefetchPhotoBlob(row.photo.public_url);
     });
   }, [historyBaseRows]);
 
   const activeRows = inboxView === 'historial' ? sortedHistoryRows : visibleRows;
+  // Solo se pintan las primeras filas; el resto se carga con «Mostrar más».
+  const displayedRows = activeRows.length > historyLimit ? activeRows.slice(0, historyLimit) : activeRows;
 
   const selectedRows = useMemo(() => {
     if (selectedIds.size === 0) return [];
@@ -1360,7 +1388,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
           )}
 
           <div className="complaints__list">
-            {activeRows.map((row, index) => {
+            {displayedRows.map((row, index) => {
               const rowId = row.history?.id || row.complaint.id;
               return (
                 <ComplaintCard
@@ -1387,6 +1415,15 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
               );
             })}
           </div>
+          {activeRows.length > displayedRows.length && (
+            <button
+              type="button"
+              className="btn btn--ghost complaints__show-more"
+              onClick={() => setHistoryLimit((limit) => limit + HISTORY_PAGE_STEP)}
+            >
+              Mostrar más · quedan {activeRows.length - displayedRows.length}
+            </button>
+          )}
         </div>
       )}
 
@@ -1493,7 +1530,7 @@ function ComplaintCard({
             onClick={() => onOpenPhoto(photo)}
             aria-label={`Ver foto de ${row.complaint.orderCode}`}
           >
-            <img src={photo.public_url} alt="" />
+            <img src={photo.public_url} alt="" loading="lazy" decoding="async" />
           </button>
         ) : (
           <div className="complaint-card__thumb complaint-card__thumb--empty" aria-hidden="true">
@@ -1549,7 +1586,7 @@ function ComplaintCard({
                 onClick={() => onPick(row.complaint.id, candidate.id)}
                 disabled={disabled}
               >
-                <img src={candidate.public_url} alt="" />
+                <img src={candidate.public_url} alt="" loading="lazy" decoding="async" />
                 <span>{candidate.name}</span>
                 <small>{formatDateTime(candidate.created_at)}</small>
               </button>

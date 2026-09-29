@@ -30,6 +30,17 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
     blocked.current = busy || Boolean(editing);
   }, [busy, editing]);
 
+  // Las comparaciones recorren todo el historial por reclamo: se memoizan y se
+  // saltean con el panel oculto para no congelar la pantalla con lotes grandes.
+  const { summary, validation } = useMemo(() => {
+    if (!active || !draft) return { summary: undefined, validation: '' };
+    try {
+      return { summary: draftComparison(history, draft.data, rows), validation: '' };
+    } catch (e) {
+      return { summary: undefined, validation: e.message };
+    }
+  }, [active, draft, history, rows]);
+
   const refresh = useCallback(async (nextDraft, forceMatch = false) => {
     const sequence = ++requestId.current;
     const incoming = nextDraft === undefined ? await loadDraft() : nextDraft;
@@ -39,10 +50,19 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
     if (sequence !== requestId.current) return;
     if (revision !== matchedRevision.current) setSelected(new Set());
     matchedRevision.current = revision;
-    setDraft(incoming);
+    // Mismo id y revisión = mismo contenido: conservar la referencia evita
+    // re-renderizar la tabla completa cada 5 segundos.
+    setDraft((prev) => (
+      prev && incoming && prev.id === incoming.id && prev.revision === incoming.revision
+        ? prev
+        : incoming
+    ));
     setHistory(store);
-    if (!incoming) setRows([]);
-    else if (matched) setRows(matched.rows);
+    setRows((prev) => {
+      if (!incoming) return prev.length === 0 ? prev : [];
+      if (matched) return matched.rows;
+      return prev;
+    });
   }, []);
 
   useEffect(() => {
@@ -118,17 +138,11 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
     });
   }
 
-  let summary;
-  let validation = '';
-  try {
-    if (draft) summary = draftComparison(history, draft.data, rows);
-  } catch (e) {
-    validation = e.message;
-  }
   const disabled = busy || !connected;
 
-  // Filtered rows calculation
-  const complaintsList = draft?.data?.complaints || [];
+  // Referencia estable: draft?.data?.complaints crea un array nuevo en cada
+  // render y invalidaba los useMemo dependientes.
+  const complaintsList = useMemo(() => draft?.data?.complaints || [], [draft]);
 
   const filteredIndices = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

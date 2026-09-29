@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   attachPhotosToHistory,
   attachHistoryToRows,
+  buildPhotoIndex,
   clearHistoryItems,
   complaintHistoryId,
   COMPLAINT_STATUSES,
@@ -47,6 +48,30 @@ test('history ids collapse the same order on the same day', () => {
     first,
     complaintHistoryId(complaint({ orderAtIso: '2026-09-18T17:51:00.000-03:00' })),
   );
+});
+
+test('parseHistory keeps already-normalized items equal to the full path', () => {
+  const imported = upsertHistoryItems(emptyHistory(), [complaint()]);
+  const fast = parseHistory(imported.store);
+  const slow = parseHistory(JSON.parse(JSON.stringify(imported.store)));
+  assert.deepEqual(Object.values(fast.items), Object.values(slow.items));
+  assert.equal(fast.updatedAt, slow.updatedAt);
+  // La ruta rápida clona: mutar el resultado no toca el original.
+  const original = Object.values(imported.store.items)[0];
+  Object.values(fast.items)[0].amount = 1;
+  assert.notEqual(original.amount, 1);
+});
+
+test('historyItemToRow accepts a prebuilt photo index', () => {
+  const photos = [
+    { id: 'p1', name: 'PEYA-2286878556', public_url: 'https://example.com/1.jpg', created_at: '2026-09-17T17:50:00-03:00' },
+  ];
+  const index = buildPhotoIndex(photos);
+  const view = historyItemToRow(
+    { ...complaint(), id: 'x', photoId: 'p1', photoName: 'PEYA-2286878556' },
+    index,
+  );
+  assert.equal(view.photo.public_url, 'https://example.com/1.jpg');
 });
 
 test('re-uploading a sheet updates the same row instead of copying it', () => {

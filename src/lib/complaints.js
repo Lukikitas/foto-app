@@ -98,6 +98,10 @@ export async function fetchPhotosForComplaints(complaints) {
     dateFrom: toDateInputValue(recentFrom),
     dateTo: toDateInputValue(new Date()),
     columns: PHOTO_COLUMNS,
+    // El volcado es un respaldo del cruce por nombre (el `kind` se filtra en
+    // cliente): se pagina pero se acota para que el matcheo siga siendo
+    // interactivo. Antes el servidor lo cortaba en 1000 filas.
+    maxRows: 3000,
   });
   const byId = new Map();
   [...recent, ...byName].forEach((photo) => byId.set(photo.id, photo));

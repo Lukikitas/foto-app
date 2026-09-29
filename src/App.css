@@ -6369,6 +6369,49 @@ button.metrics-agg:focus-visible {
   .complaints__load-methods .btn { white-space: normal; }
 }
 
+/* Botón «Mostrar más» del historial paginado */
+.complaints__show-more {
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+/* Pantalla de recuperación del ErrorBoundary (fuera del árbol de App) */
+.app-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 1.5rem;
+  background: #161616;
+  color: #f1f1f1;
+}
+.app-error__box {
+  max-width: 34rem;
+  text-align: center;
+}
+.app-error__box h1 {
+  font-size: 1.4rem;
+  margin-bottom: 0.6rem;
+  color: #f1f1f1;
+}
+.app-error__box p {
+  margin-bottom: 0.6rem;
+  color: #b3b7be;
+}
+.app-error__detail {
+  font-size: 0.85rem;
+  word-break: break-word;
+  opacity: 0.75;
+}
+.app-error__actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
 /* Version 1.5: touch gestures, reviewed imports and settings. */
 .lightbox__stage { padding: 0; touch-action: none; overscroll-behavior: contain; }
 .lightbox__zoom { width: 100%; height: 100%; transition: none; pointer-events: none; }

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { listHistoryItems } from '../lib/complaintHistory';
 import { downloadTextFile } from '../lib/complaints';
 import { formatMoney, formatNumber, formatPct } from '../lib/metrics';
-import { fetchPhotos, fetchPhotosByIds } from '../lib/photos';
+import { fetchOrderPhotosMatchingNames, fetchPhotos, fetchPhotosByIds } from '../lib/photos';
+import { compactCode } from '../lib/complaintMatch';
 import { buildStaffCsv, buildStaffReport } from '../lib/staffPerformance';
 
 const STAFF_COLUMNS = 'id,name,file_path,created_at,taken_by,has_complaint,is_refutado,aggregator';
@@ -77,6 +78,9 @@ export default function MetricsStaff({ history, range, aggregator = 'all' }) {
         const periodPhotos = await fetchPhotos(filters);
         if (!cancelled) {
           setPhotos(periodPhotos);
+          // Las fotos extra del período anterior no corresponden al nuevo:
+          // se limpian para que el efecto de faltantes traiga las del nuevo.
+          setExtraPhotos([]);
           setLoadedKey(photosKey);
         }
       } catch (loadError) {
@@ -92,20 +96,60 @@ export default function MetricsStaff({ history, range, aggregator = 'all' }) {
     };
   }, [photosKey, range.from, range.to, aggregator]);
 
-  // Fotos de fuera del período que sirven para atribuir quejas: solo se piden
-  // cuando cambia el conjunto real de ids faltantes.
-  const missingIds = useMemo(() => {
-    const known = new Set((photos || []).map((photo) => photo.id));
-    return [...new Set(items.map((item) => item.photoId).filter((id) => id && !known.has(id)))];
-  }, [photos, items]);
-  const missingKey = missingIds.join(',');
+  // Fotos de fuera del período que sirven para atribuir quejas: ids referenciados
+  // que no están en el período + nombres de foto concretos que no se encontraron.
+  // (Con las fotos del período ya completas por paginación, una queja sin foto
+  // vinculada no necesita búsqueda: no tiene foto que atribuir.)
+  const missing = useMemo(() => {
+    const knownIds = new Set(
+      [...(photos || []), ...extraPhotos].map((photo) => photo.id).filter(Boolean),
+    );
+    const knownCompacts = new Set(
+      [...(photos || []), ...extraPhotos]
+        .map((photo) => compactCode(photo?.name))
+        .filter(Boolean),
+    );
+    const ids = new Set();
+    const tokens = new Set();
+    for (const item of items) {
+      const photoIdKnown = Boolean(item.photoId) && knownIds.has(item.photoId);
+      if (item.photoId && !photoIdKnown) ids.add(item.photoId);
+      const nameCode = item.photoName ? compactCode(item.photoName) : '';
+      if (nameCode && !knownCompacts.has(nameCode)) {
+        // Solo con el nombre real de la foto: la búsqueda es precisa.
+        tokens.add(nameCode);
+        const digits = nameCode.replace(/\D/g, '');
+        if (digits.length >= 4) tokens.add(digits);
+      } else if (item.photoId && !photoIdKnown) {
+        // El id ya no existe (foto borrada): búsqueda de respaldo por código.
+        const fallback = compactCode(item.orderCode);
+        if (fallback.length >= 4) tokens.add(fallback);
+        const digits = fallback.replace(/\D/g, '');
+        if (digits.length >= 4) tokens.add(digits);
+      }
+    }
+    return { ids: [...ids], tokens: [...tokens] };
+  }, [photos, extraPhotos, items]);
+
+  const missingKey = `${missing.ids.join(',')}|${missing.tokens.join(',')}`;
 
   useEffect(() => {
-    if (!missingKey) return undefined;
+    if (missingKey === '|') return undefined;
     let cancelled = false;
-    fetchPhotosByIds(missingKey.split(','))
-      .then((extras) => {
-        if (!cancelled) setExtraPhotos(extras);
+    const [idsPart, tokensPart] = missingKey.split('|');
+    const jobs = [];
+    if (idsPart) jobs.push(fetchPhotosByIds(idsPart.split(',')));
+    if (tokensPart) jobs.push(fetchOrderPhotosMatchingNames(tokensPart.split(',')));
+    Promise.all(jobs)
+      .then((results) => {
+        if (cancelled) return;
+        const found = results.flat();
+        if (found.length === 0) return;
+        setExtraPhotos((prev) => {
+          const byId = new Map(prev.map((photo) => [photo.id, photo]));
+          found.forEach((photo) => byId.set(photo.id, photo));
+          return [...byId.values()];
+        });
       })
       .catch(() => {
         // Sin fotos extra la queja queda como "Sin asignar"; no bloquea la vista.

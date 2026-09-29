@@ -150,12 +150,45 @@ export function normalizeHistoryItem(raw, fallback = {}) {
   };
 }
 
+const NORMALIZED_KEYS = [
+  'id', 'orderCode', 'compact', 'aggregator', 'orderAtIso', 'timeOfDay', 'dateAssumed',
+  'day', 'reason', 'comment', 'combo', 'amount', 'fields', 'status', 'photoId',
+  'photoName', 'photoUrl', 'sourceId', 'manualEdit', 'importedAt', 'updatedAt',
+];
+
+function alreadyNormalized(item) {
+  // Si un ítem no tiene exactamente la forma que produce normalizeHistoryItem,
+  // se toma la ruta lenta y se re-normaliza (nunca al revés).
+  if (!item || typeof item !== 'object') return false;
+  for (const key of NORMALIZED_KEYS) {
+    if (!(key in item)) return false;
+  }
+  return typeof item.id === 'string' && item.id
+    && typeof item.orderCode === 'string' && item.orderCode
+    && typeof item.compact === 'string' && item.compact
+    && typeof item.status === 'string' && Boolean(COMPLAINT_STATUSES[item.status])
+    && typeof item.manualEdit === 'boolean'
+    && typeof item.importedAt === 'string'
+    && typeof item.updatedAt === 'string'
+    && Boolean(item.fields) && typeof item.fields === 'object' && !Array.isArray(item.fields)
+    && typeof item.amount === 'number';
+}
+
 export function parseHistory(raw) {
   const store = emptyHistory();
   if (!raw || typeof raw !== 'object') return store;
   store.updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : null;
   const source = raw.items && typeof raw.items === 'object' ? raw.items : {};
-  for (const value of Object.values(source)) {
+  const values = Object.values(source);
+  // Ruta rápida: si todo ya está normalizado (el caso habitual, porque cada
+  // mutación pasa por parseHistory), alcanza con clonar los ítems. Re-normalizar
+  // el store completo en cada llamada multiplicaba el costo de guardar un
+  // lote grande por la cantidad de reclamos.
+  if (values.every(alreadyNormalized)) {
+    for (const item of values) store.items[item.id] = { ...item };
+    return store;
+  }
+  for (const value of values) {
     const item = normalizeHistoryItem(value);
     if (item) store.items[item.id] = item;
   }
@@ -592,19 +625,39 @@ export function findHistoryForPhoto(store, photo) {
   );
 }
 
+export function buildPhotoIndex(photos = []) {
+  const byId = new Map();
+  const byCompact = new Map();
+  for (const photo of photos) {
+    if (photo?.id && !byId.has(photo.id)) byId.set(photo.id, photo);
+    const compact = compactCode(photo?.name);
+    if (compact && !byCompact.has(compact)) byCompact.set(compact, photo);
+  }
+  return { byId, byCompact };
+}
+
 export function attachHistoryToRows(rows, store) {
   const items = parseHistory(store).items;
+  // Un índice por sourceId evita recorrer todo el historial por fila
+  // (antes: O(filas × historial) con Object.values().find en cada una).
+  const bySourceId = new Map();
+  for (const item of Object.values(items)) {
+    if (item.sourceId && !bySourceId.has(item.sourceId)) bySourceId.set(item.sourceId, item);
+  }
   return rows.map((row) => ({
     ...row,
     history: items[complaintHistoryId(row.complaint)] ||
-      Object.values(items).find((item) => item.sourceId === complaintHistoryId(row.complaint)) || null,
+      bySourceId.get(complaintHistoryId(row.complaint)) || null,
   }));
 }
 
 export function historyItemToRow(item, photos = []) {
+  // Acepta la lista de fotos o un índice prearmado (buildPhotoIndex) para no
+  // recorrer todas las fotos por reclamo.
+  const index = Array.isArray(photos) ? buildPhotoIndex(photos) : photos;
   const fromGallery =
-    photos.find((photo) => item.photoId && photo.id === item.photoId) ||
-    photos.find((photo) => compactCode(photo.name) === item.compact) ||
+    (item.photoId && index.byId.get(item.photoId)) ||
+    (item.compact && index.byCompact.get(item.compact)) ||
     null;
 
   const photo =

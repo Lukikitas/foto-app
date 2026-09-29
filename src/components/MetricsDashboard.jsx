@@ -233,9 +233,8 @@ export default function MetricsDashboard({
             <button
               key={id}
               type="button"
-              className={`metrics-agg metrics-agg--hero${statusBad ? ' metrics-agg--bad' : ''}${
-                !has ? ' metrics-agg--empty' : ''
-              }${id === 'pedidosya' && has ? ' metrics-agg--wide' : ''}${aggregator === id ? ' is-selected' : ''}`}
+              className={`metrics-agg metrics-agg--hero${statusBad ? ' metrics-agg--bad' : ''}${!has ? ' metrics-agg--empty' : ''
+                }${id === 'pedidosya' && has ? ' metrics-agg--wide' : ''}${aggregator === id ? ' is-selected' : ''}`}
               onClick={() => onAggregator(aggregator === id ? 'all' : id)}
             >
               <header>
