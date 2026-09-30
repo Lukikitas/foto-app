@@ -2,11 +2,11 @@ import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
 export const RELEASE_GROUPS = [
   {
-    title: 'Correcciones',
+    title: 'Novedades',
     notes: [
-      'Métricas → Desempeño: las fotos del período ya no se cortan en 1000; ahora se leen por páginas, así pedidos, quejas y atribución por persona salen completos en rangos largos.',
-      'Historial de reclamos: al guardar un lote grande la pantalla ya no se queda en negra; la lista se muestra por tandas con «Mostrar más», las miniaturas se cargan bajo demanda y se agregó una pantalla de recuperación ante errores.',
-      'Se evitó que las comparaciones de la revisión de reclamos y los sondeos cada 5 segundos recargaran todo el historial sin cambios.',
+      'Cámara de pedidos: cada paso tiene su identidad visual (chip 🎫 Ticket / 🛍 Bolsa, color propio y silueta dentro del marco) y la palabra «Pedido» dejó de usarse como nombre de la segunda foto.',
+      'Tira del último par: se ven las miniaturas de ticket y bolsa, con «✓ Guardado» cuando se encola y un botón «Repetir» mientras el par está pendiente, sin frenar el flujo hacia el siguiente par.',
+      'Menos fotos movidas: se capturan tres frames y se conserva el más nítido, el enfoque automático del hardware tiene más tiempo y las fotos oscuras ofrecen prender el flash.',
     ],
   },
 ];

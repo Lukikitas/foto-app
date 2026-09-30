@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
 import { getCameraFlash, getTakenByHistory, saveCameraFlash, saveLastTakenBy } from '../lib/storage';
 import { subscribe } from '../lib/uploadQueue';
-import { inspectCaptureCanvas, isSameCapturedScene } from '../lib/imageQuality';
+import { inspectCaptureCanvas, isSameCapturedScene, pickSharpest } from '../lib/imageQuality';
 import PhotographerPicker from './PhotographerPicker';
 import useCameraControls from './useCameraControls';
 
@@ -10,6 +10,17 @@ const STEPS = {
   ticket: 'ticket',
   evidence: 'evidence',
 };
+
+// Anti-blur burst: a single frozen frame often lands while the phone is still
+// moving after the shutter press, so we grab a few and keep the sharpest one.
+const BURST_FRAMES = 3;
+const BURST_INTERVAL_MS = 75;
+// A pair waits this long before being queued so the strip can offer "Repetir".
+const PENDING_PAIR_MS = 5000;
+// Give slow hardware autofocus more time before falling back to the frozen frame.
+const TAKE_PHOTO_TIMEOUT_MS = 1800;
+
+const wait = (ms) => new Promise((resolve) => { window.setTimeout(resolve, ms); });
 
 function drawFrame(video, canvas, maxWidth = 2560, zoom = 1) {
   const sourceWidth = video.videoWidth;
@@ -64,12 +75,29 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
     throw new Error('La cámara todavía no está lista.');
   }
 
-  // Freeze the video frame at the shutter as a fast fallback; supported phones
-  // can supply a full still image with their own camera autofocus and processing.
-  const fallback = document.createElement('canvas');
-  drawFrame(video, fallback, 2560, softwareZoom ? zoom : 1);
-
-  const quality = inspectCaptureCanvas(fallback, { ticket });
+  // Take a tiny burst of frozen frames and keep the sharpest candidate; supported
+  // phones can still supply a full still with their own autofocus on top of it.
+  let best = null;
+  for (let i = 0; i < BURST_FRAMES; i += 1) {
+    const canvas = document.createElement('canvas');
+    drawFrame(video, canvas, 2560, softwareZoom ? zoom : 1);
+    const candidate = { canvas, quality: inspectCaptureCanvas(canvas, { ticket }) };
+    if (!best) {
+      best = candidate;
+    } else {
+      const winner = pickSharpest([best, candidate]);
+      const loser = winner === best ? candidate : best;
+      loser.canvas.width = 0;
+      loser.canvas.height = 0;
+      best = winner;
+    }
+    if (i < BURST_FRAMES - 1) {
+      await wait(BURST_INTERVAL_MS);
+      if (!video.videoWidth || !video.videoHeight) break;
+    }
+  }
+  const fallback = best.canvas;
+  const quality = best.quality;
   let upgrade = Promise.resolve(null);
   if (!softwareZoom && typeof ImageCapture === 'function' && track?.readyState === 'live') {
     upgrade = (async () => {
@@ -78,7 +106,7 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
       const blob = await Promise.race([
         capture.takePhoto(),
         new Promise((_, reject) =>
-          window.setTimeout(() => reject(new Error('Timeout de foto')), 1200)
+          window.setTimeout(() => reject(new Error('Timeout de foto')), TAKE_PHOTO_TIMEOUT_MS)
         ),
       ]);
       if (blob?.size && blob.type?.startsWith('image/')) {
@@ -134,6 +162,13 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   const { streamRef, status, error, setError, zoom, minZoom, maxZoom, hardwareZoom, zoomBusy,
     flashSupported, setFlashSupported } = camera;
   const [qualityNotice, setQualityNotice] = useState(null);
+  // Thumbnail strip with the last pair taken; `phase` is 'draft' (can repeat)
+  // until the pair is queued ('saved'). Object URLs are revoked when replaced.
+  const [strip, setStrip] = useState(null);
+  const [toast, setToast] = useState('');
+  const stripUrlsRef = useRef({ ticket: '', evidence: '' });
+  const toastTimerRef = useRef(null);
+  const flushRef = useRef(() => {});
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [whoOpen, setWhoOpen] = useState(() => !takenBy?.trim());
 
@@ -141,10 +176,36 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     flashOnRef.current = flashOn;
   }, [flashOn]);
 
+  function adoptStrip(next) {
+    const previous = stripUrlsRef.current;
+    const ticketUrl = next.ticketUrl || '';
+    const evidenceUrl = next.evidenceUrl || '';
+    if (previous.ticket && previous.ticket !== ticketUrl) URL.revokeObjectURL(previous.ticket);
+    if (previous.evidence && previous.evidence !== evidenceUrl) URL.revokeObjectURL(previous.evidence);
+    stripUrlsRef.current = { ticket: ticketUrl, evidenceUrl };
+    setStrip(ticketUrl
+      ? { ticketUrl, evidenceUrl, pair: next.pair || null, phase: next.phase || 'draft' }
+      : null);
+  }
+
+  function showToast(message) {
+    setToast(message);
+    window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(''), 1000);
+  }
+
   useEffect(() => {
     const unsubscribe = subscribe((items) => setPendingTasks(items.filter(item =>
       item.status === 'pending' || item.status === 'analyzing' || item.status === 'uploading').length));
-    return () => { unsubscribe(); flushPendingPair(false); ticketFileRef.current = null; };
+    return () => {
+      unsubscribe();
+      flushPendingPair(false);
+      ticketFileRef.current = null;
+      window.clearTimeout(toastTimerRef.current);
+      const urls = stripUrlsRef.current;
+      if (urls.ticket) URL.revokeObjectURL(urls.ticket);
+      if (urls.evidence) URL.revokeObjectURL(urls.evidence);
+    };
   }, []);
 
   function resetToTicket() {
@@ -154,6 +215,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     void camera.resetForStep(true);
     setTakingPhoto(false);
     setQualityNotice(null);
+    adoptStrip({});
   }
 
   function handleCancel() {
@@ -202,13 +264,18 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     void camera.requestZoom(zoom + direction * 0.25);
   }
 
-  function commitPair({ ticketFile, ticketUpgrade, evidenceFile, evidenceUpgrade }) {
+  function commitPair(pair) {
+    const { ticketFile, ticketUpgrade, evidenceFile, evidenceUpgrade } = pair;
     void Promise.all([ticketUpgrade || null, evidenceUpgrade || null])
       .then(([betterTicket, betterEvidence]) => onCapturePair({
         ticketFile: betterTicket || ticketFile,
         evidenceFile: betterEvidence || evidenceFile,
       }))
-      .then(() => setQueuedPairs((count) => count + 1))
+      .then(() => {
+        setQueuedPairs((count) => count + 1);
+        // Only mark the strip as saved when it still shows this very pair.
+        setStrip((current) => (current?.pair === pair ? { ...current, phase: 'saved' } : current));
+      })
       .catch((captureError) => setError(captureError.message || 'No se pudo guardar el par. Revisá la cola.'));
   }
 
@@ -220,6 +287,17 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     pending.commit();
     if (updateNotice) setQualityNotice(null);
   }
+  flushRef.current = flushPendingPair;
+
+  useEffect(() => {
+    // Queue the pending pair as soon as the app goes to the background so it is
+    // persisted before the page gets frozen or killed by the OS.
+    const flushInBackground = () => {
+      if (document.visibilityState === 'hidden') flushRef.current();
+    };
+    document.addEventListener('visibilitychange', flushInBackground);
+    return () => document.removeEventListener('visibilitychange', flushInBackground);
+  }, []);
 
   function repeatLastEvidence() {
     const pending = pendingPairRef.current;
@@ -228,6 +306,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     pendingPairRef.current = null;
     ticketFileRef.current = pending.pair.ticketFile;
     ticketUpgradeRef.current = pending.pair.ticketUpgrade;
+    adoptStrip({ ticketUrl: stripUrlsRef.current.ticket });
     setStep(STEPS.evidence);
     void camera.resetForStep(false);
     setQualityNotice(null);
@@ -264,6 +343,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         );
         ticketFileRef.current = shot.file;
         ticketUpgradeRef.current = shot.upgrade;
+        adoptStrip({ ticketUrl: URL.createObjectURL(shot.file) });
+        showToast('✓ Ticket — ahora la bolsa');
         if (navigator.vibrate) navigator.vibrate(35);
         setStep(STEPS.evidence);
         setQualityNotice(shot.quality.issue ? { issue: shot.quality.issue, step: STEPS.ticket } : null);
@@ -289,17 +370,21 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       }
 
       const pair = { ticketFile, ticketUpgrade, evidenceFile: shot.file, evidenceUpgrade: shot.upgrade };
-      if (shot.quality.issue) {
-        const pending = { pair, timer: null, commit: () => commitPair(pair) };
-        pending.timer = window.setTimeout(() => {
-          if (pendingPairRef.current === pending) flushPendingPair();
-        }, 5000);
-        pendingPairRef.current = pending;
-        setQualityNotice({ issue: shot.quality.issue, step: STEPS.evidence });
-      } else {
-        commitPair(pair);
-        setQualityNotice(null);
-      }
+      // Every pair stays pending for a few seconds so the strip can offer
+      // "Repetir"; it is queued in the background on the next shutter press,
+      // on cancel/unmount or as soon as the app goes to the background.
+      const pending = { pair, timer: null, commit: () => commitPair(pair) };
+      pending.timer = window.setTimeout(() => {
+        if (pendingPairRef.current === pending) flushPendingPair();
+      }, PENDING_PAIR_MS);
+      pendingPairRef.current = pending;
+      setQualityNotice(shot.quality.issue ? { issue: shot.quality.issue, step: STEPS.evidence } : null);
+      adoptStrip({
+        ticketUrl: stripUrlsRef.current.ticket || URL.createObjectURL(ticketFile),
+        evidenceUrl: URL.createObjectURL(shot.file),
+        pair,
+      });
+      showToast('Par listo ✓');
       if (navigator.vibrate) navigator.vibrate([35, 50, 45]);
       setError(null);
       setStep(STEPS.ticket);
@@ -316,7 +401,9 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
 
   const isTicketStep = step === STEPS.ticket;
   const photographerReady = Boolean(takenBy?.trim());
-  const stepLabel = isTicketStep ? '1 de 2 · Ticket' : '2 de 2 · Pedido';
+  const stepInfo = isTicketStep
+    ? { icon: '🎫', label: '1 de 2 · TICKET' }
+    : { icon: '🛍️', label: '2 de 2 · BOLSA' };
   const guideText = isTicketStep
     ? 'CÓDIGO: dentro del recuadro, enfocado y con buena luz'
     : 'Bolsa, contenido y ticket a la vista';
@@ -324,7 +411,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     ? 'Tomando foto…'
     : isTicketStep
       ? 'Sacar foto del ticket'
-      : 'Sacar foto del pedido';
+      : 'Sacar foto de la bolsa';
   const canCapture = status === 'ready' && !takingPhoto && !zoomBusy && photographerReady;
   const qualityMessage = {
     dark: 'La foto salió oscura.',
@@ -333,7 +420,11 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   }[qualityNotice?.issue];
 
   return (
-    <section className={`order-camera${whoOpen ? ' order-camera--who-open' : ''}`} aria-label="Cámara rápida de pedidos">
+    <section
+      className={`order-camera${whoOpen ? ' order-camera--who-open' : ''}`}
+      data-step={step}
+      aria-label="Cámara rápida de pedidos"
+    >
       <div className="order-camera__viewport" {...(takingPhoto ? {} : camera.gestures)}>
         <div className="order-camera__frame" style={{ aspectRatio: camera.imageRatio, width: `min(100vw, calc(100dvh * ${camera.imageRatio}))` }}>
         <video
@@ -348,11 +439,53 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           className={`order-camera__guide order-camera__guide--${step}`}
           aria-hidden="true"
         >
+          {isTicketStep ? (
+            <svg className="order-camera__guide-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+              <path d="M14 5h20v38l-3.3-2.5-3.4 2.5-3.3-2.5-3.3 2.5-3.4-2.5L14 43V5z" />
+              <path d="M18 15h12M18 21h12M18 27h8" />
+            </svg>
+          ) : (
+            <svg className="order-camera__guide-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+              <path d="M17 15V11a7 7 0 0 1 14 0v4" />
+              <path d="M13 15h22l2 28H11l2-28z" />
+            </svg>
+          )}
           {isTicketStep && <span className="order-camera__guide-focus" />}
           <span>{guideText}</span>
         </div>
         </div>
       </div>
+
+      {photographerReady && !whoOpen && strip?.ticketUrl && (
+        <div className="order-camera__strip">
+          <figure className="order-camera__thumb">
+            <img className="order-camera__thumb-box" src={strip.ticketUrl} alt="" />
+            <figcaption>Ticket</figcaption>
+          </figure>
+          <figure className="order-camera__thumb">
+            {strip.evidenceUrl ? (
+              <img className="order-camera__thumb-box" src={strip.evidenceUrl} alt="" />
+            ) : (
+              <span className="order-camera__thumb-box order-camera__thumb-box--empty" aria-hidden="true" />
+            )}
+            <figcaption>Bolsa</figcaption>
+          </figure>
+          {strip.phase === 'draft' && strip.evidenceUrl && (
+            <button
+              type="button"
+              className="order-camera__strip-repeat"
+              disabled={takingPhoto}
+              onClick={repeatLastEvidence}
+            >
+              Repetir
+            </button>
+          )}
+          {strip.phase === 'saved' && (
+            <span className="order-camera__strip-saved">✓ Guardado</span>
+          )}
+        </div>
+      )}
+      {toast && <div className="order-camera__toast" role="status">{toast}</div>}
 
       <header className="order-camera__top">
         <button
@@ -364,14 +497,20 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           ✕
         </button>
         <p
-          className={`order-camera__status order-camera__status--${status}`}
+          className={`order-camera__status order-camera__status--${status}${status === 'ready' && photographerReady ? ' order-camera__status--step' : ''}`}
           role="status"
           aria-live="polite"
         >
           {status === 'starting' && 'Preparando cámara…'}
           {status === 'error' && 'No se pudo abrir la cámara.'}
           {status === 'ready' && !photographerReady && 'Poné tu nombre'}
-          {status === 'ready' && photographerReady && stepLabel}
+          {status === 'ready' && photographerReady && (
+            <>
+              <span aria-hidden="true">{stepInfo.icon}</span>
+              {' '}
+              {stepInfo.label}
+            </>
+          )}
         </p>
       </header>
 
@@ -420,6 +559,9 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           )}
           {qualityNotice.step === STEPS.ticket && step === STEPS.evidence && (
             <button type="button" onClick={resetToTicket}>Repetir última foto</button>
+          )}
+          {qualityNotice.issue === 'dark' && !flashOn && flashSupported && (
+            <button type="button" onClick={handleFlashToggle}>Prender flash</button>
           )}
         </div>
       )}

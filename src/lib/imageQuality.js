@@ -46,6 +46,28 @@ export function inspectCaptureCanvas(source, { ticket = false } = {}) {
   return scoreImageQuality(context.getImageData(0, 0, sample.width, sample.height), { ticket });
 }
 
+// Pick the best burst candidate: frames without any warning win first, then the
+// sharpest one; ties keep the earliest frame (closest to the shutter press).
+export function pickSharpest(candidates) {
+  if (!candidates?.length) return null;
+  let best = null;
+  let bestProblem = true;
+  let bestSharpness = -Infinity;
+  for (const candidate of candidates) {
+    const problem = Boolean(candidate.quality?.issue);
+    const sharpness = candidate.quality?.sharpness || 0;
+    const better = best === null
+      || (bestProblem && !problem)
+      || (bestProblem === problem && sharpness > bestSharpness);
+    if (better) {
+      best = candidate;
+      bestProblem = problem;
+      bestSharpness = sharpness;
+    }
+  }
+  return best;
+}
+
 export function isSameCapturedScene(first, second) {
   const canvas = document.createElement('canvas');
   canvas.width = 48;

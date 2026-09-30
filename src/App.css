@@ -7433,3 +7433,157 @@ button.metrics-agg:focus-visible {
   }
 }
 
+
+/* ── Order camera v1.6.2: step identity, pair strip and toasts ─────────── */
+.order-camera {
+  --step-accent: #ff8a3d;
+}
+
+.order-camera[data-step='evidence'] {
+  --step-accent: #35d6b4;
+}
+
+.order-camera__guide {
+  border-color: var(--step-accent);
+}
+
+.order-camera__guide-icon {
+  position: absolute;
+  top: 6%;
+  right: 0;
+  left: 0;
+  width: 34%;
+  height: auto;
+  margin: 0 auto;
+  color: var(--step-accent);
+  opacity: 0.5;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.order-camera__status--step {
+  border-color: var(--step-accent);
+  background: var(--step-accent);
+  color: #141414;
+}
+
+.order-camera__shutter-ring {
+  border-color: var(--step-accent);
+}
+
+/* Last pair strip: passive, top-right below the header row. */
+.order-camera__strip {
+  position: absolute;
+  top: calc(max(0.55rem, env(safe-area-inset-top)) + 3.7rem);
+  right: 0.65rem;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border-radius: 0.7rem;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.order-camera__thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0;
+}
+
+.order-camera__thumb-box {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.45);
+  object-fit: cover;
+}
+
+.order-camera__thumb-box--empty {
+  border-style: dashed;
+  opacity: 0.7;
+}
+
+.order-camera__thumb figcaption {
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.order-camera__strip-repeat {
+  align-self: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+.order-camera__strip-repeat:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.order-camera__strip-saved {
+  align-self: center;
+  color: #8ef0c5;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Ephemeral transition toast: never intercepts touches. */
+.order-camera__toast {
+  position: absolute;
+  top: calc(max(0.55rem, env(safe-area-inset-top)) + 6.6rem);
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  max-width: calc(100% - 3rem);
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Keep the shooter prompt clear of the strip. */
+.order-camera__who-toggle {
+  width: fit-content;
+  max-width: calc(100% - 9.5rem);
+  text-align: left;
+}
+
+@media (max-width: 380px) {
+  .order-camera__thumb-box {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .order-camera__who-toggle {
+    max-width: calc(100% - 8.5rem);
+  }
+}
+
