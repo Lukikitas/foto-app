@@ -3,6 +3,7 @@ import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
 import { getCameraFlash, getTakenByHistory, saveCameraFlash, saveLastTakenBy } from '../lib/storage';
 import { subscribe } from '../lib/uploadQueue';
 import { inspectCaptureCanvas, isSameCapturedScene, pickSharpest } from '../lib/imageQuality';
+import PhotoLightbox from './PhotoLightbox';
 import PhotographerPicker from './PhotographerPicker';
 import useCameraControls from './useCameraControls';
 
@@ -166,6 +167,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   // until the pair is queued ('saved'). Object URLs are revoked when replaced.
   const [strip, setStrip] = useState(null);
   const [toast, setToast] = useState('');
+  // Fullscreen viewer for a strip thumbnail: { url, kind: 'ticket' | 'evidence' }.
+  const [preview, setPreview] = useState(null);
   const stripUrlsRef = useRef({ ticket: '', evidence: '' });
   const toastTimerRef = useRef(null);
   const flushRef = useRef(() => {});
@@ -182,7 +185,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     const evidenceUrl = next.evidenceUrl || '';
     if (previous.ticket && previous.ticket !== ticketUrl) URL.revokeObjectURL(previous.ticket);
     if (previous.evidence && previous.evidence !== evidenceUrl) URL.revokeObjectURL(previous.evidence);
-    stripUrlsRef.current = { ticket: ticketUrl, evidenceUrl };
+    stripUrlsRef.current = { ticket: ticketUrl, evidence: evidenceUrl };
     setStrip(ticketUrl
       ? { ticketUrl, evidenceUrl, pair: next.pair || null, phase: next.phase || 'draft' }
       : null);
@@ -312,6 +315,28 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     setQualityNotice(null);
   }
 
+  function openStripPreview(kind) {
+    const url = kind === 'ticket' ? strip?.ticketUrl : strip?.evidenceUrl;
+    if (url) setPreview({ url, kind });
+  }
+
+  function repeatFromPreview() {
+    // Both actions start a new attempt; the draft pair is never queued, so it
+    // can be dropped the same way the strip's own "Repetir" does.
+    const kind = preview?.kind;
+    setPreview(null);
+    if (kind === 'ticket') {
+      const pending = pendingPairRef.current;
+      if (pending) {
+        window.clearTimeout(pending.timer);
+        pendingPairRef.current = null;
+      }
+      resetToTicket();
+    } else {
+      repeatLastEvidence();
+    }
+  }
+
   async function handleCapture() {
     if (status !== 'ready' || takingPhoto || zoomBusy) return;
 
@@ -419,6 +444,12 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     cropped: 'El ticket parece cortado.',
   }[qualityNotice?.issue];
 
+  // The fullscreen preview only stays open while its URL still belongs to the
+  // strip: a repeat, reset or new pair closes it without a setState-in-effect.
+  const previewActive = Boolean(preview) && (
+    preview.kind === 'ticket' ? strip?.ticketUrl : strip?.evidenceUrl
+  ) === preview.url;
+
   return (
     <section
       className={`order-camera${whoOpen ? ' order-camera--who-open' : ''}`}
@@ -439,17 +470,6 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           className={`order-camera__guide order-camera__guide--${step}`}
           aria-hidden="true"
         >
-          {isTicketStep ? (
-            <svg className="order-camera__guide-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-              <path d="M14 5h20v38l-3.3-2.5-3.4 2.5-3.3-2.5-3.3 2.5-3.4-2.5L14 43V5z" />
-              <path d="M18 15h12M18 21h12M18 27h8" />
-            </svg>
-          ) : (
-            <svg className="order-camera__guide-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-              <path d="M17 15V11a7 7 0 0 1 14 0v4" />
-              <path d="M13 15h22l2 28H11l2-28z" />
-            </svg>
-          )}
           {isTicketStep && <span className="order-camera__guide-focus" />}
           <span>{guideText}</span>
         </div>
@@ -458,18 +478,30 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
 
       {photographerReady && !whoOpen && strip?.ticketUrl && (
         <div className="order-camera__strip">
-          <figure className="order-camera__thumb">
+          <button
+            type="button"
+            className="order-camera__thumb"
+            disabled={takingPhoto}
+            onClick={() => openStripPreview('ticket')}
+            aria-label="Ver la foto del ticket en grande"
+          >
             <img className="order-camera__thumb-box" src={strip.ticketUrl} alt="" />
-            <figcaption>Ticket</figcaption>
-          </figure>
-          <figure className="order-camera__thumb">
+            <span className="order-camera__thumb-label">Ticket</span>
+          </button>
+          <button
+            type="button"
+            className="order-camera__thumb"
+            disabled={takingPhoto || !strip.evidenceUrl}
+            onClick={() => openStripPreview('evidence')}
+            aria-label="Ver la foto de la bolsa en grande"
+          >
             {strip.evidenceUrl ? (
               <img className="order-camera__thumb-box" src={strip.evidenceUrl} alt="" />
             ) : (
               <span className="order-camera__thumb-box order-camera__thumb-box--empty" aria-hidden="true" />
             )}
-            <figcaption>Bolsa</figcaption>
-          </figure>
+            <span className="order-camera__thumb-label">Bolsa</span>
+          </button>
           {strip.phase === 'draft' && strip.evidenceUrl && (
             <button
               type="button"
@@ -618,6 +650,18 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           {takingPhoto ? 'Mantené el celular quieto hasta la confirmación' : captureLabel}
         </p>
       </div>
+      {preview && previewActive && (
+        <PhotoLightbox
+          photo={{ public_url: preview.url, name: preview.kind === 'ticket' ? 'Ticket' : 'Bolsa' }}
+          badges={<span>{strip?.phase === 'saved' ? '✓ Encolado' : 'Pendiente de encolar'}</span>}
+          actions={strip?.phase === 'draft' ? (
+            <button type="button" className="btn btn--ghost" onClick={repeatFromPreview}>
+              {preview.kind === 'ticket' ? 'Repetir ticket' : 'Repetir bolsa'}
+            </button>
+          ) : null}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </section>
   );
 }

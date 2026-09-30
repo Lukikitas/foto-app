@@ -6,7 +6,7 @@ import { clamp, clampOffset, pinchDistance, zoomAt } from '../lib/touchZoom';
 export default function PhotoLightbox(props) {
   return <PhotoViewer key={props.photo.id || props.photo.public_url} {...props} />;
 }
-function PhotoViewer({ photo, onClose, onDownload, badges = null }) {
+function PhotoViewer({ photo, onClose, onDownload, badges = null, actions = null }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
   const closeRef = useRef(null);
@@ -137,7 +137,12 @@ function PhotoViewer({ photo, onClose, onDownload, badges = null }) {
         {photo.taken_by && <p className="lightbox__meta">Subió: {photo.taken_by}</p>}
         {photo.notes && <p className="lightbox__notes">{photo.notes}</p>}
         {badges && <div className="lightbox__badges">{badges}</div>}
-        {onDownload && <div className="lightbox__actions"><button type="button" className="btn btn--ghost" onClick={onDownload}>Descargar</button></div>}
+        {(actions || onDownload) && (
+          <div className="lightbox__actions">
+            {actions}
+            {onDownload && <button type="button" className="btn btn--ghost" onClick={onDownload}>Descargar</button>}
+          </div>
+        )}
       </div>
     </div>
   </div>;
