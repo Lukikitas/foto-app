@@ -6,7 +6,8 @@ import { COMPLAINT_STATUSES, complaintDay } from './complaintHistory.js';
 // calcula en cada render a partir del día del pedido, de modo que cambiar los
 // días en Ajustes reevalúa todo el historial sin migrar datos.
 export const DEFAULT_REFUTADO_DAYS = 7;
-export const REFUTADO_DAYS_MIN = 1;
+// 0 (o negativo) = sin límite: la queja nunca se marca vencida.
+export const REFUTADO_DAYS_MIN = 0;
 export const REFUTADO_DAYS_MAX = 90;
 // Etiqueta de display; el estado guardado en el historial sigue siendo 'queja'
 // (las métricas y el dinero no cambian retroactivamente).
@@ -70,10 +71,13 @@ function addDaysIso(day, amount) {
   return utc.toISOString().slice(0, 10);
 }
 
-/** Día límite (inclusive) para refutar: día del pedido + días del agregador. */
+/** Día límite (inclusive) para refutar: día del pedido + días del agregador.
+ * null cuando no hay plazo (0 = sin límite o fecha inválida). */
 export function refutadoDeadlineDate(day, config, aggregator) {
   if (!isDay(day)) return null;
-  return addDaysIso(day, refutadoDeadlineDays(config, aggregator));
+  const days = refutadoDeadlineDays(config, aggregator);
+  if (!days) return null;
+  return addDaysIso(day, days);
 }
 
 /** Días que faltan para vencer; negativo si ya venció. null sin fecha válida. */

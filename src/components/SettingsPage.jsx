@@ -243,8 +243,9 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           {!deadlines ? <p>Cargando…</p> : (
             <form onSubmit={saveDeadlines}>
               <p>
-                Días desde el día del pedido para poder refutar. Al vencer, la queja aparece
-                como «Queja vencida» y ya no se ofrece refutarla.
+                Días desde el día del pedido para poder refutar. Usá <strong>0 = sin límite</strong>:
+                esas quejas nunca se marcan vencidas. Al vencer, la queja aparece como
+                «Queja vencida» y ya no se ofrece refutarla.
               </p>
               <div className="settings__deadline-grid">
                 <label>General

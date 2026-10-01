@@ -12,7 +12,7 @@ export const RELEASE_GROUPS = [
   {
     title: 'Queja vencida',
     notes: [
-      'Ajustes → «Plazos de refutación»: días por agregador (y uno general) para refutar, guardados compartidos para todos los dispositivos del local.',
+      'Ajustes → «Plazos de refutación»: días por agregador (y uno general) para refutar, contados desde el día del pedido. Usá 0 = sin límite. Se guarda compartido para todos los dispositivos del local.',
       'Cuando pasan los días desde el pedido, la queja aparece con el tag «Queja vencida» en Reclamos e Historial y ya no se ofrecen «Preparar para refutar» ni «Marcar refutado».',
       'Las quejas por vencer muestran «Vence hoy / mañana / en X d» en sus últimas fechas. Las métricas no cambian: el estado guardado sigue siendo Queja.',
     ],

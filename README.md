@@ -14,7 +14,7 @@ El campo de búsqueda se dispara solo ~400 ms después de la última tecla (sin 
 
 ### Queja vencida
 
-Ajustes → «Plazos de refutación» define los días que tiene cada agregador (PedidosYa, Rappi, Rappi Turbo, Mercado Pago) y un valor general para refutar, contados desde el día del pedido. Se guarda compartido en el documento de Métricas, igual que los objetivos, para todos los dispositivos del local.
+Ajustes → «Plazos de refutación» define los días que tiene cada agregador (PedidosYa, Rappi, Rappi Turbo, Mercado Pago) y un valor general para refutar, contados desde el día del pedido; **0 = sin límite** (esas quejas nunca se marcan vencidas). Se guarda compartido en el documento de Métricas, igual que los objetivos, para todos los dispositivos del local.
 
 Al vencer, la queja muestra el tag «Queja vencida» en Reclamos e Historial (con chip de filtro propio) y dejan de ofrecerse «Preparar para refutar» y «Marcar refutado» en esa fila; las que están a 3 días o menos muestran «Vence hoy / mañana / en X d». El vencimiento se calcula al mostrar y no se guarda: cambiar los plazos reevalúa todo el historial sin migrar datos. Las métricas no cambian: el estado persistido sigue siendo Queja y el dinero se cuenta igual.
 

@@ -33,9 +33,10 @@ test('normalizeRefutadoDays aplica defaults y recorta valores inválidos', () =>
     rappi_turbo: 9,
     mercadopago: 9,
   });
-  // Fuera de rango → al tope; no numérico → default.
+  // Fuera de rango → al tope; no numérico → default; 0 o negativo → sin límite.
   assert.equal(normalizeRefutadoDays({ default: 999 }).default, 90);
-  assert.equal(normalizeRefutadoDays({ default: 0 }).default, 1);
+  assert.equal(normalizeRefutadoDays({ default: 0 }).default, 0);
+  assert.equal(normalizeRefutadoDays({ default: -5 }).default, 0);
   assert.equal(normalizeRefutadoDays({ default: 'pronto' }).default, DEFAULT_REFUTADO_DAYS);
 });
 
@@ -86,6 +87,34 @@ test('resolveDisplayStatus etiqueta «queja_vencida» solo a quejas vencidas', (
   );
   // Sin historial ni fecha no se vence.
   assert.equal(resolveDisplayStatus(row({ status: 'none', day: '' }), CONFIG, '2026-09-30'), 'queja');
+});
+
+test('0 días significa sin límite: la queja nunca se marca vencida', () => {
+  const SIN_LIMITE = { default: 0, pedidosya: 0, rappi: 0, rappi_turbo: 0, mercadopago: 0 };
+  assert.equal(refutadoDeadlineDays(SIN_LIMITE, 'rappi'), 0);
+  assert.equal(refutadoDeadlineDate('2020-01-01', SIN_LIMITE, 'rappi'), null);
+  assert.equal(refutadoDaysLeft('2020-01-01', SIN_LIMITE, 'rappi', '2026-09-30'), null);
+  assert.equal(isRefutadoExpired('2020-01-01', SIN_LIMITE, 'rappi', '2026-09-30'), false);
+  assert.equal(
+    resolveDisplayStatus(row({ day: '2020-01-01', aggregator: 'rappi' }), SIN_LIMITE, '2026-09-30'),
+    'queja',
+  );
+  assert.equal(
+    refutadoExpiryHint(row({ day: '2020-01-01', aggregator: 'rappi' }), SIN_LIMITE, '2026-09-30'),
+    null,
+  );
+  // Por agregador: 0 solo en Rappi, los demás conservan sus días.
+  const MIXTO = { default: 7, pedidosya: 5, rappi: 0, rappi_turbo: 3, mercadopago: 10 };
+  assert.equal(refutadoDeadlineDays(MIXTO, 'rappi'), 0);
+  assert.equal(refutadoDeadlineDays(MIXTO, 'pedidosya'), 5);
+  assert.equal(
+    resolveDisplayStatus(row({ day: '2020-01-01', aggregator: 'rappi' }), MIXTO, '2026-09-30'),
+    'queja',
+  );
+  assert.equal(
+    resolveDisplayStatus(row({ day: '2020-01-01', aggregator: 'pedidosya' }), MIXTO, '2026-09-30'),
+    QUEJA_VENCIDA_STATUS,
+  );
 });
 
 test('refutadoExpiryHint avisa solo los últimos días de la ventana', () => {
