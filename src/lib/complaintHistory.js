@@ -14,6 +14,8 @@ export const COMPLAINT_STATUS_LABELS = {
   refutado: 'Refutado',
   refutado_aceptado: 'Ref. aceptado',
   refutado_rechazado: 'Ref. rechazado',
+  // Solo display: el estado guardado sigue siendo 'queja' (ver refutadoDeadline).
+  queja_vencida: 'Queja vencida',
 };
 
 export const EMPTY_COMBO_LABEL = 'Sin combo';

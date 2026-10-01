@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
+import HighlightedText from './HighlightedText';
 import PhotoLightbox from './PhotoLightbox';
 import PhotoEditForm from './PhotoEditForm';
 import CompleteOrderCode from './CompleteOrderCode';
@@ -43,6 +44,7 @@ function RowBadges({ photo }) {
 export default function PhotoListRow({
   photo,
   selected,
+  highlight = '',
   onToggleSelect,
   onLongPressSelect,
   onUpdated,
@@ -226,7 +228,9 @@ export default function PhotoListRow({
           className="photo-row__main"
           {...pressHandlers}
         >
-          <span className="photo-row__digits">{title}</span>
+          <span className="photo-row__digits">
+            <HighlightedText text={title} query={highlight} />
+          </span>
           <span className="photo-row__date">{formatDateTime(timestamp)}</span>
           {photo.taken_by && (
             <span className="photo-row__author">{photo.taken_by}</span>

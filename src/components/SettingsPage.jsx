@@ -1,9 +1,14 @@
 import PhotoLightbox from './PhotoLightbox';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, detectAggregator, getAggregatorLabel } from '../lib/aggregators';
-import { setTargetAwtPct, setTargetComplaintPct } from '../lib/metrics';
+import { setRefutadoDays, setTargetAwtPct, setTargetComplaintPct } from '../lib/metrics';
 import { loadMetricsStore, saveMetricsStore } from '../lib/metricsStore';
 import { fetchPhotosByIds, UNIDENTIFIED_ORDER_NAME } from '../lib/photos';
+import {
+  normalizeRefutadoDays,
+  REFUTADO_DAYS_MAX,
+  REFUTADO_DAYS_MIN,
+} from '../lib/refutadoDeadline';
 import {
   RECOVERY_MODES, confirmRecoveredCode, loadRecoveryEvents,
   loadRecoveryProgress, loadRecoverySettings, saveRecoverySettings,
@@ -23,9 +28,18 @@ const RUN_STATUS = {
   quota_exhausted: 'Cuota agotada', paused: 'Pausada',
 };
 
+function toDeadlineDraft(days) {
+  return Object.fromEntries(
+    Object.entries(normalizeRefutadoDays(days)).map(([key, value]) => [key, String(value)]),
+  );
+}
+
 export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
   const [settings, setSettings] = useState(null);
   const [targets, setTargets] = useState(null);
+  // Borrador en crudo (strings) de los plazos de refutación, para que borrar
+  // un campo no lo reemplace solo con el default mientras se escribe.
+  const [deadlines, setDeadlines] = useState(null);
   const [progress, setProgress] = useState(null);
   const [photos, setPhotos] = useState({});
   const [drafts, setDrafts] = useState({});
@@ -58,6 +72,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
     ]);
     setSettings(nextSettings);
     setTargets(nextTargets);
+    setDeadlines(toDeadlineDraft(nextTargets.refutadoDays));
     await refreshProgress();
   }, [refreshProgress]);
 
@@ -124,6 +139,22 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
       setNotice('Objetivos actualizados.');
     } catch (failure) {
       setError(failure.message || 'No se pudieron guardar los objetivos.');
+    } finally { setBusy(false); }
+  }
+
+  async function saveDeadlines(event) {
+    event.preventDefault();
+    setBusy(true); setError(''); setNotice('');
+    try {
+      let current = await loadMetricsStore({ strict: true });
+      current = setRefutadoDays(current, deadlines);
+      const saved = await saveMetricsStore(current);
+      setTargets(saved);
+      setDeadlines(toDeadlineDraft(saved.refutadoDays));
+      onTargetsSaved();
+      setNotice('Plazos de refutación actualizados.');
+    } catch (failure) {
+      setError(failure.message || 'No se pudieron guardar los plazos.');
     } finally { setBusy(false); }
   }
 
@@ -203,6 +234,34 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
                   onChange={(event) => setTargets({ ...targets, targetAwtPct: event.target.value })} />
               </label>
               <button className="btn btn--primary" disabled={busy}>Guardar objetivos</button>
+            </form>
+          )}
+        </section>
+
+        <section className="settings__card settings__deadlines">
+          <h3>Plazos de refutación</h3>
+          {!deadlines ? <p>Cargando…</p> : (
+            <form onSubmit={saveDeadlines}>
+              <p>
+                Días desde el día del pedido para poder refutar. Al vencer, la queja aparece
+                como «Queja vencida» y ya no se ofrece refutarla.
+              </p>
+              <div className="settings__deadline-grid">
+                <label>General
+                  <input type="number" min={REFUTADO_DAYS_MIN} max={REFUTADO_DAYS_MAX} required
+                    value={deadlines.default}
+                    onChange={(event) => setDeadlines({ ...deadlines, default: event.target.value })} />
+                </label>
+                {AGGREGATOR_OPTIONS.map((option) => (
+                  <label key={option.id}>{option.label}
+                    <input type="number" min={REFUTADO_DAYS_MIN} max={REFUTADO_DAYS_MAX} required
+                      value={deadlines[option.id] ?? deadlines.default}
+                      onChange={(event) => setDeadlines({ ...deadlines, [option.id]: event.target.value })} />
+                  </label>
+                ))}
+              </div>
+              <p>Se guarda compartido para todos los dispositivos del local.</p>
+              <button className="btn btn--primary" disabled={busy}>Guardar plazos</button>
             </form>
           )}
         </section>

@@ -1,5 +1,29 @@
 # React + Vite
 
+## Versión 1.7
+
+### Galería paginada
+
+La galería de pedidos (y Archivos) se pinta de 100 en 100: barra con «‹ Anterior», números de página con saltos («1 … 5 6 … 12»), «Siguiente ›» y el rango visible («Mostrando 1–100 de 857»). La primera tira de datos (≈300 filas) se pinta en el instante y el resto llega en segundo plano con «Actualizando…»; el límite sigue siendo las 1000 fotos más recientes. Cambiar filtros vuelve a la página 1; un refresco (visibilidad de la pestaña, ↻, subida) conserva la página actual, y cambiar de página lleva el scroll al inicio.
+
+La selección se acumula entre páginas: el checkbox dice «Página (100)» y marca o desmarca solo la ventana actual, mientras la barra de acciones en lote sigue operando sobre todo lo seleccionado. En vivo, un pedido nuevo que llega con el usuario en otra página no desplaza lo que está mirando: se ofrece con «Ver», que lleva a la página 1.
+
+### Búsqueda mientras se escribe
+
+El campo de búsqueda se dispara solo ~400 ms después de la última tecla (sin apretar Buscar), vuelve a la página 1 y descarta las respuestas que lleguen fuera de orden. Lo encontrado se resalta en los títulos de las tarjetas y del listado.
+
+### Queja vencida
+
+Ajustes → «Plazos de refutación» define los días que tiene cada agregador (PedidosYa, Rappi, Rappi Turbo, Mercado Pago) y un valor general para refutar, contados desde el día del pedido. Se guarda compartido en el documento de Métricas, igual que los objetivos, para todos los dispositivos del local.
+
+Al vencer, la queja muestra el tag «Queja vencida» en Reclamos e Historial (con chip de filtro propio) y dejan de ofrecerse «Preparar para refutar» y «Marcar refutado» en esa fila; las que están a 3 días o menos muestran «Vence hoy / mañana / en X d». El vencimiento se calcula al mostrar y no se guarda: cambiar los plazos reevalúa todo el historial sin migrar datos. Las métricas no cambian: el estado persistido sigue siendo Queja y el dinero se cuenta igual.
+
+### Hora del pedido
+
+La hora que se muestra (galería, historial, métricas y cruce con reclamos) es la de la captura del par, no la de la subida. La cola de lectura/subida guarda el momento en que se encoló el par y ese valor se escribe en la foto al insertarla, aunque la cola demore o la app se cierre y continúe en segundo plano. Las fotos ya subidas conservan su hora anterior.
+
+Validación: `npm test` (272 pruebas), `npm run lint`, `npm run build`.
+
 ## Versión 1.6
 
 ### Gráfico de tendencia en Métricas

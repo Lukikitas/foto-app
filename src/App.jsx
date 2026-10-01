@@ -150,6 +150,7 @@ export default function App() {
           <div hidden={!complaintsOpen} className="app__panel">
             <ComplaintsInbox
               view={tab === TABS.history ? 'historial' : 'cruzar'}
+              refreshKey={metricsRefreshKey}
               onRequestCruzar={() => setTab(TABS.complaints)}
               onRequestHistory={() => setTab(TABS.history)}
             />

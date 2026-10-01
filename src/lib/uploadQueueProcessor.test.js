@@ -45,8 +45,8 @@ function mockDeps(overrides = {}) {
     uploadFile: async () => {
       throw new Error('no debería subir un archivo');
     },
-    uploadPhoto: async (file, orderDigits, meta, aggregator, filePath) => {
-      uploaded.push({ orderDigits, aggregator, filePath });
+    uploadPhoto: async (file, orderDigits, meta, aggregator, filePath, capturedAt) => {
+      uploaded.push({ orderDigits, aggregator, filePath, capturedAt });
       return { id: 'photo-1', name: orderDigits, file_path: filePath };
     },
     uploadUnidentifiedOrder: async () => {
@@ -80,6 +80,34 @@ test('processQueueItem reads the ticket and then uploads with a stable path', as
   assert.equal(deps.uploaded[0].aggregator, 'pedidosya');
   assert.equal(deps.uploaded[0].filePath, item.storagePath);
   assert.match(item.storagePath, /^orders\/pedidosya\//);
+});
+
+test('the photo keeps the capture time even if the upload runs much later', async () => {
+  // createdAt = momento en que se encoló el par (recién sacadas las fotos);
+  // la cola puede demorar y la fila igual debe guardar esa hora.
+  const item = sampleItem({ createdAt: 1700000000000 });
+  const deps = mockDeps();
+  await processQueueItem(item, deps);
+  assert.equal(deps.uploaded.length, 1);
+  assert.equal(deps.uploaded[0].capturedAt, new Date(1700000000000).toISOString());
+  assert.equal(item.createdAt, 1700000000000);
+});
+
+test('an unidentified order also keeps the capture time', async () => {
+  const item = sampleItem({ createdAt: 1700000000000 });
+  let received = null;
+  await processQueueItem(item, mockDeps({
+    detectOrderFromPhoto: async () => null,
+    uploadPhoto: async () => {
+      throw new Error('no debe subir identificado');
+    },
+    uploadUnidentifiedOrder: async (file, meta, filePath, capturedAt) => {
+      received = capturedAt;
+      return { id: 'unread-photo', name: 'Código no encontrado', file_path: filePath };
+    },
+  }));
+  assert.equal(received, new Date(1700000000000).toISOString());
+  assert.equal(item.status, 'done');
 });
 
 test('processQueueItem yields instead of failing when the page is handed off', async () => {

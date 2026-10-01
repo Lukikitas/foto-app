@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
+import HighlightedText from './HighlightedText';
 import PhotoLightbox from './PhotoLightbox';
 import PhotoEditForm from './PhotoEditForm';
 import CompleteOrderCode from './CompleteOrderCode';
@@ -47,6 +48,7 @@ function PhotoBadges({ photo }) {
 export default function PhotoCard({
   photo,
   selected = false,
+  highlight = '',
   onToggleSelect,
   onLongPressSelect,
   onUpdated,
@@ -289,7 +291,9 @@ export default function PhotoCard({
             />
           ) : (
             <>
-              <h3 className="photo-card__title">{title}</h3>
+              <h3 className="photo-card__title">
+                <HighlightedText text={title} query={highlight} />
+              </h3>
               <time className="photo-card__date" dateTime={timestamp}>
                 {formatDateTime(timestamp)}
               </time>

@@ -2,11 +2,25 @@ import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
 export const RELEASE_GROUPS = [
   {
-    title: 'Novedades',
+    title: 'Galería paginada',
     notes: [
-      'Cámara de pedidos: cada paso tiene su identidad visual (chip 🎫 Ticket / 🛍 Bolsa, color propio y texto guía propio) y la palabra «Pedido» dejó de usarse como nombre de la segunda foto.',
-      'Tira del último par: se ven las miniaturas de ticket y bolsa; tocá una para verla en grande con zoom y repetirla desde ahí, con «✓ Guardado» cuando se encola y un botón «Repetir» mientras el par está pendiente, sin frenar el flujo hacia el siguiente par.',
-      'Menos fotos movidas: se capturan tres frames y se conserva el más nítido, el enfoque automático del hardware tiene más tiempo y las fotos oscuras ofrecen prender el flash.',
+      'La galería de pedidos se ve de 100 en 100: páginas numeradas con «Anterior/Siguiente», el rango visible («Mostrando 1–100 de 857») y la primera página carga al instante mientras el resto llega en segundo plano.',
+      'La búsqueda se actualiza sola mientras escribís (sin apretar Buscar) y resalta lo encontrado en los títulos.',
+      'La selección se acumula entre páginas: el checkbox «Página» marca solo la página actual y la barra de acciones sigue viendo todo lo seleccionado.',
+    ],
+  },
+  {
+    title: 'Queja vencida',
+    notes: [
+      'Ajustes → «Plazos de refutación»: días por agregador (y uno general) para refutar, guardados compartidos para todos los dispositivos del local.',
+      'Cuando pasan los días desde el pedido, la queja aparece con el tag «Queja vencida» en Reclamos e Historial y ya no se ofrecen «Preparar para refutar» ni «Marcar refutado».',
+      'Las quejas por vencer muestran «Vence hoy / mañana / en X d» en sus últimas fechas. Las métricas no cambian: el estado guardado sigue siendo Queja.',
+    ],
+  },
+  {
+    title: 'Hora del pedido',
+    notes: [
+      'La galería muestra la hora en que se sacó el par de fotos, aunque la cola de lectura/subida tarde: el pedido guarda su hora de captura y no la en que terminó de subir. Vale también si la app se cerró y la cola siguió en segundo plano.',
     ],
   },
 ];

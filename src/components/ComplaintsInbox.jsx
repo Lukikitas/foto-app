@@ -38,6 +38,13 @@ import {
   matchComplaintsToPhotos,
 } from '../lib/complaintMatch';
 import { argentinaToday, formatMoney, PERIOD_PRESETS, resolvePeriod } from '../lib/metrics';
+import { loadMetricsStore } from '../lib/metricsStore';
+import {
+  normalizeRefutadoDays,
+  QUEJA_VENCIDA_STATUS,
+  refutadoExpiryHint,
+  resolveDisplayStatus,
+} from '../lib/refutadoDeadline';
 import {
   cachedComplaintHistory,
   editHistoryItemById,
@@ -93,6 +100,7 @@ import ComplaintCodeListImport from './ComplaintCodeListImport.jsx';
 const FILTERS = [
   { id: 'all', label: 'Todas' },
   { id: COMPLAINT_STATUSES.queja, label: 'Queja' },
+  { id: QUEJA_VENCIDA_STATUS, label: 'Queja vencida' },
   { id: COMPLAINT_STATUSES.refutado, label: 'Refutado' },
   { id: COMPLAINT_STATUSES.refutado_aceptado, label: 'Ref. aceptado' },
   { id: COMPLAINT_STATUSES.refutado_rechazado, label: 'Ref. rechazado' },
@@ -142,18 +150,21 @@ function statusBadgeClass(status) {
   if (status === 'refutado_aceptado') return 'badge badge--refutado-aceptado';
   if (status === 'refutado_rechazado') return 'badge badge--aceptado';
   if (status === 'refutado') return 'badge badge--refutado';
+  if (status === QUEJA_VENCIDA_STATUS) return 'badge badge--expired';
   if (status === 'queja') return 'badge badge--complaint';
   if (status === 'sin_foto') return 'badge badge--file';
   if (status === 'ambiguo') return 'badge badge--missing-code';
   return 'badge';
 }
 
-function rowMatchesFilter(row, filter) {
+// `statusOf` resuelve el estado a mostrar (con «queja_vencida» según el plazo
+// del agregador); sin él se usa el estado guardado.
+function rowMatchesFilter(row, filter, statusOf = complaintRowStatus) {
   if (filter === 'all') return true;
   if (filter === 'con_foto' || filter === 'sin_foto' || filter === 'ambiguo') {
     return complaintPhotoStatus(row) === filter;
   }
-  return complaintRowStatus(row) === filter;
+  return statusOf(row) === filter;
 }
 
 function sourceAmount(rows) {
@@ -168,7 +179,7 @@ function historyFromResult(result) {
   return result?.store || result;
 }
 
-export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory } = {}) {
+export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory, refreshKey = 0 } = {}) {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
   const [importOpen, setImportOpen] = useState(false);
@@ -202,6 +213,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE);
+  const [refutadoDays, setRefutadoDays] = useState(null);
   const masterCheckboxRef = useRef(null);
 
   useEffect(() => {
@@ -229,6 +241,23 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   );
 
   useEffect(() => subscribeComplaintHistory(setHistoryStore), []);
+
+  // Plazos de refutación (guardados con los objetivos de Métricas). Se
+  // recargan cuando Ajustes los cambia (refreshKey); sin red ni cache se
+  // usan los plazos por defecto.
+  useEffect(() => {
+    let active = true;
+    loadMetricsStore()
+      .then((store) => {
+        if (active) setRefutadoDays(store.refutadoDays);
+      })
+      .catch(() => {
+        // Se mantienen los valores actuales (o los defaults).
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshKey]);
 
   const historyPeriod = useMemo(
     () => resolvePeriod(historyPreset, argentinaToday(), historyCustomFrom, historyCustomTo),
@@ -322,9 +351,20 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     [rows, historyStore],
   );
 
+  // Estado a mostrar y aviso de vencimiento, según los plazos configurados.
+  const deadlineConfig = useMemo(() => normalizeRefutadoDays(refutadoDays), [refutadoDays]);
+  const displayStatusOf = useCallback(
+    (row) => resolveDisplayStatus(row, deadlineConfig),
+    [deadlineConfig],
+  );
+  const expiryHintOf = useCallback(
+    (row) => refutadoExpiryHint(row, deadlineConfig),
+    [deadlineConfig],
+  );
+
   const visibleRows = useMemo(
-    () => rowsWithHistory.filter((row) => rowMatchesFilter(row, filter)),
-    [rowsWithHistory, filter],
+    () => rowsWithHistory.filter((row) => rowMatchesFilter(row, filter, displayStatusOf)),
+    [rowsWithHistory, filter, displayStatusOf],
   );
 
   const historyBaseRows = useMemo(() => {
@@ -339,8 +379,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   }, [historyStore, historyAggregator, historySearch, photos, historyPeriod]);
 
   const historyRows = useMemo(
-    () => historyBaseRows.filter((row) => rowMatchesFilter(row, filter)),
-    [historyBaseRows, filter],
+    () => historyBaseRows.filter((row) => rowMatchesFilter(row, filter, displayStatusOf)),
+    [historyBaseRows, filter, displayStatusOf],
   );
 
   const sortedHistoryRows = useMemo(() => {
@@ -522,22 +562,24 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       sin_foto: 0,
       ambiguo: 0,
       queja: 0,
+      [QUEJA_VENCIDA_STATUS]: 0,
       refutado: 0,
       refutado_aceptado: 0,
       refutado_rechazado: 0,
     };
     source.forEach((row) => {
-      const status = complaintRowStatus(row);
+      const status = displayStatusOf(row);
       if (counts[status] != null) counts[status] += 1;
       const photoStatus = complaintPhotoStatus(row);
       if (counts[photoStatus] != null) counts[photoStatus] += 1;
     });
     return counts;
-  }, [inboxView, historyBaseRows, rowsWithHistory]);
+  }, [inboxView, historyBaseRows, rowsWithHistory, displayStatusOf]);
 
   const quejasAbiertas = useMemo(
-    () => rowsWithHistory.filter((row) => complaintRowStatus(row) === COMPLAINT_STATUSES.queja),
-    [rowsWithHistory],
+    // Solo las que todavía se pueden refutar: las vencidas quedan fuera.
+    () => rowsWithHistory.filter((row) => displayStatusOf(row) === COMPLAINT_STATUSES.queja),
+    [rowsWithHistory, displayStatusOf],
   );
   const rowsWithPhotos = useMemo(
     () => rowsWithHistory.filter((row) => row.photo),
@@ -1396,6 +1438,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                   row={row}
                   index={index}
                   selected={selectedIds.has(rowId)}
+                  displayStatus={displayStatusOf(row)}
+                  expiry={expiryHintOf(row)}
                   onToggleSelect={handleToggleSelect}
                   layout={inboxView === 'historial' ? 'row' : 'card'}
                   disabled={loading}
@@ -1470,6 +1514,10 @@ function ComplaintCard({
   row,
   index,
   selected = false,
+  // Estado a mostrar: llega calculado desde la lista (incluye «queja_vencida»
+  // cuando el plazo del agregador ya pasó); si falta, se usa el guardado.
+  displayStatus = null,
+  expiry = null,
   onToggleSelect,
   layout = 'card',
   disabled,
@@ -1491,7 +1539,7 @@ function ComplaintCard({
   const [editCode, setEditCode] = useState(row.history?.orderCode || '');
   const [editAggregator, setEditAggregator] = useState(row.history?.aggregator || '');
   const [editFile, setEditFile] = useState(null);
-  const status = complaintRowStatus(row);
+  const status = displayStatus || complaintRowStatus(row);
   const isRefutedOrResolved = status !== COMPLAINT_STATUSES.queja;
   const photo = row.photo;
   const aggregator = getComplaintAggregator(row.complaint, photo) || row.history?.aggregator;
@@ -1546,8 +1594,15 @@ function ComplaintCard({
               <span className={aggregatorBadgeClass(aggregator)}>{getAggregatorLabel(aggregator)}</span>
             )}
             <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
+            {expiry && <span className="badge badge--deadline">{expiry}</span>}
             {amount != null && (
-              <span className={`badge badge--amount${isRefutedOrResolved ? ' badge--amount-green' : ''}`}>
+              <span
+                className={`badge badge--amount${
+                  status !== COMPLAINT_STATUSES.queja && status !== QUEJA_VENCIDA_STATUS
+                    ? ' badge--amount-green'
+                    : ''
+                }`}
+              >
                 {formatMoney(amount)}
               </span>
             )}

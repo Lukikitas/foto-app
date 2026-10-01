@@ -80,3 +80,15 @@ test('fetchAllPages deduplica filas repetidas entre páginas', async () => {
   const rows = await fetchAllPages(buildQuery, { pageSize: 2 });
   assert.deepEqual(rows.map((row) => row.id), ['a', 'b', 'c']);
 });
+
+test('fetchAllPages notifica el acumulado después de cada bloque con onPage', async () => {
+  const table = Array.from({ length: 250 }, (_, index) => ({ id: index }));
+  const snapshots = [];
+  const rows = await fetchAllPages(tableQuery(table), {
+    pageSize: 100,
+    onPage: (chunk) => snapshots.push(chunk.length),
+  });
+  assert.equal(rows.length, 250);
+  // Primer bloque de100 (para pintar de inmediato), luego 200 y el total.
+  assert.deepEqual(snapshots, [100, 200, 250]);
+});

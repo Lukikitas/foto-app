@@ -47,6 +47,13 @@ export async function processQueueItem(item, options = {}) {
 
   const yielded = () => shouldYield() || Boolean(signal?.aborted) || isDocumentHidden();
 
+  // createdAt del job = momento en que se encoló el par, recién sacadas las
+  // fotos. La cola puede tardar minutos: esa es la hora que se guarda y se
+  // muestra del pedido, no la del momento en que por fin sube.
+  const capturedAt = Number.isFinite(item.createdAt)
+    ? new Date(item.createdAt).toISOString()
+    : null;
+
   const yieldNow = async () => {
     if (item.status !== 'done' && item.status !== 'error') {
       item.status = 'pending';
@@ -115,7 +122,7 @@ export async function processQueueItem(item, options = {}) {
 
     let photo;
     if (item.kind === 'file') {
-      photo = await uploadFile(preparedFile, item.title, item.meta, item.storagePath);
+      photo = await uploadFile(preparedFile, item.title, item.meta, item.storagePath, capturedAt);
     } else if (item.orderDigits) {
       photo = await uploadPhoto(
         preparedFile,
@@ -123,6 +130,7 @@ export async function processQueueItem(item, options = {}) {
         item.meta,
         item.aggregator,
         item.storagePath,
+        capturedAt,
       );
     } else if (detectedOrder?.aggregator) {
       photo = await uploadPhoto(
@@ -131,9 +139,10 @@ export async function processQueueItem(item, options = {}) {
         item.meta,
         detectedOrder.aggregator,
         item.storagePath,
+        capturedAt,
       );
     } else {
-      photo = await uploadUnidentifiedOrder(preparedFile, item.meta, item.storagePath);
+      photo = await uploadUnidentifiedOrder(preparedFile, item.meta, item.storagePath, capturedAt);
     }
 
     if (item.ticketFile && !item.orderDigits && item.kind === 'order') {
@@ -153,6 +162,7 @@ export async function processQueueItem(item, options = {}) {
             item.meta,
             recovered.aggregator,
             item.storagePath,
+            capturedAt,
           );
           item.orderDigits = recovered.displayCode;
           item.aggregator = recovered.aggregator;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
 import { AGGREGATOR_OPTIONS } from '../lib/aggregators';
+import { GALLERY_PAGE_SIZE, clampPage, galleryPage, pageNumbers } from '../lib/galleryPagination';
 import { fetchPhotos, getPhotoTitle, photoMatchesFilters } from '../lib/photos';
 import { supabase } from '../lib/supabase';
 import {
@@ -34,6 +35,10 @@ const EMPTY_FILTERS = {
 // antes imponía el servidor (1000) para no tumbar el render con tablas grandes.
 // Los rangos sin tope (métricas, cruce) usan fetchPhotos sin maxRows.
 const GALLERY_MAX_ROWS = 1000;
+// Bloque inicial de la carga progresiva: con ~300 filas alcanza para pintar la
+// primera página de 100 de inmediato; el resto va llegando en segundo plano.
+const GALLERY_BLOCK_SIZE = 300;
+const SEARCH_DEBOUNCE_MS = 400;
 
 function sortPhotosNewestFirst(items) {
   return [...items].sort(
@@ -63,15 +68,27 @@ export default function PhotoGallery({
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [liveNotice, setLiveNotice] = useState(null);
   const [pendingNewPhoto, setPendingNewPhoto] = useState(null);
+  const [page, setPage] = useState(1);
 
   const appliedFiltersRef = useRef(appliedFilters);
+  const filtersRef = useRef(filters);
   const selectedIdsRef = useRef(selectedIds);
+  const pageRef = useRef(page);
   const noticeTimerRef = useRef(null);
+  const galleryRef = useRef(null);
+  // Cada carga invalida a la anterior: una respuesta vieja (p. ej. la de una
+  // búsqueda que ya no interesa) no pinta encima de la nueva.
+  const loadIdRef = useRef(0);
 
   useEffect(() => {
     appliedFiltersRef.current = appliedFilters;
     selectedIdsRef.current = selectedIds;
-  }, [appliedFilters, selectedIds]);
+    pageRef.current = page;
+  }, [appliedFilters, selectedIds, page]);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
 
   const clearLiveNoticeTimer = useCallback(() => {
     if (noticeTimerRef.current) {
@@ -102,22 +119,44 @@ export default function PhotoGallery({
   const loadPhotos = useCallback(
     async (nextFilters, { silent = false, keepSelection = false } = {}) => {
       const filtersToLoad = nextFilters ?? appliedFiltersRef.current;
+      const requestId = ++loadIdRef.current;
+
+      // Aplicar filtros distintos siempre vuelve a la página 1; un refresco
+      // (visibilidad, ↻, subida) pasa los filtros ya aplicados y conserva la
+      // página en la que estabas.
+      if (filtersToLoad !== appliedFiltersRef.current) setPage(1);
 
       if (!silent) {
         setLoading(true);
       }
       setError(null);
       try {
-        const data = await fetchPhotos({ ...filtersToLoad, kind, maxRows: GALLERY_MAX_ROWS });
+        const receiveBlock = (rows) => {
+          if (loadIdRef.current !== requestId) return;
+          setPhotos(rows);
+        };
+        const data = await fetchPhotos({
+          ...filtersToLoad,
+          kind,
+          maxRows: GALLERY_MAX_ROWS,
+          // Bloques chicos + pintado incremental: la primera página se ve sin
+          // esperar a que lleguen las ~1000 filas del tope.
+          pageSize: GALLERY_BLOCK_SIZE,
+          onPage: receiveBlock,
+        });
+        if (loadIdRef.current !== requestId) return;
         setPhotos(data);
         setAppliedFilters(filtersToLoad);
         if (!keepSelection) {
           setSelectedIds(new Set());
         }
       } catch (err) {
+        if (loadIdRef.current !== requestId) return;
         setError(err.message || 'No se pudieron cargar las fotos.');
       } finally {
-        if (!silent) {
+        // El spinner lo apaga quien quedó vigente; si una carga más nueva ya
+        // arrancó, ella se queda con el estado.
+        if (loadIdRef.current === requestId && !silent) {
           setLoading(false);
         }
       }
@@ -125,11 +164,25 @@ export default function PhotoGallery({
     [kind],
   );
 
+  // Búsqueda con debounce: se reconsulta ~400 ms después de la última tecla.
+  // Si el usuario ya buscó a mano (Buscar/filtros), no se dispara de nuevo.
+  useEffect(() => {
+    if (filtersRef.current.search === appliedFiltersRef.current.search) return undefined;
+    const timeout = window.setTimeout(() => {
+      if (filtersRef.current.search === appliedFiltersRef.current.search) return;
+      loadPhotos(filtersRef.current);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [filters.search, loadPhotos]);
+
   const handleRealtimeInsert = useCallback(
     (photo) => {
       if (!photoMatchesFilters(photo, { ...appliedFiltersRef.current, kind })) return;
 
-      if (selectedIdsRef.current.size > 0) {
+      // Con selección activa o mirando otra página no se mete la foto nueva
+      // (movería las tarjetas de la página que se está viendo): se ofrece con
+      // «Ver», que lleva a la página 1 y la agrega.
+      if (selectedIdsRef.current.size > 0 || pageRef.current > 1) {
         setPendingNewPhoto(photo);
         return;
       }
@@ -230,7 +283,17 @@ export default function PhotoGallery({
     [photos, selectedIds],
   );
 
-  const allSelected = photos.length > 0 && selectedIds.size === photos.length;
+  // Ventana de la página actual: la grilla/lista solo renderiza estas tarjetas
+  // (de 100 en 100) aunque en memoria estén las ~1000 cargadas.
+  const currentPage = useMemo(
+    () => galleryPage(photos, page, GALLERY_PAGE_SIZE),
+    [photos, page],
+  );
+  const pageItems = currentPage.items;
+  const pageCount = currentPage.pageCount;
+
+  const allSelected =
+    pageItems.length > 0 && pageItems.every((photo) => selectedIds.has(photo.id));
   const hasSelection = selectedIds.size > 0;
 
   const hasActiveFilters = Object.entries(appliedFilters).some(([key, value]) => {
@@ -343,11 +406,18 @@ export default function PhotoGallery({
   }
 
   function toggleSelectAll() {
-    if (allSelected) {
-      setSelectedIds(new Set());
-      return;
-    }
-    setSelectedIds(new Set(photos.map((photo) => photo.id)));
+    const ids = pageItems.map((photo) => photo.id);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        // La selección se acumula entre páginas: al desmarcar «Página» solo
+        // se quitan las de esta, las de las otras se conservan.
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
   }
 
   function clearSelection() {
@@ -357,12 +427,20 @@ export default function PhotoGallery({
   function acceptPendingPhoto() {
     if (!pendingNewPhoto) return;
     prependPhoto(pendingNewPhoto);
+    setPage(1);
     showLiveNotice(`Nuevo ${itemLabel} - ${getPhotoTitle(pendingNewPhoto)}`);
     setPendingNewPhoto(null);
   }
 
+  function goToPage(nextPage) {
+    const target = clampPage(nextPage, photos.length);
+    if (target === pageRef.current) return;
+    setPage(target);
+    galleryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
-    <section className={`gallery${hasSelection ? ' gallery--selecting' : ''}`}>
+    <section ref={galleryRef} className={`gallery${hasSelection ? ' gallery--selecting' : ''}`}>
       {pendingNewPhoto && (
         <div className="gallery__pending" role="status">
           <span>Nuevo archivo — {getPhotoTitle(pendingNewPhoto)}</span>
@@ -396,6 +474,11 @@ export default function PhotoGallery({
               {photos.length} {itemLabel}{photos.length !== 1 ? 's' : ''}
               {hasActiveFilters ? ' · filtradas' : ''}
               {hasSelection ? ` · ${selectedIds.size} sel.` : ''}
+            </p>
+          )}
+          {loading && photos.length > 0 && (
+            <p className="gallery__count gallery__count--updating" role="status">
+              Actualizando…
             </p>
           )}
           <span
@@ -674,17 +757,20 @@ export default function PhotoGallery({
             checked={allSelected}
             onChange={toggleSelectAll}
           />
-          <span>Todas ({photos.length})</span>
+          <span>
+            {pageCount > 1 ? 'Página' : 'Todas'} ({pageItems.length})
+          </span>
         </label>
       )}
 
       {photos.length > 0 && (
         <div className={viewMode === 'grid' ? 'gallery__grid' : 'gallery__list'}>
           {viewMode === 'grid'
-            ? photos.map((photo) => (
+            ? pageItems.map((photo) => (
                 <PhotoCard
                   key={photo.id}
                   photo={photo}
+                  highlight={appliedFilters.search}
                   selected={selectedIds.has(photo.id)}
                   onToggleSelect={toggleSelect}
                   onLongPressSelect={selectPhoto}
@@ -692,10 +778,11 @@ export default function PhotoGallery({
                   onDeleted={handleDeleted}
                 />
               ))
-            : photos.map((photo) => (
+            : pageItems.map((photo) => (
                 <PhotoListRow
                   key={photo.id}
                   photo={photo}
+                  highlight={appliedFilters.search}
                   selected={selectedIds.has(photo.id)}
                   onToggleSelect={toggleSelect}
                   onLongPressSelect={selectPhoto}
@@ -704,6 +791,55 @@ export default function PhotoGallery({
                 />
               ))}
         </div>
+      )}
+
+      {photos.length > 0 && pageCount > 1 && (
+        <nav className="gallery__pager" aria-label="Páginas de la galería">
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => goToPage(currentPage.page - 1)}
+            disabled={currentPage.page <= 1}
+          >
+            ‹ Anterior
+          </button>
+          <ul className="gallery__pager-pages">
+            {pageNumbers(currentPage.page, pageCount).map((entry, index) =>
+              typeof entry === 'number' ? (
+                <li key={entry}>
+                  <button
+                    type="button"
+                    className={`gallery__pager-btn${
+                      entry === currentPage.page ? ' gallery__pager-btn--active' : ''
+                    }`}
+                    onClick={() => goToPage(entry)}
+                    aria-current={entry === currentPage.page ? 'page' : undefined}
+                    aria-label={`Página ${entry} de ${pageCount}`}
+                  >
+                    {entry}
+                  </button>
+                </li>
+              ) : (
+                <li key={`gap-${index}`} className="gallery__pager-gap" aria-hidden="true">
+                  …
+                </li>
+              ),
+            )}
+          </ul>
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => goToPage(currentPage.page + 1)}
+            disabled={currentPage.page >= pageCount}
+          >
+            Siguiente ›
+          </button>
+          <p className="gallery__pager-range">
+            Mostrando {currentPage.start + 1}–{currentPage.start + pageItems.length} de{' '}
+            {photos.length.toLocaleString('es-AR')}
+            {hasActiveFilters ? ' filtrados' : ''}
+          </p>
+        </nav>
       )}
 
       <BulkActionBar

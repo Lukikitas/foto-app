@@ -1,4 +1,5 @@
 import { AGGREGATORS, getAggregatorLabel, getPhotoAggregator } from './aggregators.js';
+import { emptyRefutadoDays, normalizeRefutadoDays } from './refutadoDeadline.js';
 
 export const DEFAULT_COMPLAINT_TARGET_PCT = 2.4;
 export const DEFAULT_AWT_TARGET_PCT = 11;
@@ -44,6 +45,8 @@ export function emptyStore() {
     version: 1,
     targetComplaintPct: DEFAULT_COMPLAINT_TARGET_PCT,
     targetAwtPct: DEFAULT_AWT_TARGET_PCT,
+    // Días por agregador para refutar antes de marcar «Queja vencida».
+    refutadoDays: emptyRefutadoDays(),
     updatedAt: null,
     days: {},
   };
@@ -63,6 +66,7 @@ export function parseStore(raw) {
     store.targetAwtPct = awtTarget;
   }
 
+  store.refutadoDays = normalizeRefutadoDays(raw.refutadoDays);
   store.updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : null;
   store.version = 1;
   store.days = {};
@@ -387,6 +391,12 @@ export function setTargetAwtPct(store, target) {
   const value = Number(target);
   next.targetAwtPct =
     Number.isFinite(value) && value >= 0 && value <= 100 ? value : DEFAULT_AWT_TARGET_PCT;
+  return next;
+}
+
+export function setRefutadoDays(store, days) {
+  const next = parseStore(store);
+  next.refutadoDays = normalizeRefutadoDays(days);
   return next;
 }
 

@@ -46,6 +46,9 @@ test('serialize and hydrate keep ticket and evidence files', () => {
   assert.equal(restored.file.name, 'evidencia.jpg');
   assert.equal(restored.ticketFile.name, 'ticket.jpg');
   assert.equal(restored.meta.taken_by, 'Sofi');
+  // La hora de captura sobrevive al cierre/reapertura de la app: es la hora
+  // que va a tener el pedido aunque la cola se procese mucho después.
+  assert.equal(restored.createdAt, item.createdAt);
 });
 
 test('interrupted analyzing and uploading jobs resume as pending', () => {

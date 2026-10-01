@@ -128,6 +128,9 @@ export async function fetchPhotos({
   // La API corta en 1000 filas por consulta; sin paginar, los rangos largos
   // (p. ej. un mes entero en Desempeño) se truncan en silencio.
   maxRows = Infinity,
+  // Bloques de tamaño reducido + callback para ir pintando de a poco.
+  pageSize,
+  onPage,
 } = {}) {
   const trimmedSearch = search?.trim();
   const trimmedTakenBy = takenBy?.trim();
@@ -183,24 +186,32 @@ export async function fetchPhotos({
     return query;
   };
 
-  const data = await fetchAllPages(buildQuery, { maxRows });
+  const matchOptions = {
+    kind,
+    search,
+    dateFrom,
+    dateTo,
+    timeFrom,
+    timeTo,
+    aggregator,
+    codeNotFound,
+    hasComplaint,
+    isRefutado,
+    takenBy,
+    notes,
+  };
+  const matching = (rows) => rows.filter((photo) => photoMatchesFilters(photo, matchOptions));
 
-  return data.filter((photo) =>
-    photoMatchesFilters(photo, {
-      kind,
-      search,
-      dateFrom,
-      dateTo,
-      timeFrom,
-      timeTo,
-      aggregator,
-      codeNotFound,
-      hasComplaint,
-      isRefutado,
-      takenBy,
-      notes,
-    }),
-  );
+  const data = await fetchAllPages(buildQuery, {
+    maxRows,
+    pageSize,
+    // Los bloques llegan acumulados y ya filtrados en cliente (hay filtros que
+    // el servidor no conoce, como el tipo Pedidos/Archivos): la galería pinta
+    // la primera tira sin esperar a agotar maxRows.
+    onPage: onPage ? (rows) => onPage(matching(rows)) : undefined,
+  });
+
+  return matching(data);
 }
 
 export function sanitizePhotoSearchToken(token) {
@@ -334,11 +345,15 @@ export function photoMatchesFilters(
   return true;
 }
 
-async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '') {
+async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '', capturedAt = null) {
   const photoMeta = normalizePhotoMeta(meta);
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
   const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
   const resolvedPath = filePath || (folder ? `${folder}/${fileName}` : fileName);
+  // La cola puede demorar minutos (u horas) en llegar acá: cuando se informa la
+  // hora de captura, manda esa y no now() del servidor. Valor raro → default.
+  const createdAt =
+    typeof capturedAt === 'string' && !Number.isNaN(Date.parse(capturedAt)) ? capturedAt : null;
 
   const { data: existing } = await supabase
     .from('photos')
@@ -365,6 +380,7 @@ async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '
       public_url: urlData.publicUrl,
       aggregator: AGGREGATORS[folder.split('/')[1]] ? folder.split('/')[1] : null,
       ...photoMeta,
+      ...(createdAt ? { created_at: createdAt } : {}),
     })
     .select()
     .single();
@@ -383,24 +399,38 @@ async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '
   return data;
 }
 
-export async function uploadPhoto(file, orderDigits, meta = {}, aggregator = 'sin_agregador', filePath = '') {
+export async function uploadPhoto(
+  file,
+  orderDigits,
+  meta = {},
+  aggregator = 'sin_agregador',
+  filePath = '',
+  capturedAt = null,
+) {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('Ingresá el código completo o los últimos 4 dígitos del pedido.');
   }
 
   const storageAggregator = AGGREGATORS[aggregator] ? aggregator : 'sin_agregador';
-  const photo = await insertStoredFile(file, orderDigits, meta, `orders/${storageAggregator}`, filePath);
+  const photo = await insertStoredFile(
+    file,
+    orderDigits,
+    meta,
+    `orders/${storageAggregator}`,
+    filePath,
+    capturedAt,
+  );
   if (photo?.name === UNIDENTIFIED_ORDER_NAME) {
     return updatePhoto(photo.id, orderDigits, meta, storageAggregator);
   }
   return photo;
 }
 
-export async function uploadUnidentifiedOrder(file, meta = {}, filePath = '') {
-  return insertStoredFile(file, UNIDENTIFIED_ORDER_NAME, meta, 'orders/no_code', filePath);
+export async function uploadUnidentifiedOrder(file, meta = {}, filePath = '', capturedAt = null) {
+  return insertStoredFile(file, UNIDENTIFIED_ORDER_NAME, meta, 'orders/no_code', filePath, capturedAt);
 }
 
-export async function uploadFile(file, title, meta = {}, filePath = '') {
+export async function uploadFile(file, title, meta = {}, filePath = '', capturedAt = null) {
   const fallback = file.name.replace(/\.[^.]+$/, '') || 'Archivo';
   const name = normalizePhotoName(title, fallback);
   return insertStoredFile(
@@ -413,6 +443,7 @@ export async function uploadFile(file, title, meta = {}, filePath = '') {
     },
     'files',
     filePath,
+    capturedAt,
   );
 }
 
