@@ -22,7 +22,11 @@ Al vencer, la queja muestra el tag «Queja vencida» en Reclamos e Historial (co
 
 La hora que se muestra (galería, historial, métricas y cruce con reclamos) es la de la captura del par, no la de la subida. La cola de lectura/subida guarda el momento en que se encoló el par y ese valor se escribe en la foto al insertarla, aunque la cola demore o la app se cierre y continúe en segundo plano. Las fotos ya subidas conservan su hora anterior.
 
-Validación: `npm test` (272 pruebas), `npm run lint`, `npm run build`.
+### Evidencia fiel a la cámara
+
+La tira de la cámara muestra el frame congelado que se vio al disparar. Cuando el teléfono lo permite, su foto de alta resolución (`ImageCapture.takePhoto()`) reemplaza a ese frame para subir con más detalle y enfoque automático; desde la 1.7 ese reemplazo **solo ocurre si la foto de alta resolución tiene exactamente el mismo encuadre** que el frame mostrado (correlación normalizada ≥ 0,9 sobre recortes del mismo aspecto, tolerando temblor de hasta 2 px y diferencias de exposición/HDR). Si el teléfono devuelve la foto recortada o con otra proporción, se sube el frame que se vio. Así lo que se agranda en la galería y lo que se descarga es idéntico a lo que el empleado vio en cámara. Las miniaturas de la grilla siguen recortando por diseño de galería.
+
+Validación: `npm test` (278 pruebas), `npm run lint`, `npm run build`.
 
 ## Versión 1.6
 

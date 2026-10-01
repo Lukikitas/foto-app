@@ -23,5 +23,11 @@ export const RELEASE_GROUPS = [
       'La galería muestra la hora en que se sacó el par de fotos, aunque la cola de lectura/subida tarde: el pedido guarda su hora de captura y no la en que terminó de subir. Vale también si la app se cerró y la cola siguió en segundo plano.',
     ],
   },
+  {
+    title: 'Evidencia fiel a la cámara',
+    notes: [
+      'La foto que se agranda en la galería y la que se descarga son exactamente las que vio el empleado al sacarla: si la foto de alta resolución del teléfono viene con otro encuadre (zoom de fábrica), se conserva el frame que se mostró en cámara. Cuando el encuadre coincide, sube la versión de alta resolución con más detalle.',
+    ],
+  },
 ];
 export const RELEASE_NOTES = RELEASE_GROUPS.flatMap(group => group.notes);

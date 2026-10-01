@@ -118,6 +118,9 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
         });
         const bitmap = await createImageBitmap(still);
         try {
+          // El still solo reemplaza al frame que el empleado ya vio si cubre
+          // el mismo encuadre; si el teléfono lo devuelve recortado, se
+          // conserva el frame visto (lo que ves es lo que sube).
           if (!isSameCapturedScene(fallback, bitmap)) return null;
           const stillQuality = inspectCaptureCanvas(bitmap, { ticket });
           if (stillQuality.issue === 'blurry' && quality.issue !== 'blurry') return null;
