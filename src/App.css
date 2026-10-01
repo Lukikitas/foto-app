@@ -7248,6 +7248,10 @@ button.metrics-agg:focus-visible {
   min-width: 0;
   width: 100%;
 }
+.settings__manual .btn {
+  margin-top: 0.3rem;
+  text-decoration: none;
+}
 .settings__version-card { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(135deg, var(--surface), color-mix(in srgb, var(--surface) 93%, #e21c36)); }
 .settings__version-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .settings__version-kicker { text-transform: uppercase; font-weight: 700; font-size: .7rem; letter-spacing: .12em; color: var(--text-muted); }

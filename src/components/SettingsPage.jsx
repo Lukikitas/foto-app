@@ -277,6 +277,22 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           <p>Esta preferencia se guarda en este dispositivo.</p>
         </section>
 
+        <section className="settings__card settings__manual">
+          <h3>Manual de uso</h3>
+          <p>
+            Guía corta para el equipo: cómo sacar las fotos, buscar en la galería, marcar
+            una queja y refutar. Se puede leer en el celu o guardar como PDF.
+          </p>
+          <a
+            className="btn btn--primary"
+            href={`${import.meta.env.BASE_URL}manual/`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abrir manual
+          </a>
+        </section>
+
         <section className="settings__card settings__version-card">
           <div className="settings__version-top">
             <div>

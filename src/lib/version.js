@@ -29,5 +29,11 @@ export const RELEASE_GROUPS = [
       'La foto que se agranda en la galería y la que se descarga son exactamente las que vio el empleado al sacarla: si la foto de alta resolución del teléfono viene con otro encuadre (zoom de fábrica), se conserva el frame que se mostró en cámara. Cuando el encuadre coincide, sube la versión de alta resolución con más detalle.',
     ],
   },
+  {
+    title: 'Manual de uso',
+    notes: [
+      'Ajustes → «Manual de uso»: guía corta para el equipo (sacar fotos, galería, quejas y refutado) que se abre en el celu y se puede guardar como PDF con un toque.',
+    ],
+  },
 ];
 export const RELEASE_NOTES = RELEASE_GROUPS.flatMap(group => group.notes);

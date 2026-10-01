@@ -64,7 +64,7 @@ export default defineConfig({
       includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm,gz}'],
-        globIgnores: ['**/node_modules/**', '**/presentacion/**'],
+        globIgnores: ['**/node_modules/**', '**/presentacion/**', '**/manual/**'],
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         rollupFormat: 'iife',
       },
