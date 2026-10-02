@@ -25,7 +25,7 @@ clientsClaim();
 
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/tesseract\//, /^\/presentacion(\/|$)/],
+    denylist: [/^\/tesseract\//, /^\/presentacion(\/|$)/, /^\/manual(\/|$)/],
   }),
 );
 

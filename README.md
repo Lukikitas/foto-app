@@ -28,7 +28,7 @@ La tira de la cámara muestra el frame congelado que se vio al disparar. Cuando 
 
 ### Manual de uso
 
-La app incluye una guía corta para el equipo (sacar fotos, galería, marcar quejas y refutado) en `public/manual/index.html`. Se abre desde **Ajustes → Manual de uso** o directo en `/manual/` y tiene el botón «Guardar como PDF / Imprimir» para quedarse con el PDF en el celu. Es una página autocontenida con estilos A4 de impresión que reutiliza las capturas de `public/presentacion/`; no se precachea el service worker (igual que la presentación).
+La app incluye una guía corta para el equipo (sacar fotos, galería, marcar quejas, refutado, repetir fotos y corregir autores) en `public/manual/index.html`. Se abre desde **Ajustes → Manual de uso** o directo en `/manual/` y tiene el botón «Guardar como PDF / Imprimir» para quedarse con el PDF en el celu. Es una página autocontenida con estilos A4 de impresión y capturas propias en `public/manual/img/`; no se precachea el service worker y queda fuera del fallback de navegación (junto a `presentacion/`), así que `/manual/` sirve la guía y no la app.
 
 Validación: `npm test` (278 pruebas), `npm run lint`, `npm run build`.
 
