@@ -142,7 +142,7 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
               <div className="report-pdf-kpi report-pdf-kpi--total">
                 <span className="report-pdf-kpi__label">$ Reclamado Total</span>
                 <strong className="report-pdf-kpi__val">{formatMoney(totals.complaintAmount)}</strong>
-                <span className="report-pdf-kpi__hint">Plata dada al cliente en reclamos</span>
+                <span className="report-pdf-kpi__hint">Dinero devuelto al cliente en reclamos</span>
               </div>
               <div className="report-pdf-kpi report-pdf-kpi--good">
                 <span className="report-pdf-kpi__label">$ Recuperado</span>

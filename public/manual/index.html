@@ -9,14 +9,24 @@
     <style>
       :root {
         --red: #e4002b;
-        --ink: #1b1c1f;
+        --red-dark: #b5001f;
+        --red-soft: #fdf0f3;
+        --ink: #16171a;
         --muted: #6b707a;
-        --line: #e6e7ea;
+        --line: #e7e8ec;
         --card: #ffffff;
-        --bg: #f4f5f7;
-        --ok: #1e9e5a;
-        --warn: #c77700;
-        --info: #2563eb;
+        --bg: #f1f2f5;
+        --amber: #b66a00;
+        --amber-bg: #fff7e8;
+        --amber-line: #f0d9ab;
+        --green: #178a4f;
+        --green-bg: #e9f8f0;
+        --green-line: #bfe8d1;
+        --blue: #2258d6;
+        --blue-bg: #eaf1fe;
+        --blue-line: #c6d8fc;
+        --gray-bg: #f2f3f5;
+        --gray-line: #d8dade;
         --sans: 'Segoe UI', system-ui, Roboto, sans-serif;
       }
 
@@ -27,9 +37,10 @@
         color: var(--ink);
         font-family: var(--sans);
         font-size: 15px;
-        line-height: 1.5;
+        line-height: 1.52;
       }
 
+      /* Barra superior (solo pantalla) */
       .toolbar {
         position: sticky;
         top: 0;
@@ -39,18 +50,27 @@
         justify-content: space-between;
         gap: 1rem;
         padding: 0.6rem 1rem;
-        background: #fff;
-        border-bottom: 1px solid var(--line);
+        background: #17181b;
+        color: #fff;
       }
-      .toolbar p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+      .toolbar__title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 700;
+        font-size: 0.92rem;
+        white-space: nowrap;
+      }
+      .toolbar__title img { width: 24px; height: 24px; border-radius: 7px; }
+      .toolbar p { margin: 0; color: #b9bcc4; font-size: 0.8rem; }
       .toolbar button {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
         min-height: 2.4rem;
-        padding: 0.45rem 1rem;
+        padding: 0.45rem 1.05rem;
         border: none;
-        border-radius: 8px;
+        border-radius: 999px;
         background: var(--red);
         color: #fff;
         font: inherit;
@@ -58,177 +78,291 @@
         cursor: pointer;
         white-space: nowrap;
       }
-      .toolbar button:hover { background: #c60025; }
+      .toolbar button:hover { background: var(--red-dark); }
 
       .sheet {
-        max-width: 820px;
-        margin: 1.2rem auto 2rem;
-        padding: 2.2rem 2.4rem 2rem;
+        max-width: 860px;
+        margin: 1.2rem auto 2.5rem;
+        padding: 1.6rem 1.8rem 2rem;
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 14px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+        border-radius: 6px;
       }
 
-      .kicker {
-        margin: 0 0 0.3rem;
-        color: var(--red);
-        font-size: 0.74rem;
+      /* Portada */
+      .cover {
+        padding: 1.6rem 1.8rem 1.4rem;
+        border-radius: 6px;
+        background: #17181b;
+        color: #fff;
+      }
+      .cover__brand {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+      }
+      .cover__brand img {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+      }
+      .cover__kicker {
+        margin: 0 0 0.15rem;
+        color: #ff93a5;
+        font-size: 0.72rem;
         font-weight: 800;
-        letter-spacing: 0.14em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
       }
-      h1 { margin: 0; font-size: 2rem; letter-spacing: -0.03em; line-height: 1.1; }
-      .lead { margin: 0.55rem 0 0.4rem; max-width: 40rem; }
-      .meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
+      .cover h1 {
         margin: 0.7rem 0 0;
+        font-size: 1.9rem;
+        letter-spacing: -0.02em;
+        color: #fff;
+      }
+      .cover__lead {
+        margin: 0.5rem 0 0;
+        max-width: 38rem;
+        color: #d7d9df;
+        font-size: 1rem;
+      }
+      .cover__meta {
+        margin: 0.8rem 0 0;
+        color: #9ba0aa;
+        font-size: 0.78rem;
+      }
+
+      /* Índice */
+      .toc-card {
+        margin: 1rem 0 0;
+        padding-top: 0.7rem;
+        border-top: 2px solid var(--ink);
+      }
+      .toc-card__title {
+        margin: 0 0 0.45rem;
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .toc {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.2rem 1rem;
+        margin: 0;
         padding: 0;
         list-style: none;
       }
-      .meta li {
-        padding: 0.18rem 0.55rem;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        color: var(--muted);
-        font-size: 0.78rem;
-        font-weight: 600;
-      }
-
-      section { margin-top: 1.6rem; }
-      h2 {
-        display: flex;
-        align-items: center;
-        gap: 0.55rem;
-        margin: 0 0 0.55rem;
-        font-size: 1.28rem;
-        letter-spacing: -0.02em;
-      }
-      h2 .n {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: none;
-        width: 1.7rem;
-        height: 1.7rem;
-        border-radius: 50%;
-        background: var(--red);
-        color: #fff;
-        font-size: 0.95rem;
-        font-weight: 800;
-      }
-
-      .split {
-        display: grid;
-        grid-template-columns: 1fr 190px;
-        gap: 1.1rem;
-        align-items: start;
-      }
-      .split figure { margin: 0; }
-      .split__media { display: grid; gap: 0.7rem; }
-      .figure--phone { max-width: 270px; margin: 0.55rem auto 0; }
-      h3.sub {
-        margin: 0.95rem 0 0.35rem;
-        font-size: 1.02rem;
-        letter-spacing: -0.01em;
-      }
-      h3.sub::before {
-        content: '';
-        display: inline-block;
-        width: 0.55rem;
-        height: 0.55rem;
-        border-radius: 50%;
-        background: var(--red);
-        margin-right: 0.42rem;
-      }
-
-      ol.steps { margin: 0; padding-left: 1.2rem; }
-      ol.steps > li { margin: 0 0 0.45rem; }
-      ol.steps > li::marker { color: var(--red); font-weight: 700; }
-      .ui { font-weight: 700; }
-
-      .tip {
-        margin: 0.7rem 0 0;
-        padding: 0.65rem 0.8rem;
-        border-left: 3px solid var(--red);
-        background: #fdf1f3;
-        border-radius: 0 8px 8px 0;
+      .toc a {
+        display: block;
+        padding: 0.25rem 0;
+        color: var(--ink);
+        text-decoration: none;
         font-size: 0.92rem;
       }
-      .tip b { color: var(--red); }
-      .tip--warn { border-left-color: var(--warn); background: #fdf6e9; }
-      .tip--warn b { color: var(--warn); }
+      .toc a:hover { color: var(--red); }
+      .toc__n { color: var(--red); font-weight: 700; margin-right: 0.35rem; }
+      /* Secciones */
+      section.manual-section { margin-top: 0.4rem; }
+      h2 {
+        margin: 1.5rem 0 0;
+        font-size: 1.4rem;
+        letter-spacing: -0.02em;
+      }
+      h2 .n { color: var(--red); font-weight: 800; }
+      h2 .n::after { content: '.'; }
+      .section-lead {
+        margin: 0.4rem 0 0;
+        max-width: 44rem;
+        color: var(--muted);
+        font-size: 0.98rem;
+      }
+      h3.sub {
+        margin: 1.2rem 0 0.3rem;
+        font-size: 1.04rem;
+      }
 
-      figure { break-inside: avoid; }
+      /* Pasos numerados (solo donde hay secuencia real) */
+      ol.steps {
+        margin: 0.6rem 0 0;
+        padding-left: 1.6rem;
+      }
+      ol.steps > li {
+        margin-bottom: 0.55rem;
+        padding-left: 0.25rem;
+      }
+      ol.steps > li::marker {
+        color: var(--red);
+        font-weight: 800;
+      }
+      ul.list { margin: 0.6rem 0 0; padding-left: 1.1rem; }
+      ul.list > li { margin-bottom: 0.45rem; }
+      .ui {
+        font-weight: 700;
+        background: var(--gray-bg);
+        border-radius: 5px;
+        padding: 0 0.28rem;
+      }
+
+      /* Avisos: dos tipos — nota y advertencia */
+      .callout {
+        margin: 0.8rem 0 0;
+        padding: 0.55rem 0.8rem;
+        border-left: 3px solid var(--gray-line);
+        background: var(--gray-bg);
+        font-size: 0.94rem;
+      }
+      .callout b.label { font-weight: 700; }
+      .callout--warn { background: var(--amber-bg); border-left-color: var(--amber); }
+      .callout--warn b.label { color: var(--amber); }
+
+      .doavoid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4rem 1.6rem;
+        margin-top: 1rem;
+        padding-top: 0.7rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.94rem;
+      }
+      .doavoid h4 {
+        margin: 0 0 0.3rem;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      .doavoid ul { margin: 0; padding-left: 1.05rem; }
+      .doavoid li { margin-bottom: 0.2rem; }
+
+      /* Flujo visual */
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.45rem;
+        margin: 0.8rem 0 0;
+        padding: 0.7rem 0.8rem;
+        background: var(--gray-bg);
+        border: 1px dashed var(--gray-line);
+        border-radius: 12px;
+      }
+      .flow__step {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 999px;
+        border: 1.5px solid var(--gray-line);
+        background: #fff;
+        font-weight: 700;
+        font-size: 0.86rem;
+      }
+      .flow__arrow { color: var(--muted); font-weight: 800; }
+      .flow__or { font-size: 0.8rem; font-style: italic; color: var(--muted); }
+      .flow--amber { color: var(--amber); border-color: var(--amber-line); background: var(--amber-bg); }
+      .flow--blue { color: var(--blue); border-color: var(--blue-line); background: var(--blue-bg); }
+      .flow--green { color: var(--green); border-color: var(--green-line); background: var(--green-bg); }
+      .flow--red { color: var(--red-dark); border-color: #f3c1c8; background: #fdeef0; }
+      .flow--gray { color: var(--muted); border-color: var(--gray-line); background: var(--gray-bg); border-style: dashed; }
+
+      /* Tabla */
+      .table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 0; font-size: 0.92rem; }
+      .table th, .table td {
+        border: 1px solid var(--line);
+        padding: 0.45rem 0.6rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .table th {
+        background: var(--gray-bg);
+        color: var(--muted);
+        font-size: 0.76rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .table td b.cell { white-space: nowrap; }
+      .c-amber { color: var(--amber); }
+      .c-blue { color: var(--blue); }
+      .c-green { color: var(--green); }
+      .c-red { color: var(--red-dark); }
+      .c-gray { color: var(--muted); }
+
+      /* Figuras */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1.1rem;
+        align-items: start;
+        margin-top: 0.5rem;
+      }
+      figure {
+        margin: 0;
+        width: 300px;
+        max-width: 100%;
+        break-inside: avoid;
+      }
+      figure.figure--compact { width: 250px; }
       figure img {
         display: block;
         width: 100%;
         height: auto;
+        border-radius: 4px;
         border: 1px solid var(--line);
-        border-radius: 10px;
         background: #09090a;
       }
       figcaption {
-        margin-top: 0.3rem;
-        color: var(--muted);
-        font-size: 0.78rem;
+        margin-top: 0.35rem;
+        font-size: 0.76rem;
         line-height: 1.35;
-      }
-
-      .states {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        margin: 0.5rem 0 0.7rem;
-        padding: 0;
-        list-style: none;
-      }
-      .states li {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.22rem 0.6rem;
-        border-radius: 7px;
-        border: 1px solid;
-        font-size: 0.8rem;
-        font-weight: 700;
-      }
-      .states small { font-weight: 500; opacity: 0.85; }
-      .st-queja { background: #fdf6e9; border-color: #f0dcb2; color: var(--warn); }
-      .st-refutado { background: #eaf1fe; border-color: #c3d6fb; color: var(--info); }
-      .st-ok { background: #e9f7ef; border-color: #bfe8d1; color: var(--ok); }
-      .st-no { background: #fdecee; border-color: #f6c9ce; color: var(--red); }
-      .st-vencida { background: #f1f2f4; border-color: #d7d9de; color: var(--muted); border-style: dashed; }
-
-      .qa { margin: 0; }
-      .qa dt { margin-top: 0.7rem; font-weight: 700; }
-      .qa dt::before { content: '› '; color: var(--red); }
-      .qa dd { margin: 0.12rem 0 0; }
-
-      footer {
-        margin-top: 1.8rem;
-        padding-top: 0.7rem;
-        border-top: 1px solid var(--line);
         color: var(--muted);
-        font-size: 0.78rem;
+      }
+      /* Dudas rápidas */
+      .qa { margin: 0.7rem 0 0; }
+      .qa__item {
+        padding: 0.55rem 0;
+        border-top: 1px solid var(--line);
+        break-inside: avoid;
+      }
+      .qa__q { margin: 0; font-weight: 700; font-size: 0.97rem; }
+      .qa__a { margin: 0.18rem 0 0; font-size: 0.94rem; color: var(--ink); }
+
+      footer.manual-footer {
         display: flex;
         justify-content: space-between;
-        gap: 1rem;
         flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-top: 2rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.78rem;
+        color: var(--muted);
       }
 
-      @media (max-width: 700px) {
-        .sheet { margin: 0; border: none; border-radius: 0; padding: 1.3rem 1.05rem 2rem; box-shadow: none; }
-        .split { grid-template-columns: 1fr; }
-        .split figure { max-width: 240px; }
+      @media (max-width: 720px) {
+        .sheet {
+          margin: 0;
+          border: none;
+          border-radius: 0;
+          padding: 1.1rem 1rem 2.5rem;
+          box-shadow: none;
+        }
         .toolbar p { display: none; }
+        .cover { padding: 1.4rem 1.2rem 1.2rem; }
+        .cover h1 { font-size: 1.75rem; }
+        .toc { grid-template-columns: 1fr; }
+        .split { grid-template-columns: 1fr; }
+        .doavoid { grid-template-columns: 1fr; }
+        figure, figure.figure--compact { width: 280px; justify-self: center; }
       }
 
-      @page { size: A4; margin: 13mm 12mm 12mm; }
+      @page { size: A4; margin: 12mm; }
 
       @media print {
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         body { background: #fff; font-size: 10.5pt; }
         .toolbar { display: none; }
         .sheet {
@@ -239,208 +373,288 @@
           border-radius: 0;
           box-shadow: none;
         }
-        h1 { font-size: 22pt; }
-        h2 { font-size: 14pt; break-after: avoid; }
-        .tip, .qa dt, ol.steps > li, figure, .states { break-inside: avoid; }
-        .split figure { max-width: 48mm; }
-        .figure--phone { max-width: 46mm; }
-        .split--tall figure img { max-height: 60mm; }
-        figure img { max-height: 92mm; object-fit: contain; background: #fff; }
-        section { margin-top: 1rem; }
+        section.manual-section { break-before: page; margin-top: 0; }
+        h2, .section-lead, h3.sub { break-after: avoid; }
+        .callout, .qa__item, .flow, .toc a, li, figure, .table tr { break-inside: avoid; }
+        .cover { border-radius: 12px; }
+        h2 { font-size: 16pt; }
+        .split { grid-template-columns: 1fr auto; }
+        .split figure { width: 70mm; }
+        .split figure.figure--compact { width: 58mm; }
+        figure img { background: #fff; }
+        a { color: inherit; text-decoration: none; }
       }
     </style>
   </head>
   <body>
     <div class="toolbar">
-      <p>Para guardar el manual en el celu o la PC: tocá el botón y elegí <b>«Guardar como PDF»</b>.</p>
-      <button type="button" onclick="window.print()">⬇ Guardar como PDF / Imprimir</button>
+      <span class="toolbar__title"><img src="../pwa-192.png" alt="" /> Manual de uso · STAR-APP</span>
+      <p>Para quedarte el PDF: tocá el botón y elegí «Guardar como PDF».</p>
+      <button type="button" onclick="window.print()">Guardar como PDF / Imprimir</button>
     </div>
 
     <main class="sheet">
-      <header>
-        <p class="kicker">STAR-APP Delivery</p>
+      <header class="cover">
+        <div class="cover__brand">
+          <img src="../pwa-192.png" alt="Ícono de STAR-APP" />
+          <div>
+            <p class="cover__kicker">STAR-APP Delivery · La Plata</p>
+            <p style="margin: 0; font-weight: 700;">Equipo de fotografía y reclamos</p>
+          </div>
+        </div>
         <h1>Manual de uso</h1>
-        <p class="lead">
-          Guía corta para el equipo: cómo sacar las fotos, ver y buscar en la galería,
-          marcar un pedido como queja y refutar. Si tenés una duda, mirá acá.
+        <p class="cover__lead">
+          Cómo sacar las fotos de cada pedido, buscar en la galería, marcar quejas y refutar.
         </p>
-        <ul class="meta">
-          <li>Versión 1.7</li>
-          <li>~5 minutos de lectura</li>
-          <li>Local: La Plata</li>
-        </ul>
+        <p class="cover__meta">Versión 1.7 · actualizada el 30/09/2026</p>
       </header>
 
-      <section>
-        <h2><span class="n">1</span> Sacar las fotos</h2>
-        <div class="split">
-          <div>
-            <ol class="steps">
-              <li>Entrá a <span class="ui">Sacar foto</span> y poné tu nombre (queda guardado para la próxima).</li>
-              <li>Encuadrá el ticket con el código bien visible. Si hace falta, prendé el <span class="ui">flash</span> (botón abajo) o alejá un poco el celu.</li>
-              <li><b>Paso 1 — Ticket:</b> sacale la foto al ticket. Si dice <span class="ui">«✓ Ticket — ahora la bolsa»</span>, vas bien.</li>
-              <li><b>Paso 2 — Bolsa:</b> sacá la bolsa completa, con el ticket a la vista. Cuando diga <span class="ui">«Par listo ✓»</span>, listo. ¿Salió mal una de las dos? Se puede repetir (sección 5).</li>
-              <li>Seguí con el siguiente par: la cola sube las fotos y lee los códigos sola. <b>Podés cerrar la app</b> y sigue en segundo plano.</li>
-              <li>La hora que queda en el pedido es <b>la que sacaste la foto</b>, aunque la subida tarde.</li>
-            </ol>
-            <p class="tip">
-              <b>Lo que ves es lo que se sube.</b> La foto que se abre o se descarga después es
-              exactamente la misma que viste en cámara.
-            </p>
-            <p class="tip tip--warn">
-              <b>Avisos de calidad:</b> «oscura» → prendé el flash · «borrosa» → apoyá el celu y
-              esperá un segundo · «cortada» → alejá (tiene que entrar todo el ticket).
-            </p>
-          </div>
-          <figure>
-            <img src="img/camara-ticket.png" alt="Cámara de pedidos: paso 1 de 2, ticket con el código dentro del recuadro" onerror="this.closest('figure').style.display='none'" />
-            <figcaption>Paso 1 de 2 · TICKET: el código dentro del recuadro, enfocado y con buena luz.</figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <section>
-        <h2><span class="n">2</span> Ver y buscar en la galería</h2>
-        <ol class="steps">
-          <li>Entrá a <span class="ui">Galería de pedidos</span>. Las fotos se ven de <b>100 en 100</b>: abajo usá <span class="ui">‹ Anterior</span> y <span class="ui">Siguiente ›</span>, o tocá un número para saltar de página.</li>
-          <li><b>Buscá mientras escribís:</b> el número del pedido («4821»), «PEYA…» o el nombre de quien sacó la foto. Lo que coincida se resalta.</li>
-          <li><b>Filtros rápidos:</b> <span class="ui">Hoy</span>, <span class="ui">Ayer</span>, <span class="ui">Reclamos</span> y <span class="ui">Sin código</span>. Para más, tocá <span class="ui">Filtros</span> (fechas, autor, agregador).</li>
-          <li><b>Ver la foto completa:</b> tocá <span class="ui">Ver</span> en la tarjeta. Lo que se ve ahí es lo mismo que se descarga.</li>
-          <li><b>Acciones en lote:</b> marcá con el checkbox <span class="ui">Página</span> para seleccionar las 100 de esa página (podés sumar selecciones de otras páginas) y descargar o borrar juntas desde la barra de abajo.</li>
+      <nav class="toc-card" aria-label="Índice del manual">
+        <p class="toc-card__title">Contenido</p>
+        <ol class="toc">
+          <li><a href="#s1"><span class="toc__n">1</span> Sacar las fotos</a></li>
+          <li><a href="#s2"><span class="toc__n">2</span> Galería: ver y buscar</a></li>
+          <li><a href="#s3"><span class="toc__n">3</span> Marcar una queja</a></li>
+          <li><a href="#s4"><span class="toc__n">4</span> Proceso de refutado</a></li>
+          <li><a href="#s5"><span class="toc__n">5</span> Repetir y corregir</a></li>
+          <li><a href="#s6"><span class="toc__n">6</span> Dudas rápidas</a></li>
         </ol>
-        <figure class="figure--phone">
-          <img src="img/galeria-filtros.png" alt="Galería de pedidos en el celu con el panel de Filtros abierto" onerror="this.closest('figure').style.display='none'" />
-          <figcaption>Filtros de la galería: pedido, autor, fechas, agregador y el checkbox «Página (100)».</figcaption>
-        </figure>
-      </section>
+      </nav>
+      <section class="manual-section" id="s1">
+        <h2><span class="n">1</span> Sacar las fotos</h2>
+        <p class="section-lead">
+          Dos fotos por pedido: primero el ticket, después la bolsa. La cola sube y lee el código sola.
+        </p>
 
-      <section>
+        <p class="callout">
+          <b class="label">Antes de empezar:</b> revisá el nombre en «¿Quién saca la foto?»: es el que queda en
+          cada foto del turno. Y la hora de cada pedido es la de la foto, no la de la subida.
+        </p>
+
+        <div class="split">
+          <div>
+            <ol class="steps">
+              <li>Entrá a <span class="ui">Sacar foto</span> y elegí tu nombre.</li>
+              <li>Ubicá el código dentro del recuadro y sacá la foto. Si hace falta, flash o zoom (− / 1× / +).</li>
+              <li>Después, la bolsa completa con el ticket a la vista. Cuando diga «Par listo ✓», terminaste el par.</li>
+              <li>Seguí con el siguiente par. Podés cerrar la app: la cola sigue subiendo en segundo plano.</li>
+            </ol>
+          </div>
+          <figure>
+            <img src="img/camara-ticket.png" alt="Foto del ticket con el código dentro del recuadro" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>El código tiene que quedar completo dentro del recuadro: eso es lo que lee la app.</figcaption>
+          </figure>
+        </div>
+
+        <div class="doavoid">
+          <div>
+            <h4>Hacé</h4>
+            <ul>
+              <li>Código completo y dentro del recuadro</li>
+              <li>Esperá el enfoque antes de disparar</li>
+              <li>Flash si hay sombra o poca luz</li>
+              <li>Bolsa con el ticket visible arriba</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Evitá</h4>
+            <ul>
+              <li>Ticket cortado o fuera del recuadro</li>
+              <li>Sombra encima del código</li>
+              <li>Foto movida o sin enfoque</li>
+              <li>Cubrir el ticket con la mano</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="callout callout--warn">
+          <b class="label">Si la app te avisa:</b>
+          «oscura» → prendé el flash o buscá más luz · «borrosa» → apoyá el celular y esperá un segundo ·
+          «cortada» → alejá un poco: tiene que entrar todo el ticket.
+        </p>
+      </section>
+      <section class="manual-section" id="s2">
+        <h2><span class="n">2</span> Ver y buscar en la galería</h2>
+        <p class="section-lead">Todas las fotos del turno, de 100 en 100.</p>
+
+        <div class="split">
+          <div>
+            <ul class="list">
+              <li><span class="ui">‹ Anterior</span> y <span class="ui">Siguiente ›</span> cambian de página; tocá un número para saltar directo.</li>
+              <li>En <span class="ui">Pedido</span> buscás mientras escribís: un número («4821»), «PEYA…» o el nombre de quien sacó la foto. Lo que coincide se resalta.</li>
+              <li>Filtros rápidos: <span class="ui">Hoy</span>, <span class="ui">Ayer</span>, <span class="ui">Reclamos</span>, <span class="ui">Sin código</span>. Para fechas, autor o agregador, <span class="ui">Filtros</span>.</li>
+              <li><span class="ui">Ver</span> en la tarjeta muestra la foto completa, igual que se descarga.</li>
+              <li>El checkbox <span class="ui">«Página»</span> marca las 100 de la página; descargá o borrá juntas desde la barra de abajo.</li>
+            </ul>
+          </div>
+          <figure>
+            <img src="img/galeria-filtros.png" alt="Galería de pedidos con el panel de Filtros abierto" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>En «Filtros», el checkbox «Página (100)» marca las 100 de una sola vez.</figcaption>
+          </figure>
+        </div>
+
+        <p class="callout">
+          Si te pasaron un número, pegalo en <span class="ui">Pedido</span>: se resalta mientras escribís,
+          sin presionar <span class="ui">Buscar</span>. Las fotos nuevas aparecen solas (punto verde);
+          si estás en otra página, <span class="ui">Ver</span> salta a la primera.
+        </p>
+      </section>
+      <section class="manual-section" id="s3">
         <h2><span class="n">3</span> Marcar un pedido como queja</h2>
+        <p class="section-lead">
+          Cuando un pedido tuvo un problema, marcalo: queda en el historial y en las métricas.
+        </p>
+
         <div class="split">
           <div>
             <ol class="steps">
-              <li>En la galería, <b>buscá el número del pedido</b>.</li>
-              <li>Tocá <span class="ui">Editar</span> en su tarjeta.</li>
-              <li>Marcá la casilla <span class="ui">«Pedido con reclamo»</span>.</li>
-              <li>Tocá <span class="ui">Guardar</span>. Ya está: aparece en <span class="ui">Historial</span> como <b>Queja</b> y entra en las métricas.</li>
+              <li>Buscá el número del pedido en la galería.</li>
+              <li>Tocá <span class="ui">Editar</span>.</li>
+              <li>Marcá <span class="ui">«Pedido con reclamo»</span>.</li>
+              <li>Tocá <span class="ui">Guardar</span>. La tarjeta muestra el badge <b>Reclamo</b> y la queja entra en <span class="ui">Historial</span> y métricas.</li>
             </ol>
-            <p class="tip">
-              <b>Si el pedido ya está en la lista/Sheet del local</b>, cruzalo en <span class="ui">Reclamos</span>
-              y la app le completa motivo y monto solo.
+            <p class="callout">
+              <b class="label">Si el pedido ya está en la lista/Sheet del local:</b>
+              cruzalo en <span class="ui">Reclamos</span> y la app completa motivo y monto sola.
             </p>
           </div>
           <figure>
-            <img src="img/editar-reclamo.png" alt="Editar pedido en el celu con la casilla Pedido con reclamo" onerror="this.closest('figure').style.display='none'" />
-            <figcaption>Editar pedido: casilla «Pedido con reclamo» y «Reemplazar foto».</figcaption>
+            <img src="img/editar-reclamo.png" alt="Formulario Editar pedido con la casilla Pedido con reclamo" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>«Pedido con reclamo» es la casilla que convierte el pedido en una queja.</figcaption>
           </figure>
         </div>
       </section>
-
-      <section>
+      <section class="manual-section" id="s4">
         <h2><span class="n">4</span> El proceso de refutado</h2>
-        <ul class="states">
-          <li class="st-queja">Queja <small>· falta refutar</small></li>
-          <li class="st-refutado">Refutado <small>· en trámite</small></li>
-          <li class="st-ok">Ref. aceptado <small>· plata recuperada</small></li>
-          <li class="st-no">Ref. rechazado <small>· plata perdida</small></li>
-          <li class="st-vencida">Queja vencida <small>· pasó el plazo</small></li>
-        </ul>
+        <p class="section-lead">
+          Cómo viaja una queja y qué significa cada estado para el dinero.
+        </p>
+
+        <div class="flow" aria-label="Camino de una queja">
+          <span class="flow__step flow--amber">🟡 Queja</span>
+          <span class="flow__arrow">→</span>
+          <span class="flow__step flow--blue">🔵 Refutado</span>
+          <span class="flow__arrow">→</span>
+          <span class="flow__step flow--green">🟢 Ref. aceptado</span>
+          <span class="flow__or">o</span>
+          <span class="flow__step flow--red">🔴 Ref. rechazado</span>
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr><th>Estado</th><th>Qué pasó</th><th>Dinero</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><b class="cell c-amber">🟡 Queja</b></td><td>Entró el reclamo, falta actuar</td><td>Descontada del local</td></tr>
+            <tr><td><b class="cell c-blue">🔵 Refutado</b></td><td>Preparaste la refutación y fuiste al portal</td><td>En disputa</td></tr>
+            <tr><td><b class="cell c-green">🟢 Ref. aceptado</b></td><td>El agregador devolvió el dinero</td><td>Recuperada</td></tr>
+            <tr><td><b class="cell c-red">🔴 Ref. rechazado</b></td><td>No aceptaron la refutación</td><td>Perdida</td></tr>
+            <tr><td><b class="cell c-gray">⬜ Queja vencida</b></td><td>Pasó el plazo del agregador</td><td>Perdida, sin opción de refutar</td></tr>
+          </tbody>
+        </table>
         <div class="split">
           <div>
+            <h3 class="sub">Cómo se hace</h3>
             <ol class="steps">
-              <li>Andá a <span class="ui">Reclamos</span> y pegá la lista/Sheet del día. La app <b>cruza cada queja con su foto</b>.</li>
+              <li>Pegá la lista/Sheet del día en <span class="ui">Reclamos</span>: la app cruza cada queja con su foto.</li>
               <li>Si dice <span class="ui">«Elegí la foto»</span>, tocá la correcta entre las candidatas.</li>
-              <li>Tocá <span class="ui">Preparar para refutar</span>: descarga la foto del pedido, copia el código y abre el portal del agregador. Ahí pegá el código y subí la evidencia.</li>
+              <li><span class="ui">Preparar para refutar</span> descarga la foto, copia el código y abre el portal. Ahí pegá el código y subí la evidencia.</li>
               <li>De vuelta en la app, tocá <span class="ui">Marcar refutado</span>.</li>
-              <li>Cuando el agregador responda: <span class="ui">Ref. aceptado</span> o <span class="ui">Ref. rechazado</span>.</li>
+              <li>Cuando el agregador responda, la queja queda <span class="ui">Ref. aceptado</span> o <span class="ui">Ref. rechazado</span>.</li>
             </ol>
-            <p class="tip tip--warn">
-              <b>Cada agregador tiene días para refutar</b> desde el día del pedido (lo carga el
-              encargado en Ajustes → Plazos de refutación; 0 = sin límite). Si está por vencer,
-              la queja muestra <span class="ui">«Vence en 2 d»</span>; si se vence, queda como
-              <b>Queja vencida</b> y ya no se puede refutar.
+            <p class="callout callout--warn">
+              <b class="label">Cada agregador tiene días para refutar:</b>
+              Contados desde el día del pedido (Ajustes → Plazos de refutación; 0 = sin límite).
+              «Vence en 2 d» avisa que está por vencer. Si se vence, queda «Queja vencida»: registrada,
+              pero sin opción de refutar.
             </p>
           </div>
-          <figure>
+          <figure class="figure--compact">
             <img src="img/historial-estados.png" alt="Historial con una queja aceptada y otra por vencer" onerror="this.closest('figure').style.display='none'" />
-            <figcaption>Historial: una «Ref. aceptado» (arriba) y una «Queja» con «Vence mañana» (abajo).</figcaption>
+            <figcaption>Una queja ya resuelta (Ref. aceptado) y otra por vencer con «Vence mañana».</figcaption>
           </figure>
         </div>
       </section>
-
-      <section>
+      <section class="manual-section" id="s5">
         <h2><span class="n">5</span> Repetir fotos y corregir el autor</h2>
-        <div class="split split--tall">
+        <p class="section-lead">
+          Una foto para repetir o el nombre equivocado: se corrige acá.
+        </p>
+
+        <h3 class="sub">Ya se subió el par y necesito repetir la bolsa</h3>
+        <div class="split">
           <div>
-            <h3 class="sub">Ya se subió el par y necesito repetir la bolsa</h3>
             <ol class="steps">
-              <li>
-                <b>Todavía no se subió</b> (el par está en la tira de abajo): volvé al paso del ticket y tocá
-                <span class="ui">«Repetir»</span> en la tira — se rehace <b>solo la bolsa</b> y el ticket se conserva.
-                Si lo que salió mal es el ticket, en el paso de la bolsa está <span class="ui">«Repetir ticket»</span>.
-              </li>
-              <li>
-                <b>Ya se subió</b>: Galería → <span class="ui">Editar</span> → <span class="ui">«Reemplazar foto»</span> →
-                <span class="ui">Seleccionar archivo</span> → elegí la foto buena → <span class="ui">Guardar</span>.
-                La foto vieja se reemplaza y el pedido queda igual.
-              </li>
-              <li>
-                El ticket no se guarda como foto (solo se lee el código). Si el código quedó mal, cambialo en
-                Editar → <span class="ui">«Código del pedido»</span>.
-              </li>
-            </ol>
-
-            <h3 class="sub">No cambié el nombre al empezar el turno</h3>
-            <ol class="steps">
-              <li>
-                <b>Antes de la primera foto</b>: en la pantalla <span class="ui">Sacar foto</span> tocá
-                «¿Quién saca la foto?» y elegí tu nombre. Queda guardado en ese celu, así que revisalo cada turno.
-              </li>
-              <li>
-                <b>Ya subidas, de a una</b>: Galería → <span class="ui">Editar</span> →
-                <span class="ui">«Quién lo subió»</span> → el nombre correcto → <span class="ui">Guardar</span>.
-              </li>
-              <li>
-                <b>Ya subidas, en lote</b>: seleccioná las fotos (checkbox <span class="ui">«Página»</span>) →
-                en la barra de abajo tocá <span class="ui">«Cambiar autor»</span> → poné el nombre → confirmar.
-                Se cambian todas juntas.
-              </li>
+              <li><b>Todavía no se subió:</b> en la tira de abajo tocá <span class="ui">«Repetir»</span> — se rehace solo la bolsa. Si falló el ticket, en el paso de la bolsa está <span class="ui">«Repetir ticket»</span>.</li>
+              <li><b>Ya se subió:</b> Galería → <span class="ui">Editar</span> → <span class="ui">«Reemplazar foto»</span> → elegí la foto → <span class="ui">Guardar</span>.</li>
+              <li>El ticket no se guarda como foto. Si el código quedó mal, cambialo en Editar → <span class="ui">«Código del pedido»</span>.</li>
             </ol>
           </div>
-          <div class="split__media">
-            <figure>
-              <img src="img/camara-bolsa.png" alt="Cámara: paso 2 de 2, bolsa con miniaturas del par y botón Repetir ticket" onerror="this.closest('figure').style.display='none'" />
-              <figcaption>Paso 2 · BOLSA: miniaturas TICKET/BOLSA y «Repetir ticket».</figcaption>
-            </figure>
-            <figure>
-              <img src="img/pantalla-inicio.png" alt="Pantalla Sacar foto con el selector ¿Quién saca la foto?" onerror="this.closest('figure').style.display='none'" />
-              <figcaption>Al arrancar el turno: elegí quién saca la foto.</figcaption>
-            </figure>
-          </div>
+          <figure>
+            <img src="img/camara-bolsa.png" alt="Paso de la bolsa: miniaturas del par y Repetir ticket" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>Paso de la bolsa: miniaturas TICKET/BOLSA del par y «Repetir ticket».</figcaption>
+          </figure>
         </div>
-      </section>
 
-      <section>
+        <h3 class="sub">No cambié el nombre al empezar el turno</h3>
+        <div class="split">
+          <div>
+            <ol class="steps">
+              <li><b>Antes de la primera foto:</b> tocá «¿Quién saca la foto?» en la pantalla <span class="ui">Sacar foto</span>. Queda guardado en ese celular: revisalo cada turno.</li>
+              <li><b>De a una:</b> Galería → <span class="ui">Editar</span> → <span class="ui">«Quién lo subió»</span> → nombre → <span class="ui">Guardar</span>.</li>
+              <li><b>En lote:</b> seleccioná las fotos (checkbox <span class="ui">«Página»</span>) → <span class="ui">«Cambiar autor»</span> en la barra de abajo.</li>
+            </ol>
+          </div>
+          <figure>
+            <img src="img/pantalla-inicio.png" alt="Pantalla Sacar foto con el selector ¿Quién saca la foto?" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>«¿Quién saca la foto?»: el nombre que queda en cada foto del turno.</figcaption>
+          </figure>
+        </div>
+
+        <p class="callout">
+          <b class="label">Regla simple:</b> si la foto no está en la galería, se repite desde la cámara.
+          Si ya está, se corrige con <span class="ui">Editar</span>.
+        </p>
+      </section>
+      <section class="manual-section" id="s6">
         <h2><span class="n">6</span> Dudas rápidas</h2>
+        <p class="section-lead">Las preguntas que más se repiten en el local.</p>
+
         <dl class="qa">
-          <dt>«La cola está larga y no sube»</dt>
-          <dd>Seguí laburando: la cola baja sola y en orden. Si algo se traba, abrí la barra de cola y tocá <span class="ui">Reintentar</span>. Cerrar la app no la corta.</dd>
-          <dt>«El pedido quedó como Código no encontrado»</dt>
-          <dd>Se sube igual como evidencia. Se reintenta solo; también podés completarlo desde la galería → tarjeta → <span class="ui">Completar código</span>.</dd>
-          <dt>«Me salió borrosa / oscura»</dt>
-          <dd>En la tira del último par tenés <span class="ui">Repetir</span> unos segundos. Consejo: flash abajo, esperá el enfoque y que se vea todo el ticket.</dd>
-          <dt>«Apareció Queja vencida»</dt>
-          <dd>Pasó el plazo del agregador. Queda registrada en el historial y en métricas, pero sin opción de refutar.</dd>
-          <dt>«¿Dónde veo la plata?»</dt>
-          <dd>En <span class="ui">Métricas</span>: quejas del período, $ recuperado, $ perdido y los objetivos del local.</dd>
-          <dt>«¿La hora es la de la subida?»</dt>
-          <dd>No: es <b>la hora en que se sacó la foto</b>, aunque la cola tarde o la app se haya cerrado.</dd>
+          <div class="qa__item">
+            <dt class="qa__q">«La cola está larga y no sube»</dt>
+            <dd class="qa__a">Seguí trabajando: la cola continúa sola y en orden. Si algo se traba, abrí la barra de cola y tocá <span class="ui">Reintentar</span>. Cerrar la app no la detiene.</dd>
+          </div>
+          <div class="qa__item">
+            <dt class="qa__q">«El pedido quedó como Código no encontrado»</dt>
+            <dd class="qa__a">Se sube igual como evidencia. Se reintenta solo; también podés completarlo desde la galería → tarjeta → <span class="ui">Completar código</span>.</dd>
+          </div>
+          <div class="qa__item">
+            <dt class="qa__q">«Me salió borrosa / oscura»</dt>
+            <dd class="qa__a">En la tira del último par tenés <span class="ui">Repetir</span> unos segundos (sección 5). Flash, esperá el enfoque y que se vea todo el ticket.</dd>
+          </div>
+          <div class="qa__item">
+            <dt class="qa__q">«Apareció Queja vencida»</dt>
+            <dd class="qa__a">Pasó el plazo del agregador. Queda registrada en el historial y en métricas, pero sin opción de refutar.</dd>
+          </div>
+          <div class="qa__item">
+            <dt class="qa__q">«¿Dónde veo el dinero?»</dt>
+            <dd class="qa__a">En <span class="ui">Métricas</span>: quejas del período, $ recuperado, $ perdido y los objetivos del local.</dd>
+          </div>
+          <div class="qa__item">
+            <dt class="qa__q">«¿La hora es la de la subida?»</dt>
+            <dd class="qa__a">No: es <b>la hora en que se sacó la foto</b>, aunque la cola tarde o la app se haya cerrado.</dd>
+          </div>
+          <div class="qa__item">
+            <dt class="qa__q">«Me equivoqué de nombre en un montón de fotos»</dt>
+            <dd class="qa__a">Seleccionalas en la galería (checkbox «Página») y usá <span class="ui">«Cambiar autor»</span> en lote — se arreglan juntas (sección 5).</dd>
+          </div>
         </dl>
       </section>
 
-      <footer>
-        <span>Manual de uso · STAR-APP Delivery</span>
-        <span>Versión 1.7 · Guardá este PDF en el celu para consultarlo rápido</span>
+      <footer class="manual-footer">
+        <span><b>Manual de uso</b> · STAR-APP Delivery · v1.7</span>
+        <span>¿Falta algo en la guía? Avisá para actualizarla.</span>
       </footer>
     </main>
   </body>

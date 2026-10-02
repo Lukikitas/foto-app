@@ -622,7 +622,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
       <div class="kpi-card kpi-card--total">
         <span class="kpi-label">$ Reclamado Total</span>
         <span class="kpi-val">${formatMoney(totals.complaintAmount)}</span>
-        <span class="kpi-hint">Plata dada al cliente en reclamos</span>
+        <span class="kpi-hint">Dinero devuelto al cliente en reclamos</span>
       </div>
 
       <div class="kpi-card kpi-card--good">

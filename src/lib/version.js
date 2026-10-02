@@ -5,7 +5,7 @@ export const RELEASE_GROUPS = [
     title: 'Galería paginada',
     notes: [
       'La galería de pedidos se ve de 100 en 100: páginas numeradas con «Anterior/Siguiente», el rango visible («Mostrando 1–100 de 857») y la primera página carga al instante mientras el resto llega en segundo plano.',
-      'La búsqueda se actualiza sola mientras escribís (sin apretar Buscar) y resalta lo encontrado en los títulos.',
+      'La búsqueda se actualiza sola mientras escribís (sin presionar Buscar) y resalta lo encontrado en los títulos.',
       'La selección se acumula entre páginas: el checkbox «Página» marca solo la página actual y la barra de acciones sigue viendo todo lo seleccionado.',
     ],
   },
