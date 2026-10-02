@@ -60,6 +60,9 @@
         font-weight: 700;
         font-size: 0.92rem;
         white-space: nowrap;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .toolbar__title img { width: 24px; height: 24px; border-radius: 7px; }
       .toolbar p { margin: 0; color: #b9bcc4; font-size: 0.8rem; }
@@ -79,6 +82,10 @@
         white-space: nowrap;
       }
       .toolbar button:hover { background: var(--red-dark); }
+      @media (max-width: 720px) {
+        .toolbar { padding: 0.5rem 0.7rem; gap: 0.6rem; }
+        .toolbar button { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+      }
 
       .sheet {
         max-width: 860px;
@@ -193,6 +200,13 @@
       ol.steps > li {
         margin-bottom: 0.55rem;
         padding-left: 0.25rem;
+      }
+      ol.steps > li::after { content: ''; display: table; clear: both; }
+      ol.steps .step-shot {
+        float: right;
+        width: 250px;
+        max-width: 46%;
+        margin: 0 0 0.4rem 1rem;
       }
       ol.steps > li::marker {
         color: var(--red);
@@ -357,6 +371,7 @@
         .split { grid-template-columns: 1fr; }
         .doavoid { grid-template-columns: 1fr; }
         figure, figure.figure--compact { width: 280px; justify-self: center; }
+        ol.steps .step-shot { float: none; width: 280px; max-width: 100%; margin: 0.5rem auto 0; }
       }
 
       @page { size: A4; margin: 12mm; }
@@ -381,6 +396,7 @@
         .split { grid-template-columns: 1fr auto; }
         .split figure { width: 70mm; }
         .split figure.figure--compact { width: 58mm; }
+        ol.steps .step-shot { float: right; width: 52mm; margin: 0 0 0.3rem 4mm; }
         figure img { background: #fff; }
         a { color: inherit; text-decoration: none; }
       }
@@ -390,7 +406,7 @@
     <div class="toolbar">
       <span class="toolbar__title"><img src="../pwa-192.png" alt="" /> Manual de uso · STAR-APP</span>
       <p>Para quedarte el PDF: tocá el botón y elegí «Guardar como PDF».</p>
-      <button type="button" onclick="window.print()">Guardar como PDF / Imprimir</button>
+      <button type="button" onclick="window.print()">Guardar/Imprimir</button>
     </div>
 
     <main class="sheet">
@@ -415,7 +431,7 @@
           <li><a href="#s1"><span class="toc__n">1</span> Sacar las fotos</a></li>
           <li><a href="#s2"><span class="toc__n">2</span> Galería: ver y buscar</a></li>
           <li><a href="#s3"><span class="toc__n">3</span> Marcar una queja</a></li>
-          <li><a href="#s4"><span class="toc__n">4</span> Proceso de refutado</a></li>
+          <li><a href="#s4"><span class="toc__n">4</span> Proceso de refutado (PedidosYa)</a></li>
           <li><a href="#s5"><span class="toc__n">5</span> Repetir y corregir</a></li>
           <li><a href="#s6"><span class="toc__n">6</span> Dudas rápidas</a></li>
         </ol>
@@ -525,9 +541,9 @@
         </div>
       </section>
       <section class="manual-section" id="s4">
-        <h2><span class="n">4</span> El proceso de refutado</h2>
+        <h2><span class="n">4</span> El proceso de refutado (PedidosYa)</h2>
         <p class="section-lead">
-          Cómo viaja una queja y qué significa cada estado para el dinero.
+          Cómo se refuta una queja en el portal de PedidosYa y qué significa cada estado para el dinero.
         </p>
 
         <div class="flow" aria-label="Camino de una queja">
@@ -552,15 +568,12 @@
             <tr><td><b class="cell c-gray">⬜ Queja vencida</b></td><td>Pasó el plazo del agregador</td><td>Perdida, sin opción de refutar</td></tr>
           </tbody>
         </table>
+        <h3 class="sub">En la app: dejás todo listo</h3>
         <div class="split">
           <div>
-            <h3 class="sub">Cómo se hace</h3>
             <ol class="steps">
-              <li>Pegá la lista/Sheet del día en <span class="ui">Reclamos</span>: la app cruza cada queja con su foto.</li>
-              <li>Si dice <span class="ui">«Elegí la foto»</span>, tocá la correcta entre las candidatas.</li>
-              <li><span class="ui">Preparar para refutar</span> descarga la foto, copia el código y abre el portal. Ahí pegá el código y subí la evidencia.</li>
-              <li>De vuelta en la app, tocá <span class="ui">Marcar refutado</span>.</li>
-              <li>Cuando el agregador responda, la queja queda <span class="ui">Ref. aceptado</span> o <span class="ui">Ref. rechazado</span>.</li>
+              <li>Buscá la queja por el número de pedido. Se ve con el badge <b>Queja</b> y el plazo (<span class="ui">«Vence en 3 d»</span>).</li>
+              <li>Tocá <span class="ui">Preparar para refutar</span>: la app descarga la foto del pedido y copia el código. Después, <span class="ui">«Abrir portal»</span> te deja el código listo para pegar.</li>
             </ol>
             <p class="callout callout--warn">
               <b class="label">Cada agregador tiene días para refutar:</b>
@@ -568,6 +581,64 @@
               «Vence en 2 d» avisa que está por vencer. Si se vence, queda «Queja vencida»: registrada,
               pero sin opción de refutar.
             </p>
+          </div>
+          <figure>
+            <img src="img/refutar-ver-queja-app.jpeg" alt="Quejas en la app con el botón Preparar para refutar y el plazo Vence en 3 d" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>La queja en la app: badge Queja, plazo «Vence en 3 d» y «Preparar para refutar».</figcaption>
+          </figure>
+        </div>
+
+        <h3 class="sub">En el portal de PedidosYa</h3>
+        <p class="callout">
+          <b class="label">Este es el proceso de refutado de PedidosYa</b> y se hace desde un dispositivo con
+          acceso al portal (celular con sesión Partner o PC). La app no refuta sola: deja la foto descargada
+          y el código copiado para que los lleves al portal.
+        </p>
+        <ol class="steps">
+          <li>
+            Abrí el portal (<span class="ui">«Abrir portal»</span>) y en <span class="ui">Pedidos</span> buscá el número de pedido — lo tenés copiado.
+            <figure class="step-shot">
+              <img src="img/refutar-abrir-portal.jpeg" alt="Portal PedidosYa Partner en Pedidos con el número de pedido buscado" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>Portal → Pedidos: buscá el número.</figcaption>
+            </figure>
+          </li>
+          <li>
+            Tocá el pedido para abrir su ficha: ahí están los reclamos, las deducciones y <span class="ui">«Ayuda con este pedido»</span>.
+            <figure class="step-shot">
+              <img src="img/refutar-ver-ficha.jpeg" alt="Ficha del pedido en el portal con reclamos, deducciones y Ayuda con este pedido" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>La ficha del pedido, con sus reclamos y deducciones.</figcaption>
+            </figure>
+          </li>
+          <li>
+            Tocá <span class="ui">«Ayuda con este pedido»</span> y elegí <span class="ui">«Reclamar cargos por devolución a usuarios»</span>.
+            <figure class="step-shot">
+              <img src="img/refutar-reclamar.jpeg" alt="Ayuda en línea con la opción Reclamar cargos por devolución a usuarios" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>«Reclamar cargos por devolución a usuarios».</figcaption>
+            </figure>
+          </li>
+          <li>
+            Revisá «Reclama un reembolso» y tocá <span class="ui">«Crear caso para disputa»</span>. La respuesta llega en un plazo de 72 h.
+            <figure class="step-shot">
+              <img src="img/refutar-crear-caso.jpeg" alt="Artículo Reclama un reembolso con el botón Crear caso para disputa" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>«Reclama un reembolso» → «Crear caso para disputa».</figcaption>
+            </figure>
+          </li>
+          <li>
+            Cargá la foto descargada con <span class="ui">«Cargar archivo»</span>, escribí el detalle en Comentarios, marcá la casilla de confirmación y enviá.
+            <figure class="step-shot">
+              <img src="img/refutar-subir-datos.jpeg" alt="Formulario del caso con Cargar archivo, campo Comentarios y casilla de confirmación" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>Foto, detalle y confirmación del caso.</figcaption>
+            </figure>
+          </li>
+        </ol>
+
+        <h3 class="sub">De vuelta en la app</h3>
+        <div class="split">
+          <div>
+            <ol class="steps">
+              <li>Tocá <span class="ui">Marcar refutado</span>: la queja pasa a <span class="ui">Refutado</span> y deja de verse como pendiente.</li>
+              <li>Esperá la respuesta del agregador: <span class="ui">Ref. aceptado</span> o <span class="ui">Ref. rechazado</span>.</li>
+            </ol>
           </div>
           <figure class="figure--compact">
             <img src="img/historial-estados.png" alt="Historial con una queja aceptada y otra por vencer" onerror="this.closest('figure').style.display='none'" />
