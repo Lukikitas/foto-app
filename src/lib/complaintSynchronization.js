@@ -1,4 +1,5 @@
 import { getPhotoAggregator } from './aggregators.js';
+import { statusIsDisputed } from './complaintHistory.js';
 import {
   deleteHistoryItemsByIds,
   importComplaintsToHistory,
@@ -146,9 +147,11 @@ export async function deleteHistoryRowsSynchronized(rows = []) {
   }
 }
 
-export async function setComplaintStatusSynchronized(row, status) {
+export async function setComplaintStatusSynchronized(row, status, { unrefutableReason } = {}) {
   const photo = row?.photo?.id ? (await loadRealPhotos([row]))[0] : null;
-  const disputed = Boolean(status && status !== 'queja');
+  // Solo los estados disputados marcan la foto como refutada; «No refutable»
+  // nunca entró en disputa, así que la foto no se marca is_refutado.
+  const disputed = statusIsDisputed(status);
   let updatedPhoto = photo;
   if (photo) {
     updatedPhoto = await updatePhoto(
@@ -159,7 +162,11 @@ export async function setComplaintStatusSynchronized(row, status) {
     );
   }
   try {
-    const history = await setHistoryResolution(row.complaint, updatedPhoto || row.photo, { status });
+    const history = await setHistoryResolution(
+      row.complaint,
+      updatedPhoto || row.photo,
+      { status, unrefutableReason },
+    );
     return { history, updatedPhoto };
   } catch (error) {
     if (photo) await restorePhotos([photo]);
@@ -167,9 +174,9 @@ export async function setComplaintStatusSynchronized(row, status) {
   }
 }
 
-export async function setComplaintStatusesSynchronized(rows, status) {
+export async function setComplaintStatusesSynchronized(rows, status, { unrefutableReason } = {}) {
   const photos = await loadRealPhotos(rows);
-  const disputed = Boolean(status && status !== 'queja');
+  const disputed = statusIsDisputed(status);
   const updatedPhotos = [];
   try {
     for (const photo of photos) {
@@ -185,7 +192,7 @@ export async function setComplaintStatusesSynchronized(rows, status) {
       ...row,
       photo: byId.get(row.photo?.id) || row.photo,
     }));
-    const history = await setHistoryResolutions(resolvedRows, { status });
+    const history = await setHistoryResolutions(resolvedRows, { status, unrefutableReason });
     return { history, updatedPhotos };
   } catch (error) {
     await restorePhotos(photos);

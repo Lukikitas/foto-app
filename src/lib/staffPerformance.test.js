@@ -105,6 +105,59 @@ test('staff report totals aggregate photos, complaints and rates', () => {
   assert.ok(Math.abs(report.totals.complaintPct - 100) < 0.01);
 });
 
+test('staff report separates accepted refutations from unrefutable complaints per person', () => {
+  const photos = [
+    {
+      id: 'p1',
+      name: '4696',
+      file_path: 'orders/pedidosya/4696.jpg',
+      created_at: '2026-09-01T13:05:00-03:00',
+      taken_by: 'Sofi',
+    },
+    {
+      id: 'p2',
+      name: '4698',
+      file_path: 'orders/rappi/4698.jpg',
+      created_at: '2026-09-01T15:00:00-03:00',
+      taken_by: 'Ana',
+    },
+  ];
+  const historyItems = [
+    {
+      compact: '4696',
+      orderCode: '4696',
+      photoId: 'p1',
+      timeOfDay: '13:05',
+      amount: 1000,
+      status: 'refutado_aceptado',
+      day: '2026-09-01',
+    },
+    {
+      compact: '4698',
+      orderCode: '4698',
+      photoId: 'p2',
+      timeOfDay: '15:00',
+      amount: 2000,
+      status: 'no_refutable',
+      unrefutableReason: 'Queja real',
+      day: '2026-09-01',
+    },
+  ];
+  const report = buildStaffReport({ photos, historyItems });
+  const sofia = report.people.find((row) => row.key === 'sofi');
+  const ana = report.people.find((row) => row.key === 'ana');
+
+  assert.equal(sofia.refutadoAceptado, 1, 'Ref. aceptado cuenta como queja falsa');
+  assert.equal(sofia.noRefutable, 0);
+  assert.equal(ana.noRefutable, 1, 'No refutable es la pérdida que importa');
+  assert.equal(ana.refutadoAceptado, 0);
+  assert.equal(report.totals.refutadoAceptado, 1);
+  assert.equal(report.totals.noRefutable, 1);
+
+  const csv = buildStaffCsv(report);
+  assert.match(csv, /refutadas_aceptadas,no_refutables/);
+});
+
 test('hourly distribution buckets orders and complaints in Argentina time with a sin-hora row', () => {
   const report = buildStaffReport({ photos: PERIOD_PHOTOS, historyItems: HISTORY_ITEMS });
   const byHour = new Map(report.hourly.map((row) => [row.hour, row]));
@@ -209,7 +262,7 @@ test('staff CSV includes people and hourly sections with headers', () => {
   const report = buildStaffReport({ photos: PERIOD_PHOTOS, historyItems: HISTORY_ITEMS });
   const csv = buildStaffCsv(report);
   const lines = csv.trim().split('\n');
-  assert.equal(lines[0], 'persona,fotos,pedidos,porcentaje_fotos,quejas,porcentaje_quejas,monto_quejas,monto_recuperado');
+  assert.equal(lines[0], 'persona,fotos,pedidos,porcentaje_fotos,quejas,porcentaje_quejas,refutadas_aceptadas,no_refutables,monto_quejas,monto_recuperado');
   assert.ok(lines.some((line) => line.startsWith('Sofi,')));
   assert.ok(lines.some((line) => line.startsWith('Sin asignar,')));
   assert.ok(lines.includes('hora,pedidos,porcentaje_pedidos,quejas,porcentaje_quejas,porcentaje_quejas_sobre_pedidos'));

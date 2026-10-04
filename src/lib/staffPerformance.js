@@ -114,6 +114,8 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
         photos: 0,
         orders: 0,
         complaints: 0,
+        refutadoAceptado: 0,
+        noRefutable: 0,
         complaintAmount: 0,
         recoveredAmount: 0,
       };
@@ -147,7 +149,12 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
     row.complaints += 1;
     row.complaintAmount += moneyForStatus(item);
     if (item?.status === COMPLAINT_STATUSES.refutado_aceptado) {
+      // Queja falsa: no juega en contra de quien sacó la foto.
+      row.refutadoAceptado += 1;
       row.recoveredAmount += moneyForStatus(item);
+    } else if (item?.status === COMPLAINT_STATUSES.no_refutable) {
+      // Pérdida sin refutar: es la que sirve para medidas disciplinarias.
+      row.noRefutable += 1;
     }
 
     const hour = complaintHour(item);
@@ -159,6 +166,8 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
     photos: 0,
     orders: 0,
     complaints: 0,
+    refutadoAceptado: 0,
+    noRefutable: 0,
     complaintAmount: 0,
     recoveredAmount: 0,
     people: 0,
@@ -168,6 +177,8 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
     totals.photos += row.photos;
     totals.orders += row.orders;
     totals.complaints += row.complaints;
+    totals.refutadoAceptado += row.refutadoAceptado;
+    totals.noRefutable += row.noRefutable;
     totals.complaintAmount += row.complaintAmount;
     totals.recoveredAmount += row.recoveredAmount;
     if (row.key !== personKey(NO_PERSON)) totals.people += 1;
@@ -209,7 +220,7 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
 
 export function buildStaffCsv(report) {
   const lines = [];
-  lines.push('persona,fotos,pedidos,porcentaje_fotos,quejas,porcentaje_quejas,monto_quejas,monto_recuperado');
+  lines.push('persona,fotos,pedidos,porcentaje_fotos,quejas,porcentaje_quejas,refutadas_aceptadas,no_refutables,monto_quejas,monto_recuperado');
   for (const row of report?.people || []) {
     lines.push([
       csvEscape(row.name),
@@ -218,6 +229,8 @@ export function buildStaffCsv(report) {
       csvPct(row.photoSharePct),
       row.complaints,
       csvPct(row.complaintPct),
+      row.refutadoAceptado,
+      row.noRefutable,
       row.complaintAmount,
       row.recoveredAmount,
     ].join(','));

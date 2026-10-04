@@ -14,6 +14,7 @@ import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 const STATUS_FILTERS = [
   { id: 'all', label: 'Todas' },
   { id: COMPLAINT_STATUSES.queja, label: 'Queja' },
+  { id: COMPLAINT_STATUSES.no_refutable, label: 'No refutable' },
   { id: COMPLAINT_STATUSES.refutado, label: 'Refutado' },
   { id: COMPLAINT_STATUSES.refutado_aceptado, label: 'Ref. aceptado' },
   { id: COMPLAINT_STATUSES.refutado_rechazado, label: 'Ref. rechazado' },
@@ -168,7 +169,12 @@ export default function MetricsComplaintsList({
                     )}
                   </td>
                   <td>{formatMoney(item.amount)}</td>
-                  <td>{COMPLAINT_STATUS_LABELS[item.status] || item.status}</td>
+                  <td>
+                    {COMPLAINT_STATUS_LABELS[item.status] || item.status}
+                    {item.status === COMPLAINT_STATUSES.no_refutable && item.unrefutableReason ? (
+                      <small>{item.unrefutableReason}</small>
+                    ) : null}
+                  </td>
                   <td>{item.photoUrl ? <button type="button" className="btn btn--small btn--ghost" onClick={() => setLightboxPhoto({ id: item.photoId, name: item.orderCode, public_url: item.photoUrl, created_at: item.orderAtIso })}>Ver foto</button> : 'No'}</td>
                   <td>
                     <div className="metrics-registry__actions">

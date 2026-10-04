@@ -1,4 +1,4 @@
-name: Validate version 1.7
+name: Validate version 1.8
 on:
   pull_request:
   push:

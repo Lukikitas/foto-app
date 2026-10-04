@@ -7,6 +7,7 @@ export const COMPLAINT_STATUSES = {
   refutado: 'refutado',
   refutado_aceptado: 'refutado_aceptado',
   refutado_rechazado: 'refutado_rechazado',
+  no_refutable: 'no_refutable',
 };
 
 export const COMPLAINT_STATUS_LABELS = {
@@ -14,9 +15,19 @@ export const COMPLAINT_STATUS_LABELS = {
   refutado: 'Refutado',
   refutado_aceptado: 'Ref. aceptado',
   refutado_rechazado: 'Ref. rechazado',
+  no_refutable: 'No refutable',
   // Solo display: el estado guardado sigue siendo 'queja' (ver refutadoDeadline).
   queja_vencida: 'Queja vencida',
 };
+
+// Motivos ofrecidos al marcar «No se puede refutar». El motivo se guarda en el
+// historial (unrefutableReason) y alimenta las métricas disciplinarias.
+export const NO_REFUTABLE_REASONS = [
+  'No hay foto',
+  'Queja real',
+  'Foto borrosa/invalida',
+  'Código no visible',
+];
 
 export const EMPTY_COMBO_LABEL = 'Sin combo';
 
@@ -40,6 +51,7 @@ export function emptyHistoryFlags() {
     refutado: 0,
     refutadoAceptado: 0,
     refutadoRechazado: 0,
+    noRefutable: 0,
     complaintAmount: 0,
     recoveredAmount: 0,
     lostAmount: 0,
@@ -124,6 +136,12 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     accepted: raw?.accepted ?? fallback.accepted,
     refutado: raw?.refutado ?? fallback.refutado,
   });
+  // El motivo solo aplica mientras el estado sea «No refutable»: cambiarlo
+  // (lote, importación de reintegros, etc.) lo limpia para no dejar datos viejos.
+  const unrefutableReason =
+    status === COMPLAINT_STATUSES.no_refutable
+      ? String(raw?.unrefutableReason || fallback.unrefutableReason || '').trim()
+      : '';
   const amount = toAmount(raw?.amount ?? fallback.amount);
   const combo = String(raw?.combo || fallback.combo || '').trim();
 
@@ -142,6 +160,7 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     amount,
     fields: mergeFields(fallback.fields, raw?.fields),
     status,
+    unrefutableReason,
     photoId: raw?.photoId || fallback.photoId || null,
     photoName: raw?.photoName || fallback.photoName || null,
     photoUrl: raw?.photoUrl || fallback.photoUrl || null,
@@ -154,8 +173,8 @@ export function normalizeHistoryItem(raw, fallback = {}) {
 
 const NORMALIZED_KEYS = [
   'id', 'orderCode', 'compact', 'aggregator', 'orderAtIso', 'timeOfDay', 'dateAssumed',
-  'day', 'reason', 'comment', 'combo', 'amount', 'fields', 'status', 'photoId',
-  'photoName', 'photoUrl', 'sourceId', 'manualEdit', 'importedAt', 'updatedAt',
+  'day', 'reason', 'comment', 'combo', 'amount', 'fields', 'status', 'unrefutableReason',
+  'photoId', 'photoName', 'photoUrl', 'sourceId', 'manualEdit', 'importedAt', 'updatedAt',
 ];
 
 function alreadyNormalized(item) {
@@ -608,6 +627,7 @@ export function groupHistoryFlags(store, from, to) {
     if (item.status === COMPLAINT_STATUSES.refutado_aceptado) bucket.refutadoAceptado += 1;
     else if (item.status === COMPLAINT_STATUSES.refutado_rechazado) bucket.refutadoRechazado += 1;
     else if (item.status === COMPLAINT_STATUSES.refutado) bucket.refutado += 1;
+    else if (item.status === COMPLAINT_STATUSES.no_refutable) bucket.noRefutable += 1;
     else bucket.queja += 1;
     addMoneyToFlags(bucket, item);
   });

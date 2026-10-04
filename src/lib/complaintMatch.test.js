@@ -151,6 +151,17 @@ test('complaint status follows Queja → Refutado → Ref. aceptado or rechazado
   );
 });
 
+test('complaint row keeps the no_refutable status instead of deriving one', () => {
+  assert.equal(
+    complaintRowStatus({
+      status: 'matched',
+      photo: photo({ is_refutado: false, has_complaint: true }),
+      history: { status: 'no_refutable', unrefutableReason: 'No hay foto' },
+    }),
+    'no_refutable',
+  );
+});
+
 test('appends reclamo notes without duplicating them', () => {
   const once = mergeComplaintNotes(null, {
     reason: 'Faltan productos',

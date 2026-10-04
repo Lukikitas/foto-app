@@ -132,6 +132,18 @@ export default function ComplaintsBulkBar({
                 role="menuitem"
                 onClick={() => {
                   setStatusMenuOpen(false);
+                  onMarkStatus(COMPLAINT_STATUSES.no_refutable);
+                }}
+              >
+                <span className="badge badge--no-refutable">No refutable</span>
+                <small>Pide motivo · no se puede refutar</small>
+              </button>
+              <button
+                type="button"
+                className="complaints-bulk-bar__menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setStatusMenuOpen(false);
                   onMarkStatus(COMPLAINT_STATUSES.queja);
                 }}
               >

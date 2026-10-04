@@ -255,6 +255,7 @@ function emptyResolution() {
     refutado: 0,
     refutadoAceptado: 0,
     refutadoRechazado: 0,
+    noRefutable: 0,
     complaintAmount: 0,
     recoveredAmount: 0,
     lostAmount: 0,
@@ -289,6 +290,7 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator, history
     refutado: toCount(history.refutado),
     refutadoAceptado: toCount(history.refutadoAceptado),
     refutadoRechazado: toCount(history.refutadoRechazado),
+    noRefutable: toCount(history.noRefutable),
     complaintAmount,
     recoveredAmount,
     lostAmount,
@@ -308,7 +310,8 @@ function hasResolution(row) {
     row.queja > 0 ||
     row.refutado > 0 ||
     row.refutadoAceptado > 0 ||
-    row.refutadoRechazado > 0
+    row.refutadoRechazado > 0 ||
+    row.noRefutable > 0
   );
 }
 
@@ -418,6 +421,7 @@ function rollupRows(id, rows) {
   const refutado = rows.reduce((sum, row) => sum + toCount(row.refutado), 0);
   const refutadoAceptado = rows.reduce((sum, row) => sum + toCount(row.refutadoAceptado), 0);
   const refutadoRechazado = rows.reduce((sum, row) => sum + toCount(row.refutadoRechazado), 0);
+  const noRefutable = rows.reduce((sum, row) => sum + toCount(row.noRefutable), 0);
   const complaintAmount = rows.reduce((sum, row) => sum + (Number(row.complaintAmount) || 0), 0);
   const recoveredAmount = rows.reduce((sum, row) => sum + (Number(row.recoveredAmount) || 0), 0);
   const undisputedAmount = rows.reduce((sum, row) => sum + (Number(row.undisputedAmount) || 0), 0);
@@ -433,6 +437,7 @@ function rollupRows(id, rows) {
     refutado,
     refutadoAceptado,
     refutadoRechazado,
+    noRefutable,
     complaintAmount,
     recoveredAmount,
     lostAmount: confirmedLostAmount + undisputedAmount,

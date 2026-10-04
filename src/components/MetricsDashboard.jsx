@@ -221,6 +221,7 @@ export default function MetricsDashboard({
         <p>
           {formatNumber(item.queja)} quejas · {formatNumber(item.refutado)} refutados ·{' '}
           {formatNumber(item.refutadoAceptado)} aceptados · {formatNumber(item.refutadoRechazado)} rechazados
+          {item.noRefutable > 0 ? <> · {formatNumber(item.noRefutable)} no refutables</> : null}
         </p>
       </div>
 

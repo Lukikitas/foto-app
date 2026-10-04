@@ -22,6 +22,7 @@ function countStatus(items) {
     if (item.status === COMPLAINT_STATUSES.refutado_aceptado) flags.refutadoAceptado += 1;
     else if (item.status === COMPLAINT_STATUSES.refutado_rechazado) flags.refutadoRechazado += 1;
     else if (item.status === COMPLAINT_STATUSES.refutado) flags.refutado += 1;
+    else if (item.status === COMPLAINT_STATUSES.no_refutable) flags.noRefutable += 1;
     else flags.queja += 1;
     addMoneyToFlags(flags, item);
   });
@@ -105,6 +106,7 @@ export function buildRegistryCsv(items) {
     'comentario',
     'monto',
     'estado',
+    'motivo_no_refutable',
     'foto',
     ...extras,
   ];
@@ -121,6 +123,7 @@ export function buildRegistryCsv(items) {
         item.comment,
         item.amount ?? '',
         COMPLAINT_STATUS_LABELS[item.status] || item.status,
+        item.unrefutableReason || '',
         item.photoUrl ? 'si' : 'no',
         ...extras.map((key) => item.fields?.[key] || ''),
       ]
@@ -162,6 +165,7 @@ export function buildRegistryWorkbook(items) {
     { value: 'Observaciones', style: CELL_STYLES.HEADER },
     { value: 'Monto ($)', style: CELL_STYLES.HEADER },
     { value: 'Estado', style: CELL_STYLES.HEADER },
+    { value: 'Motivo no refutable', style: CELL_STYLES.HEADER },
     { value: 'Foto', style: CELL_STYLES.HEADER },
     ...extras.map((k) => ({ value: k, style: CELL_STYLES.HEADER })),
   ];
@@ -179,6 +183,7 @@ export function buildRegistryWorkbook(items) {
         { value: item.comment || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: Number(item.amount) || 0, style: CELL_STYLES.CURRENCY },
         { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.TEXT_BORDER },
+        { value: item.unrefutableReason || '', style: CELL_STYLES.TEXT_BORDER },
         { value: item.photoUrl ? 'Sí' : 'No', style: CELL_STYLES.CENTER },
         ...extras.map((k) => ({ value: item.fields?.[k] ?? '', style: CELL_STYLES.TEXT_BORDER })),
       ],
@@ -190,7 +195,7 @@ export function buildRegistryWorkbook(items) {
       {
         name: 'Registro Quejas',
         rows,
-        columnWidths: [16, 12, 10, 15, 24, 24, 30, 14, 16, 8, ...extras.map(() => 16)],
+        columnWidths: [16, 12, 10, 15, 24, 24, 30, 14, 16, 22, 8, ...extras.map(() => 16)],
       },
     ],
   };
@@ -437,6 +442,7 @@ export function buildReportWorkbook(report) {
     { value: 'Observaciones', style: CELL_STYLES.HEADER },
     { value: 'Monto ($)', style: CELL_STYLES.HEADER },
     { value: 'Estado', style: CELL_STYLES.HEADER },
+    { value: 'Motivo no refutable', style: CELL_STYLES.HEADER },
     { value: 'Foto', style: CELL_STYLES.HEADER },
     ...extras.map((k) => ({ value: k, style: CELL_STYLES.HEADER })),
   ];
@@ -453,6 +459,7 @@ export function buildReportWorkbook(report) {
         { value: item.comment || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: Number(item.amount) || 0, style: CELL_STYLES.CURRENCY },
         { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.CENTER },
+        { value: item.unrefutableReason || '', style: CELL_STYLES.TEXT_BORDER },
         { value: item.photoUrl ? 'Sí' : 'No', style: CELL_STYLES.CENTER },
         ...extras.map((key) => ({ value: item.fields?.[key] || '—', style: CELL_STYLES.TEXT_BORDER })),
       ],
@@ -494,7 +501,7 @@ export function buildReportWorkbook(report) {
       },
       {
         name: 'Detalle de Quejas',
-        colWidths: [18, 14, 12, 18, 24, 26, 32, 16, 18, 10, ...extras.map(() => 18)],
+        colWidths: [18, 14, 12, 18, 24, 26, 32, 16, 18, 22, 10, ...extras.map(() => 18)],
         autoFilter: `A1:${lastDetailCol}${detailRows.length}`,
         rows: detailRows,
       },

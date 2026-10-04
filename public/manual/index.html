@@ -443,7 +443,7 @@
         <p class="cover__lead">
           Cómo sacar las fotos de cada pedido, buscar en la galería, marcar quejas y refutar.
         </p>
-        <p class="cover__meta">Versión 1.7 · actualizada el 30/09/2026</p>
+        <p class="cover__meta">Versión 1.8 · actualizada el 04/10/2026</p>
       </header>
 
       <nav class="toc-card" aria-label="Índice del manual">
@@ -587,6 +587,7 @@
             <tr><td><b class="cell c-green">🟢 Ref. aceptado</b></td><td>El agregador devolvió el dinero</td><td>Recuperada</td></tr>
             <tr><td><b class="cell c-red">🔴 Ref. rechazado</b></td><td>No aceptaron la refutación</td><td>Perdida</td></tr>
             <tr><td><b class="cell c-gray">⬜ Queja vencida</b></td><td>Pasó el plazo del agregador</td><td>Perdida, sin opción de refutar</td></tr>
+            <tr><td><b class="cell c-red">⛔ No refutable</b></td><td>Marcaste «No se puede refutar» con su motivo</td><td>Perdida, sin opción de refutar</td></tr>
           </tbody>
         </table>
         <h3 class="sub">En la app: dejás todo listo</h3>
@@ -659,6 +660,7 @@
             <ol class="steps">
               <li>Tocá <span class="ui">Marcar refutado</span>: la queja pasa a <span class="ui">Refutado</span> y deja de verse como pendiente.</li>
               <li>Esperá la respuesta del agregador: <span class="ui">Ref. aceptado</span> o <span class="ui">Ref. rechazado</span>.</li>
+              <li>Si la queja no se puede refutar (no hay foto, queja real, foto borrosa o código no visible), tocá <span class="ui">No se puede refutar</span>: te pide el motivo y queda <b>No refutable</b> — sin botones de refutar y contada como pérdida.</li>
             </ol>
           </div>
           <figure class="figure--compact">
@@ -730,6 +732,10 @@
             <dd class="qa__a">Pasó el plazo del agregador. Queda registrada en el historial y en métricas, pero sin opción de refutar.</dd>
           </div>
           <div class="qa__item">
+            <dt class="qa__q">«¿Qué es No refutable?»</dt>
+            <dd class="qa__a">Que decidiste que esa queja no se puede refutar: se guarda el motivo (No hay foto, Queja real, Foto borrosa/invalida o Código no visible), el dinero se cuenta como pérdida y desaparecen los botones de refutar. En <span class="ui">Desempeño</span> se cuenta aparte: «Ref. acept.» son quejas falsas (no juegan en contra) y «No refut.» es lo que sirve para una medida disciplinaria.</dd>
+          </div>
+          <div class="qa__item">
             <dt class="qa__q">«¿Dónde veo el dinero?»</dt>
             <dd class="qa__a">En <span class="ui">Métricas</span>: quejas del período, $ recuperado, $ perdido y los objetivos del local.</dd>
           </div>
@@ -745,7 +751,7 @@
       </section>
 
       <footer class="manual-footer">
-        <span><b>Manual de uso</b> · STAR-APP Delivery · v1.7</span>
+        <span><b>Manual de uso</b> · STAR-APP Delivery · v1.8</span>
         <span>¿Falta algo en la guía? Avisá para actualizarla.</span>
       </footer>
     </main>

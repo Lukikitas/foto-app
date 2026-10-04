@@ -73,13 +73,23 @@ function nextStatus(current, { status, accepted, refutado } = {}) {
   return current.status || COMPLAINT_STATUSES.queja;
 }
 
-function resolutionPatch(current, photo, { status, accepted, refutado } = {}) {
-  return {
-    status: nextStatus(current, { status, accepted, refutado }),
+function resolutionPatch(current, photo, { status, accepted, refutado, unrefutableReason } = {}) {
+  const nextStatusValue = nextStatus(current, { status, accepted, refutado });
+  const patch = {
+    status: nextStatusValue,
     photoId: photo?.id || current.photoId,
     photoName: photo?.name || current.photoName,
     photoUrl: photo?.public_url || current.photoUrl,
   };
+  if (nextStatusValue === COMPLAINT_STATUSES.no_refutable) {
+    patch.unrefutableReason = String(
+      unrefutableReason || current.unrefutableReason || '',
+    ).trim();
+  } else if (current.unrefutableReason) {
+    // Salir del estado «No refutable» limpia el motivo para no dejar datos viejos.
+    patch.unrefutableReason = '';
+  }
+  return patch;
 }
 
 export function importComplaintsToHistory(complaints, rows = []) {
@@ -93,7 +103,7 @@ export function importComplaintsToHistory(complaints, rows = []) {
   });
 }
 
-export function setHistoryResolutions(rows, { status, accepted, refutado } = {}) {
+export function setHistoryResolutions(rows, { status, accepted, refutado, unrefutableReason } = {}) {
   return mutateComplaintHistory((store) => {
     let next = store;
     rows.forEach(({ complaint, photo }) => {
@@ -104,14 +114,18 @@ export function setHistoryResolutions(rows, { status, accepted, refutado } = {})
       }
       const current = next.items[id] || Object.values(next.items).find((item) => item.sourceId === id);
       if (!current) return;
-      next = patchHistoryItem(next, current.id, resolutionPatch(current, photo, { status, accepted, refutado }));
+      next = patchHistoryItem(
+        next,
+        current.id,
+        resolutionPatch(current, photo, { status, accepted, refutado, unrefutableReason }),
+      );
     });
     return next;
   });
 }
 
-export function setHistoryResolution(complaint, photo, { status, accepted, refutado } = {}) {
-  return setHistoryResolutions([{ complaint, photo }], { status, accepted, refutado });
+export function setHistoryResolution(complaint, photo, { status, accepted, refutado, unrefutableReason } = {}) {
+  return setHistoryResolutions([{ complaint, photo }], { status, accepted, refutado, unrefutableReason });
 }
 
 export function setHistoryPhoto(complaint, photo) {
@@ -156,7 +170,7 @@ export function syncGalleryComplaintToHistory(photo) {
   return mutateComplaintHistory((store) => syncGalleryComplaintInStore(store, photo));
 }
 
-export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado } = {}) {
+export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado, unrefutableReason } = {}) {
   return setHistoryResolution(
     {
       orderCode: photo.name,
@@ -165,6 +179,6 @@ export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado
       comment: '',
     },
     photo,
-    { status, accepted, refutado },
+    { status, accepted, refutado, unrefutableReason },
   );
 }

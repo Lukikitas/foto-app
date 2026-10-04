@@ -1,5 +1,15 @@
 # React + Vite
 
+## Versión 1.8
+
+### No se puede refutar
+
+En Reclamos e Historial, las quejas abiertas (estado Queja) tienen el botón **«No se puede refutar»**: abre un modal que pide el motivo entre presets —*No hay foto*, *Queja real*, *Foto borrosa/invalida*, *Código no visible*— más un detalle opcional, y la queja pasa al nuevo estado **No refutable** (`no_refutable`, con `unrefutableReason` guardado en el historial y sincronizado entre dispositivos). Igual que con Ref. rechazado o Queja vencida desaparecen «Preparar para refutar» y «Marcar refutado», la foto no se marca refutada (nunca entró en disputa), el badge de monto deja de estar en verde y el dinero se cuenta dentro de $ perdido. Hay chip de filtro propio en Reclamos e Historial (y en Métricas → Quejas) y el menú «Estado» de la barra masiva ofrece «No refutable», que abre el mismo modal para toda la selección; para deshacerlo, cambiar el estado a Queja desde «Editar datos…».
+
+Desempeño de personal agrega por persona las columnas **«Ref. acept.»** (quejas con refutación aceptada: falsas, no juegan en contra del personal) y **«No refut.»** (quejas no refutables: la pérdida sin refutar, resaltada en rojo cuando hay alguna, que es la base para medidas disciplinarias), con nota al pie y las dos columnas nuevas en el CSV. El resumen de Métricas muestra «N no refutables» cuando corresponde, el detalle del informe y el registro CSV/Excel incluyen el motivo (`motivo_no_refutable`) y el manual documenta el estado.
+
+Validación: `npm test` (297 pruebas), `npm run lint`, `npm run build`.
+
 ## Versión 1.7
 
 ### Galería paginada
@@ -30,7 +40,7 @@ La tira de la cámara muestra el frame congelado que se vio al disparar. Cuando 
 
 La app incluye una guía corta para el equipo (sacar fotos, galería, marcar quejas, refutado, repetir fotos y corregir autores) en `public/manual/index.html`. Se abre desde **Ajustes → Manual de uso** o directo en `/manual/index.html` (el archivo explícito, así funciona igual en `npm run dev`, en GitHub Pages y desde cualquier dispositivo) y tiene el botón «Guardar/Imprimir» para quedarse con el PDF en el celu. Es una página autocontenida con portada, índice, estilos A4 de impresión (contenido continuo sin páginas a medio llenar) y capturas propias en `public/manual/img/`; no se precachea el service worker y queda fuera del fallback de navegación (junto a `presentacion/`), así que `/manual/…` sirve la guía y no la app.
 
-Validación: `npm test` (278 pruebas), `npm run lint`, `npm run build`.
+Validación: `npm test` (291 pruebas), `npm run lint`, `npm run build`.
 
 ## Versión 1.6
 

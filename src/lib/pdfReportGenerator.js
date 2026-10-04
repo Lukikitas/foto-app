@@ -646,7 +646,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
       <div class="kpi-card kpi-card--count">
         <span class="kpi-label">Pedidos con Reclamo</span>
         <span class="kpi-val">${formatNumber(totals.count)}</span>
-        <span class="kpi-hint">${totals.refutadoAceptado ? `${formatNumber(totals.refutadoAceptado)} recuperados con éxito` : 'Quejas registradas'}</span>
+        <span class="kpi-hint">${totals.refutadoAceptado ? `${formatNumber(totals.refutadoAceptado)} recuperados con éxito` : 'Quejas registradas'}${totals.noRefutable ? ` · ${formatNumber(totals.noRefutable)} no refutables` : ''}</span>
       </div>
     </section>
 
@@ -897,7 +897,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
             ${items.map((item) => {
               const statusClass = item.status === 'refutado_aceptado'
                 ? 'badge-status--accepted'
-                : item.status === 'refutado_rechazado'
+                : item.status === 'refutado_rechazado' || item.status === 'no_refutable'
                 ? 'badge-status--rejected'
                 : 'badge-status--pending';
               return `

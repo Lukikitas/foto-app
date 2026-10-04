@@ -166,6 +166,7 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
                 <strong className="report-pdf-kpi__val">{formatNumber(totals.count)}</strong>
                 <span className="report-pdf-kpi__hint">
                   {totals.refutadoAceptado ? `${formatNumber(totals.refutadoAceptado)} recuperados con éxito` : 'Quejas registradas'}
+                  {totals.noRefutable ? ` · ${formatNumber(totals.noRefutable)} no refutables` : ''}
                 </span>
               </div>
             </section>
@@ -425,7 +426,7 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
                         const statusClass =
                           item.status === 'refutado_aceptado'
                             ? 'badge-status--accepted'
-                            : item.status === 'refutado_rechazado'
+                            : item.status === 'refutado_rechazado' || item.status === 'no_refutable'
                             ? 'badge-status--rejected'
                             : 'badge-status--pending';
                         return (
@@ -440,6 +441,9 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
                               <span className={`badge-status ${statusClass}`}>
                                 {COMPLAINT_STATUS_LABELS[item.status] || item.status}
                               </span>
+                              {item.unrefutableReason ? (
+                                <small className="report-pdf-unref-reason">{item.unrefutableReason}</small>
+                              ) : null}
                             </td>
                             <td className="report-pdf-col--center">{item.photoUrl ? 'Sí' : 'No'}</td>
                             {extras.map((key) => (

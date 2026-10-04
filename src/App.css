@@ -2377,6 +2377,17 @@
   border: 1px dashed var(--border-strong);
 }
 
+/* «No se puede refutar»: pérdida decidida, sin opción de refutar */
+.badge--no-refutable {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px dashed var(--danger-border);
+}
+
+.complaint-card--no_refutable {
+  border-color: var(--danger-border);
+}
+
 .complaint-card--queja_vencida {
   border-color: var(--danger-border);
 }
@@ -5724,6 +5735,13 @@ button.metrics-agg:focus-visible {
   text-align: center !important;
 }
 
+.report-pdf-unref-reason {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 .badge-status {
   display: inline-block;
   padding: 2px 6px;
@@ -6144,6 +6162,52 @@ button.metrics-agg:focus-visible {
 .complaint-batch-modal {
   max-width: 580px;
   width: 95vw;
+}
+
+/* Modal «No se puede refutar»: pide motivo (presets) antes de marcar */
+.complaint-unrefutable-modal {
+  max-width: 460px;
+  width: 95vw;
+}
+
+.complaint-unrefutable-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.complaint-unrefutable-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.complaint-unrefutable-preset {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.complaint-unrefutable-preset.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.complaint-unrefutable-preset input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .complaint-batch-form {

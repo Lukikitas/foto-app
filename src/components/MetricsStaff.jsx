@@ -289,6 +289,20 @@ export default function MetricsStaff({ history, range, aggregator = 'all' }) {
                       <th scope="col" className="staff__th--num">% del total</th>
                       <SortHeader label="Pedidos" sortKey="orders" current={sort.key} dir={sort.dir} onSort={toggleSort} />
                       <SortHeader label="Quejas" sortKey="complaints" current={sort.key} dir={sort.dir} onSort={toggleSort} />
+                      <th
+                        scope="col"
+                        className="staff__th--num"
+                        title="Quejas con Ref. aceptado: resultaron falsas y no juegan en contra del personal"
+                      >
+                        Ref. acept.
+                      </th>
+                      <th
+                        scope="col"
+                        className="staff__th--num"
+                        title="Quejas marcadas «No se puede refutar»: pérdida sin refutar, base para medidas disciplinarias"
+                      >
+                        No refut.
+                      </th>
                       <SortHeader label="% quejas" sortKey="complaintPct" current={sort.key} dir={sort.dir} onSort={toggleSort} />
                       <SortHeader label="$ quejas" sortKey="complaintAmount" current={sort.key} dir={sort.dir} onSort={toggleSort} />
                       <SortHeader label="$ recuperado" sortKey="recoveredAmount" current={sort.key} dir={sort.dir} onSort={toggleSort} />
@@ -309,6 +323,10 @@ export default function MetricsStaff({ history, range, aggregator = 'all' }) {
                         <td className="staff__td--num">{formatPct(row.photoSharePct, 1)}</td>
                         <td className="staff__td--num">{formatNumber(row.orders)}</td>
                         <td className="staff__td--num">{formatNumber(row.complaints)}</td>
+                        <td className="staff__td--num">{formatNumber(row.refutadoAceptado)}</td>
+                        <td className={`staff__td--num${row.noRefutable > 0 ? ' is-bad' : ''}`}>
+                          {formatNumber(row.noRefutable)}
+                        </td>
                         <td className={`staff__td--num${row.complaintPct != null && row.complaintPct > 2.4 ? ' is-bad' : ''}`}>
                           {formatPct(row.complaintPct)}
                         </td>
@@ -319,6 +337,11 @@ export default function MetricsStaff({ history, range, aggregator = 'all' }) {
                   </tbody>
                 </table>
               </div>
+              <p className="staff__footnote">
+                Ref. aceptado = queja falsa: no juega en contra de quien sacó la foto.
+                No refutable = queja que no se pudo refutar (perdida): es la base para
+                medidas disciplinarias.
+              </p>
             </>
           )}
 

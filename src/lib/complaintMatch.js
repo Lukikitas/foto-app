@@ -248,7 +248,8 @@ export function complaintResolutionStatus(row) {
     status === 'queja' ||
     status === 'refutado' ||
     status === 'refutado_aceptado' ||
-    status === 'refutado_rechazado'
+    status === 'refutado_rechazado' ||
+    status === 'no_refutable'
   ) {
     return status;
   }

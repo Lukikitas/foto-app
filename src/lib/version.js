@@ -1,38 +1,16 @@
 import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
+// Novedades que muestra Ajustes → «Ver novedades». Al subir de versión menor
+// se podan los grupos anteriores (convención desde v1.7): el título del modal
+// es «Novedades de la versión {APP_VERSION}», así que solo debe listar las de
+// esta versión.
 export const RELEASE_GROUPS = [
   {
-    title: 'Galería paginada',
+    title: 'No se puede refutar',
     notes: [
-      'La galería de pedidos se ve de 100 en 100: páginas numeradas con «Anterior/Siguiente», el rango visible («Mostrando 1–100 de 857») y la primera página carga al instante mientras el resto llega en segundo plano.',
-      'La búsqueda se actualiza sola mientras escribís (sin presionar Buscar) y resalta lo encontrado en los títulos.',
-      'La selección se acumula entre páginas: el checkbox «Página» marca solo la página actual y la barra de acciones sigue viendo todo lo seleccionado.',
-    ],
-  },
-  {
-    title: 'Queja vencida',
-    notes: [
-      'Ajustes → «Plazos de refutación»: días por agregador (y uno general) para refutar, contados desde el día del pedido. Usá 0 = sin límite. Se guarda compartido para todos los dispositivos del local.',
-      'Cuando pasan los días desde el pedido, la queja aparece con el tag «Queja vencida» en Reclamos e Historial y ya no se ofrecen «Preparar para refutar» ni «Marcar refutado».',
-      'Las quejas por vencer muestran «Vence hoy / mañana / en X d» en sus últimas fechas. Las métricas no cambian: el estado guardado sigue siendo Queja.',
-    ],
-  },
-  {
-    title: 'Hora del pedido',
-    notes: [
-      'La galería muestra la hora en que se sacó el par de fotos, aunque la cola de lectura/subida tarde: el pedido guarda su hora de captura y no la en que terminó de subir. Vale también si la app se cerró y la cola siguió en segundo plano.',
-    ],
-  },
-  {
-    title: 'Evidencia fiel a la cámara',
-    notes: [
-      'La foto que se agranda en la galería y la que se descarga son exactamente las que vio el empleado al sacarla: si la foto de alta resolución del teléfono viene con otro encuadre (zoom de fábrica), se conserva el frame que se mostró en cámara. Cuando el encuadre coincide, sube la versión de alta resolución con más detalle.',
-    ],
-  },
-  {
-    title: 'Manual de uso',
-    notes: [
-      'Ajustes → «Manual de uso»: guía corta para el equipo (sacar fotos, galería, quejas y refutado) que se abre en el celu y se puede guardar como PDF con un toque.',
+      'En Reclamos e Historial, las quejas abiertas tienen el botón «No se puede refutar»: pide el motivo (presets: No hay foto, Queja real, Foto borrosa/invalida, Código no visible + detalle opcional) y la queja queda como «No refutable».',
+      'Una vez marcada como «No refutable» desaparecen «Preparar para refutar» y «Marcar refutado» (igual que con Ref. rechazado o Queja vencida), la foto no se marca refutada y el dinero se cuenta como pérdida. Hay chip de filtro y opción en el menú «Estado» de la barra masiva.',
+      'Desempeño de personal: columnas nuevas «Ref. acept.» (quejas falsas, no juegan en contra) y «No refut.» (pérdidas sin refutar, base para medidas disciplinarias), también en el CSV; el resumen de Métricas muestra «N no refutables» y el registro CSV/Excel incluye el motivo.',
     ],
   },
 ];

@@ -57,6 +57,33 @@ test('report totals recovered money only from Ref. aceptado', () => {
   assert.match(csv, /8000/);
 });
 
+test('report totals count no_refutable separately and keep its money as lost', () => {
+  let store = upsertHistoryItems(emptyHistory(), [
+    complaint(),
+    complaint({ orderCode: 'PEYA-5', amount: 2000 }),
+  ]).store;
+  const ids = Object.keys(store.items);
+  store = patchHistoryItem(store, ids[0], {
+    status: COMPLAINT_STATUSES.no_refutable,
+    unrefutableReason: 'Queja real',
+  });
+  store = patchHistoryItem(store, ids[1], { status: COMPLAINT_STATUSES.refutado_aceptado });
+
+  const report = buildComplaintReport(store, { from: '2026-09-17', to: '2026-09-17' });
+  assert.equal(report.totals.count, 2);
+  assert.equal(report.totals.noRefutable, 1);
+  assert.equal(report.totals.queja, 0, 'los no refutables no son quejas pendientes');
+  assert.equal(report.totals.refutadoAceptado, 1);
+  // Sin estado disputado el dinero queda en «sin disputar» y entra en $ perdido.
+  assert.equal(report.totals.undisputedAmount, 8000);
+  assert.equal(report.totals.recoveredAmount, 2000);
+  assert.equal(report.totals.lostAmount, 8000);
+
+  const csv = buildRegistryCsv(report.items);
+  assert.match(csv, /motivo_no_refutable/);
+  assert.match(csv, /Queja real/);
+});
+
 test('buildReportWorkbook produces multi-sheet workbook with 6 sheets and proper data', async () => {
   const store = upsertHistoryItems(emptyHistory(), [
     complaint(),

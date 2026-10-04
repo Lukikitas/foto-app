@@ -456,3 +456,61 @@ test('deleteHistoryItems removes multiple items in a single call', () => {
   assert.equal(pruned.items[ids[1]].orderCode, 'PEYA-2');
 });
 
+test('no_refutable status persists with its reason and counts as lost money', () => {
+  let store = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const id = Object.keys(store.items)[0];
+  store = patchHistoryItem(store, id, {
+    status: COMPLAINT_STATUSES.no_refutable,
+    unrefutableReason: 'No hay foto',
+  });
+
+  // Ruta rápida y lenta coinciden: el motivo viaja normalizado en el item.
+  const fast = parseHistory(store);
+  const slow = parseHistory(JSON.parse(JSON.stringify(store)));
+  assert.deepEqual(Object.values(fast.items), Object.values(slow.items));
+
+  const item = fast.items[id];
+  assert.equal(item.status, COMPLAINT_STATUSES.no_refutable);
+  assert.equal(item.unrefutableReason, 'No hay foto');
+  assert.equal(historyResolution(item), 'no_refutable');
+  assert.equal(
+    listHistoryItems(store, { status: COMPLAINT_STATUSES.no_refutable }).length,
+    1,
+    'el filtro por estado debe encontrarlo',
+  );
+
+  const flags = groupHistoryFlags(store, '2026-09-17', '2026-09-17');
+  const bucket = flags['2026-09-17'].pedidosya;
+  assert.equal(bucket.noRefutable, 1);
+  assert.equal(bucket.queja, 0, 'no debe contarse como queja pendiente');
+  assert.equal(bucket.refutadoRechazado, 0);
+  assert.equal(bucket.undisputedAmount, 8990, 'el dinero queda como no disputado');
+  assert.equal(bucket.lostAmount, 8990, 'y por tanto entra en $ perdido');
+});
+
+test('re-importing the sheet keeps the no_refutable status and reason', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [complaint()]);
+  const id = Object.keys(seeded.store.items)[0];
+  const marked = patchHistoryItem(seeded.store, id, {
+    status: COMPLAINT_STATUSES.no_refutable,
+    unrefutableReason: 'Foto borrosa/invalida',
+  });
+  const again = upsertHistoryItems(marked, [complaint({ comment: 'Sheet de nuevo' })]);
+  const item = Object.values(again.store.items)[0];
+  assert.equal(item.status, COMPLAINT_STATUSES.no_refutable);
+  assert.equal(item.unrefutableReason, 'Foto borrosa/invalida');
+});
+
+test('changing away from no_refutable clears the stored reason', () => {
+  let store = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const id = Object.keys(store.items)[0];
+  store = patchHistoryItem(store, id, {
+    status: COMPLAINT_STATUSES.no_refutable,
+    unrefutableReason: 'Queja real',
+  });
+  store = patchHistoryItem(store, id, { status: COMPLAINT_STATUSES.queja });
+  const item = parseHistory(store).items[id];
+  assert.equal(item.status, COMPLAINT_STATUSES.queja);
+  assert.equal(item.unrefutableReason, '', 'el motivo no debe quedar colgado de otro estado');
+});
+

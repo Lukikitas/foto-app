@@ -94,6 +94,7 @@ import { getImportAggregator, getSavedSheetUrl, saveImportAggregator } from '../
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
 import ComplaintBatchEditModal from './ComplaintBatchEditModal';
+import ComplaintNoRefutableModal from './ComplaintNoRefutableModal';
 import ComplaintsBulkBar from './ComplaintsBulkBar';
 import ComplaintCodeListImport from './ComplaintCodeListImport.jsx';
 
@@ -101,6 +102,7 @@ const FILTERS = [
   { id: 'all', label: 'Todas' },
   { id: COMPLAINT_STATUSES.queja, label: 'Queja' },
   { id: QUEJA_VENCIDA_STATUS, label: 'Queja vencida' },
+  { id: COMPLAINT_STATUSES.no_refutable, label: 'No refutable' },
   { id: COMPLAINT_STATUSES.refutado, label: 'Refutado' },
   { id: COMPLAINT_STATUSES.refutado_aceptado, label: 'Ref. aceptado' },
   { id: COMPLAINT_STATUSES.refutado_rechazado, label: 'Ref. rechazado' },
@@ -150,6 +152,7 @@ function statusBadgeClass(status) {
   if (status === 'refutado_aceptado') return 'badge badge--refutado-aceptado';
   if (status === 'refutado_rechazado') return 'badge badge--aceptado';
   if (status === 'refutado') return 'badge badge--refutado';
+  if (status === 'no_refutable') return 'badge badge--no-refutable';
   if (status === QUEJA_VENCIDA_STATUS) return 'badge badge--expired';
   if (status === 'queja') return 'badge badge--complaint';
   if (status === 'sin_foto') return 'badge badge--file';
@@ -212,6 +215,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
+  // Fila(s) pendientes de marcar «No se puede refutar»: se confirman con motivo.
+  const [unrefutableTarget, setUnrefutableTarget] = useState(null);
   const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE);
   const [refutadoDays, setRefutadoDays] = useState(null);
   const masterCheckboxRef = useRef(null);
@@ -563,6 +568,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       ambiguo: 0,
       queja: 0,
       [QUEJA_VENCIDA_STATUS]: 0,
+      [COMPLAINT_STATUSES.no_refutable]: 0,
       refutado: 0,
       refutado_aceptado: 0,
       refutado_rechazado: 0,
@@ -688,14 +694,23 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     finally { setLoading(false); }
   }
 
-  async function markRow(row, { status } = {}) {
+  async function markRow(row, { status, unrefutableReason } = {}) {
+    // «No se puede refutar» siempre pide motivo: se abre el modal y la
+    // confirmación vuelve a llamar a markRow con el motivo cargado.
+    if (status === COMPLAINT_STATUSES.no_refutable && !unrefutableReason) {
+      setUnrefutableTarget({ rows: [row] });
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const result = await setComplaintStatusSynchronized(row, status);
+      const result = await setComplaintStatusSynchronized(row, status, { unrefutableReason });
       if (result.updatedPhoto) applyUpdatedPhotos([result.updatedPhoto]);
       setHistoryStore(historyFromResult(result.history));
-      setNotice(`Pedido ${row.complaint.orderCode} marcado como ${statusLabel(status)}.`);
+      setNotice(
+        `Pedido ${row.complaint.orderCode} marcado como ${statusLabel(status)}` +
+          `${unrefutableReason ? ` (${unrefutableReason})` : ''}.`,
+      );
     } catch (err) {
       setError(err.message || 'No se pudo actualizar el reclamo.');
     } finally {
@@ -914,20 +929,40 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     }
   }
 
-  async function markMany(targetRows, { status } = {}) {
+  async function markMany(targetRows, { status, unrefutableReason } = {}) {
     if (targetRows.length === 0) return;
+    if (status === COMPLAINT_STATUSES.no_refutable && !unrefutableReason) {
+      setUnrefutableTarget({ rows: targetRows });
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const result = await setComplaintStatusesSynchronized(targetRows, status);
+      const result = await setComplaintStatusesSynchronized(targetRows, status, { unrefutableReason });
       if (result.updatedPhotos.length) applyUpdatedPhotos(result.updatedPhotos);
       setHistoryStore(historyFromResult(result.history));
-      setNotice(`${targetRows.length} pedidos marcados como ${statusLabel(status)}.`);
+      setNotice(
+        `${targetRows.length} pedidos marcados como ${statusLabel(status)}` +
+          `${unrefutableReason ? ` (${unrefutableReason})` : ''}.`,
+      );
     } catch (err) {
       setError(err.message || 'No se pudieron actualizar los reclamos.');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function confirmUnrefutable(unrefutableReason) {
+    const target = unrefutableTarget;
+    setUnrefutableTarget(null);
+    if (!target?.rows?.length || !unrefutableReason) return;
+    const payload = { status: COMPLAINT_STATUSES.no_refutable, unrefutableReason };
+    if (target.rows.length === 1) {
+      await markRow(target.rows[0], payload);
+    } else {
+      await markMany(target.rows, payload);
+    }
+    if (target.clearSelection) setSelectedIds(new Set());
   }
 
   async function downloadMatchedEvidence() {
@@ -972,6 +1007,10 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
 
   async function handleBatchMarkStatus(status) {
     if (selectedIds.size === 0) return;
+    if (status === COMPLAINT_STATUSES.no_refutable) {
+      setUnrefutableTarget({ rows: selectedRows, clearSelection: true });
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -1499,6 +1538,16 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         />
       )}
 
+      {/* Pedir motivo antes de marcar «No se puede refutar» */}
+      {unrefutableTarget && (
+        <ComplaintNoRefutableModal
+          selectedCount={unrefutableTarget.rows.length}
+          onConfirm={confirmUnrefutable}
+          onClose={() => setUnrefutableTarget(null)}
+          disabled={loading}
+        />
+      )}
+
       {lightboxPhoto && isImagePhoto(lightboxPhoto) && (
         <PhotoLightbox
           photo={lightboxPhoto}
@@ -1598,7 +1647,9 @@ function ComplaintCard({
             {amount != null && (
               <span
                 className={`badge badge--amount${
-                  status !== COMPLAINT_STATUSES.queja && status !== QUEJA_VENCIDA_STATUS
+                  status !== COMPLAINT_STATUSES.queja &&
+                  status !== QUEJA_VENCIDA_STATUS &&
+                  status !== COMPLAINT_STATUSES.no_refutable
                     ? ' badge--amount-green'
                     : ''
                 }`}
@@ -1616,6 +1667,11 @@ function ComplaintCard({
       )}
       {row.complaint.comment && (
         <p className="complaint-card__comment">{row.complaint.comment}</p>
+      )}
+      {status === COMPLAINT_STATUSES.no_refutable && row.history?.unrefutableReason && (
+        <p className="complaint-card__comment">
+          No refutable: {row.history.unrefutableReason}
+        </p>
       )}
       {extraFields.length > 0 && (
         <p className="complaint-card__comment">
@@ -1680,6 +1736,17 @@ function ComplaintCard({
             disabled={disabled}
           >
             Marcar refutado
+          </button>
+        )}
+        {status === COMPLAINT_STATUSES.queja && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            title="La queja queda como pérdida sin refutar; te pide el motivo"
+            onClick={() => onMarkStatus(row, COMPLAINT_STATUSES.no_refutable)}
+            disabled={disabled}
+          >
+            No se puede refutar
           </button>
         )}
         {status === COMPLAINT_STATUSES.refutado && (
