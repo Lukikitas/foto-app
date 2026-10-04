@@ -426,6 +426,20 @@ Deno.serve(async (request) => {
       await releaseTicket(photoId);
       return reply({ released: true });
     }
+    if (body.action === 'ticket') {
+      const photo = await getPhoto(photoId);
+      if (!photo) return reply({ error: 'Pedido no encontrado.' }, 404);
+      const { data: ref, error } = await db.from('unresolved_ticket_refs')
+        .select('storage_path,expires_at').eq('photo_id', photoId).maybeSingle();
+      if (error) throw error;
+      if (!ref || Date.parse(ref.expires_at) <= Date.now()) {
+        return reply({ error: 'El ticket ya no está disponible.' }, 404);
+      }
+      const { data: signed, error: signError } = await db.storage.from(TICKET_BUCKET)
+        .createSignedUrl(ref.storage_path, 300);
+      if (signError) throw signError;
+      return reply({ url: signed.signedUrl, expiresAt: ref.expires_at });
+    }
     if (body.action === 'analyze') return analyze(photoId);
     return reply({ error: 'Acción desconocida.' }, 400);
   } catch (error) {

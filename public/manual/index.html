@@ -388,15 +388,36 @@
           border-radius: 0;
           box-shadow: none;
         }
-        section.manual-section { break-before: page; margin-top: 0; }
+        section.manual-section {
+          margin-top: 6mm;
+          padding-top: 3mm;
+          border-top: 0.4mm solid var(--line);
+        }
         h2, .section-lead, h3.sub { break-after: avoid; }
-        .callout, .qa__item, .flow, .toc a, li, figure, .table tr { break-inside: avoid; }
-        .cover { border-radius: 12px; }
+        .callout, .qa__item, .flow, .toc a, li, figure, .table tr, .split, .doavoid { break-inside: avoid; }
+        p, li { orphans: 3; widows: 3; }
+        .cover { border-radius: 12px; padding: 9mm 10mm 7mm; }
+        .cover__brand img { width: 9mm; height: 9mm; border-radius: 2mm; }
+        .cover h1 { font-size: 16pt; margin-top: 4mm; }
+        .cover__lead { font-size: 9.5pt; margin-top: 3mm; }
+        .cover__meta { margin-top: 4mm; }
+        .toc-card { margin-top: 5mm; }
         h2 { font-size: 16pt; }
         .split { grid-template-columns: 1fr auto; }
-        .split figure { width: 70mm; }
-        .split figure.figure--compact { width: 58mm; }
-        ol.steps .step-shot { float: right; width: 52mm; margin: 0 0 0.3rem 4mm; }
+        .split figure { width: 54mm; }
+        .split figure.figure--compact { width: 46mm; }
+        ol.steps .step-shot { float: right; width: 48mm; margin: 0 0 0.3rem 3.5mm; }
+        /* Pasos del portal: página propia, tarjetas número + captura en cuadrícula */
+        ol.steps--shots { break-before: page; padding-left: 5mm; }
+        ol.steps--shots::after { content: ''; display: table; clear: both; }
+        ol.steps--shots > li {
+          float: left;
+          width: 50mm;
+          margin: 0 6mm 4mm 0;
+          padding-left: 0;
+          font-size: 9.5pt;
+        }
+        ol.steps--shots .step-shot { float: none; width: 100%; max-width: none; margin: 1.5mm 0 0; }
         figure img { background: #fff; }
         a { color: inherit; text-decoration: none; }
       }
@@ -594,7 +615,7 @@
           acceso al portal (celular con sesión Partner o PC). La app no refuta sola: deja la foto descargada
           y el código copiado para que los lleves al portal.
         </p>
-        <ol class="steps">
+        <ol class="steps steps--shots">
           <li>
             Abrí el portal (<span class="ui">«Abrir portal»</span>) y en <span class="ui">Pedidos</span> buscá el número de pedido — lo tenés copiado.
             <figure class="step-shot">
@@ -658,7 +679,7 @@
             <ol class="steps">
               <li><b>Todavía no se subió:</b> en la tira de abajo tocá <span class="ui">«Repetir»</span> — se rehace solo la bolsa. Si falló el ticket, en el paso de la bolsa está <span class="ui">«Repetir ticket»</span>.</li>
               <li><b>Ya se subió:</b> Galería → <span class="ui">Editar</span> → <span class="ui">«Reemplazar foto»</span> → elegí la foto → <span class="ui">Guardar</span>.</li>
-              <li>El ticket no se guarda como foto. Si el código quedó mal, cambialo en Editar → <span class="ui">«Código del pedido»</span>.</li>
+              <li>El ticket no se guarda como foto en la galería, pero en Editar podés verlo y descargarlo con <span class="ui">«Ver / descargar ticket»</span> mientras siga disponible (72 horas). Si el código quedó mal, cambialo en Editar → <span class="ui">«Código del pedido»</span>.</li>
             </ol>
           </div>
           <figure>

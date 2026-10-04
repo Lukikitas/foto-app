@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, getPhotoAggregator } from '../lib/aggregators';
 import { isOrderPhoto, isValidOrderDigits } from '../lib/photos';
+import { loadOrderTicket, ticketDownloadFilename } from '../lib/orderTicketViewer';
+import { fetchPhotoBlob, triggerBlobDownload, triggerUrlDownload } from '../lib/photoDownload';
 
 export default function PhotoEditForm({
   photo,
@@ -18,6 +20,75 @@ export default function PhotoEditForm({
     aggregator: getPhotoAggregator(photo) || '',
     file: null,
   });
+  const [ticket, setTicket] = useState(null);
+  const [ticketState, setTicketState] = useState('idle'); // idle | loading | missing | error
+  const [ticketError, setTicketError] = useState(null);
+  const ticketUrlRef = useRef(null);
+
+  // La URL de objeto del ticket local se revoca al cerrar o desmontar.
+  useEffect(() => () => {
+    if (ticketUrlRef.current) URL.revokeObjectURL(ticketUrlRef.current);
+  }, []);
+
+  function closeTicket() {
+    if (ticketUrlRef.current) {
+      URL.revokeObjectURL(ticketUrlRef.current);
+      ticketUrlRef.current = null;
+    }
+    setTicket(null);
+    setTicketState('idle');
+    setTicketError(null);
+  }
+
+  async function handleViewTicket() {
+    if (ticket) {
+      closeTicket();
+      return;
+    }
+    setTicketState('loading');
+    setTicketError(null);
+    try {
+      const found = await loadOrderTicket(photo.id);
+      if (!found) {
+        setTicketState('missing');
+        return;
+      }
+      if (found.source === 'local') ticketUrlRef.current = found.url;
+      setTicket(found);
+      setTicketState('idle');
+    } catch (err) {
+      setTicketState('error');
+      setTicketError(err.message || 'No se pudo obtener la foto del ticket.');
+    }
+  }
+
+  async function handleDownloadTicket() {
+    if (!ticket) return;
+    const filename = ticketDownloadFilename(photo);
+    setTicketError(null);
+    let source = ticket;
+    try {
+      let blob = source.file;
+      if (!blob) {
+        try {
+          blob = await fetchPhotoBlob(source.url);
+        } catch (fetchError) {
+          // La URL firmada venció (5 min): se pide una fresca y se reintenta.
+          const fresh = await loadOrderTicket(photo.id);
+          if (!fresh) throw fetchError;
+          source = fresh;
+          setTicket(source);
+          blob = fresh.file || await fetchPhotoBlob(fresh.url);
+        }
+      }
+      if (!blob || !triggerBlobDownload(blob, filename)) {
+        throw new Error('No se pudo descargar el ticket.');
+      }
+    } catch {
+      // Sin CORS o URL vencida: el navegador abre la imagen en otra pestaña.
+      triggerUrlDownload(source.url, filename);
+    }
+  }
 
   function updateForm(key, value) {
     setForm((prev) => {
@@ -128,6 +199,44 @@ export default function PhotoEditForm({
             />
             <span>Es un refutado</span>
           </label>
+        </div>
+      )}
+
+      {isOrder && (
+        <div className="photo-card__edit-ticket">
+          <button
+            type="button"
+            className="btn btn--small btn--ghost"
+            onClick={handleViewTicket}
+            disabled={loading || ticketState === 'loading'}
+          >
+            {ticketState === 'loading'
+              ? 'Buscando ticket…'
+              : ticket
+                ? 'Ocultar ticket'
+                : 'Ver / descargar ticket'}
+          </button>
+          {ticketState === 'missing' && (
+            <small>No hay ticket guardado para esta foto: solo se conserva 72 horas.</small>
+          )}
+          {ticketState === 'error' && ticketError && (
+            <small>{ticketError}</small>
+          )}
+          {ticket && (
+            <div className="photo-card__ticket-preview">
+              <img src={ticket.url} alt="Foto del ticket" />
+              <div className="photo-card__rename-actions">
+                <button
+                  type="button"
+                  className="btn btn--small btn--primary"
+                  onClick={handleDownloadTicket}
+                  disabled={loading}
+                >
+                  Descargar ticket
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

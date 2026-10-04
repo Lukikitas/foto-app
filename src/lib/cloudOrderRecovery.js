@@ -42,3 +42,19 @@ export async function releaseCloudTicket(photoId) {
   });
   if (error) throw error;
 }
+
+// URL firmada (5 minutos) de la foto del ticket en el bucket privado
+// «order-tickets». Devuelve null cuando el ticket caducó o nunca existió.
+export async function getCloudTicketUrl(photoId) {
+  if (!cloudRecoveryEnabled || !photoId) return null;
+  const supabase = await client();
+  const { data, error, response } = await supabase.functions.invoke('order-code-recovery', {
+    body: { action: 'ticket', photoId },
+  });
+  if (error) {
+    const status = error.context?.status ?? response?.status ?? null;
+    if (status === 404) return null;
+    throw error;
+  }
+  return data?.url || null;
+}

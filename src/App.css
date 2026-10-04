@@ -2538,6 +2538,29 @@
   overflow-wrap: anywhere;
 }
 
+.photo-card__edit-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.photo-card__ticket-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.photo-card__ticket-preview img {
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
 .complaint-card__edit-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));

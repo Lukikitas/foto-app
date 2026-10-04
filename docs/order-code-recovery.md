@@ -8,7 +8,7 @@ La lectura local funciona sin servicios adicionales. El respaldo de Google Visio
 4. Configurar en GitHub Actions el secreto `TICKET_CLEANUP_SECRET` con el mismo valor. El workflow `cleanup-order-tickets.yml` elimina los tickets vencidos cada hora. Ejecutarlo manualmente una vez para comprobar el resultado.
 5. Configurar la variable de repositorio `VITE_CLOUD_OCR_ENABLED=true` y ejecutar el workflow de despliegue de GitHub Pages. La variable debe permanecer desactivada hasta que los pasos anteriores funcionen.
 
-Los tickets se suben solo para pedidos que siguen sin código, se comprimen a 1600 px y se eliminan al confirmarse el código o después de 72 horas. Si el bucket no tiene espacio, el ticket permanece en el celular y el pedido sigue guardándose. Las fotos anteriores a esta función no tienen ticket remoto; se reanaliza la foto de la bolsa.
+Los tickets se suben solo para pedidos que siguen sin código, se comprimen a 1600 px y se eliminan al confirmarse el código o después de 72 horas. Si el bucket no tiene espacio, el ticket permanece en el celular y el pedido sigue guardándose. Las fotos anteriores a esta función no tienen ticket remoto; se reanaliza la foto de la bolsa. Mientras el ticket siga disponible, la acción `ticket` de la función devuelve una URL firmada de 5 minutos y la galería la usa en Editar → «Ver / descargar ticket».
 
 ## Revisión diaria en el servidor
 
