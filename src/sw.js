@@ -13,7 +13,7 @@ import {
 } from './lib/uploadQueueDeps.js';
 import { processStoredUploadQueue } from './lib/uploadQueueDrain.js';
 import { detectOrderFromPhoto } from './lib/orderOcrServiceWorker.js';
-import { keepTicketForRecovery, recoverOrderCodeInCloud, releaseCloudTicket } from './lib/cloudOrderRecovery.js';
+import { keepTicketForRecovery, recoverOrderCodeInCloud } from './lib/cloudOrderRecovery.js';
 import {
   UPLOAD_QUEUE_MESSAGE,
   UPLOAD_QUEUE_SYNC_TAG,
@@ -38,7 +38,6 @@ function drainQueue() {
     uploadUnidentifiedOrder,
     keepTicketForRecovery,
     recoverOrderCodeInCloud,
-    releaseCloudTicket,
   });
 }
 

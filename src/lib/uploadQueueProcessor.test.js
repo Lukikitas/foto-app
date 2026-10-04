@@ -188,18 +188,35 @@ test('the background worker resumes a ticket after the closing page lease expire
   assert.equal((await store.list()).length, 0);
 });
 
-test('the ticket is discarded as soon as its code is safely persisted', async () => {
+test('the ticket is kept until the photo uploads so any order can store it remotely', async () => {
+  // Antes el ticket se descartaba apenas el OCR leía el código (antes de
+  // subirlo), así que los pedidos leídos a la primera no tenían ticket en
+  // ningún lado. Ahora sobrevive hasta el final y también se sube a Supabase.
   const item = sampleItem();
   const saved = [];
+  const kept = [];
+  let ticketDuringCompress = null;
   await processQueueItem(item, mockDeps({
-    persist: async (entry) => saved.push(serializeQueueRecord(entry)),
+    detectOrderFromPhoto: async () => ({ displayCode: 'PEYA12345', aggregator: 'pedidosya' }),
     compressImage: async (file) => {
-      assert.equal(item.ticketFile, null);
+      ticketDuringCompress = item.ticketFile?.name || null;
       return file;
     },
+    persist: async (entry) => saved.push(serializeQueueRecord(entry)),
+    keepTicketForRecovery: async (id, ticket) => {
+      kept.push([id, ticket.name]);
+      return true;
+    },
   }));
-  const identified = saved.find((record) => record.orderDigits === 'PEYA12345');
-  assert.equal(identified.ticket, null);
+  assert.equal(ticketDuringCompress, 'ticket.jpg');
+  assert.deepEqual(kept, [['photo-1', 'ticket.jpg']]);
+  assert.equal(item.orderDigits, 'PEYA12345');
+  assert.equal(item.status, 'done');
+  // La referencia en memoria se libera recién al terminar el ítem.
+  assert.equal(item.ticketFile, null);
+  const finished = saved[saved.length - 1];
+  assert.equal(finished.status, 'done');
+  assert.equal(finished.ticket, null);
 });
 
 test('order evidence gets higher-quality processing without changing generic files', async () => {
@@ -296,12 +313,12 @@ test('a reliable cloud fallback identifies an uploaded no-code order after local
       calls.push(['cloud', id]);
       return { displayCode: 'PEYA2298878868', aggregator: 'pedidosya', reliable: true };
     },
-    releaseCloudTicket: async (id) => calls.push(['release', id]),
   }));
+  // El ticket se conserva (no se libera al confirmar el código): queda
+  // disponible en Supabase hasta las 72 h para verlo desde Editar.
   assert.deepEqual(calls, [
     ['keep', 'unread-photo', 'ticket.jpg'],
     ['cloud', 'unread-photo'],
-    ['release', 'photo-1'],
   ]);
   assert.equal(result.photo.name, 'PEYA2298878868');
   assert.equal(item.orderDigits, 'PEYA2298878868');
@@ -339,12 +356,10 @@ test('a rejected remote ticket does not block the cloud OCR recovery', async () 
       calls.push(['cloud', id]);
       return { displayCode: 'PEYA2298878868', aggregator: 'pedidosya', reliable: true };
     },
-    releaseCloudTicket: async (id) => calls.push(['release', id]),
   }));
   assert.deepEqual(calls, [
     'keep-rejected',
     ['cloud', 'unread-photo'],
-    ['release', 'photo-1'],
   ]);
   assert.equal(result.photo.name, 'PEYA2298878868');
   assert.equal(item.status, 'done');

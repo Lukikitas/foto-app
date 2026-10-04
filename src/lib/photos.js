@@ -2,7 +2,6 @@ import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { AGGREGATORS, detectAggregator, getPhotoAggregator } from './aggregators';
 import { supabase } from './supabase';
 import { fetchAllPages } from './paginate';
-import { releaseCloudTicket } from './cloudOrderRecovery';
 import { downloadPhoto } from './photoDownload.js';
 import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
 import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
@@ -471,16 +470,6 @@ export async function updatePhoto(id, name, meta = {}, chosenAggregator = null) 
     .single();
 
   if (error) throw error;
-  if (isValidOrderDigits(nextName)) {
-    try {
-      await deleteUnresolvedTicket(id);
-    } catch (ticketError) {
-      console.error('No se pudo eliminar el ticket local ya resuelto.', ticketError);
-    }
-    void releaseCloudTicket(id).catch((ticketError) => {
-      console.warn('El ticket remoto se eliminará en la limpieza programada.', ticketError);
-    });
-  }
   return data;
 }
 
@@ -560,13 +549,6 @@ export async function updatePhotoDetails(photo, { name, aggregator, file, ...met
       }
     }
     throw error;
-  }
-  if (isValidOrderDigits(nextName)) {
-    try {
-      await deleteUnresolvedTicket(photo.id);
-    } catch (ticketError) {
-      console.error('No se pudo eliminar el ticket local ya resuelto.', ticketError);
-    }
   }
   return data;
 }

@@ -241,10 +241,8 @@ async function scheduledRecovery() {
         });
         if (error) throw error;
         confirmed = Boolean(data);
-        if (confirmed) {
-          try { await releaseTicket(item.photo_id); }
-          catch (ticketError) { console.warn('El ticket se eliminará en la limpieza programada.', ticketError); }
-        }
+        // El ticket se conserva hasta las 72 h aunque el código se confirme:
+        // la limpieza por expiración es quien lo elimina.
       }
       const latest = confirmed ? null : await getPhoto(item.photo_id);
       const status = confirmed ? 'confirmed' :
@@ -354,7 +352,9 @@ Deno.serve(async (request) => {
         return reply({ error: 'Ticket inválido.' }, 400);
       }
       const photo = await getPhoto(photoId);
-      if (!photo || photo.name !== NO_CODE) return reply({ error: 'Pedido no disponible.' }, 404);
+      if (!photo || !photo.file_path?.startsWith('orders/')) {
+        return reply({ error: 'Pedido no disponible.' }, 404);
+      }
       // La cola del celular puede demorar horas (offline o con mucho trabajo):
       // la ventana se alinea con el TTL del ticket (72 h). Los 30 min originales
       // rechazaban tickets válidos solo por la demora de subida.
@@ -417,10 +417,8 @@ Deno.serve(async (request) => {
       });
       if (error) throw error;
       if (!saved) return reply({ error: 'El pedido cambió; actualizá la vista.' }, 409);
-      if (code) {
-        try { await releaseTicket(photoId); }
-        catch (ticketError) { console.warn('El ticket se eliminará en la limpieza programada.', ticketError); }
-      }
+      // El ticket NO se borra al confirmar el código: se conserva hasta las 72 h
+      // para poder verlo desde Editar. Solo lo elimina la limpieza por expiración.
       return reply({ photo: await getPhoto(photoId) });
     }
     if (body.action === 'release') {

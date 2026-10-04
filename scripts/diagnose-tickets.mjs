@@ -1,4 +1,6 @@
-// Diagnóstico de solo lectura: qué fotos recientes tienen ticket en Supabase.
+// Diagnóstico de solo lectura: qué pedidos recientes tienen ticket en Supabase.
+// Desde v1.7.7.3 el ticket se conserva para TODOS los pedidos durante 72 h,
+// con o sin código, así que el script revisa la ventana completa.
 import { readFile } from 'node:fs/promises';
 
 const env = Object.fromEntries(
@@ -14,14 +16,14 @@ const NO_CODE = 'Código no encontrado';
 const headers = { Authorization: `Bearer ${KEY}`, apikey: KEY };
 
 const desde = new Date(Date.now() - 72 * 3600 * 1000).toISOString();
-const photos = await fetch(
-  `${URL_BASE}/rest/v1/photos?select=id,name,created_at,taken_by` +
-    `&name=eq.${encodeURIComponent(NO_CODE)}&created_at=gte.${desde}&order=created_at.desc`,
+const photos = (await fetch(
+  `${URL_BASE}/rest/v1/photos?select=id,name,created_at,taken_by,file_path` +
+    `&created_at=gte.${desde}&order=created_at.desc`,
   { headers },
-).then((r) => r.json());
+).then((r) => r.json())).filter((photo) => String(photo.file_path || '').startsWith('orders/'));
 
-console.log(`Fotos SIN CÓDIGO en las últimas 72 h: ${photos.length}`);
-console.log('(Solo ellas pueden tener ticket: se sube solo a pedidos sin código)');
+console.log(`Pedidos en las últimas 72 h: ${photos.length}`);
+console.log('(Todos pueden tener ticket: se sube con o sin código y dura 72 h)');
 
 let withTicket = 0;
 const rows = [];
@@ -40,10 +42,12 @@ for (const photo of photos) {
   rows.push({
     fecha: photo.created_at.slice(0, 16),
     quien: (photo.taken_by || '-').padEnd(8),
+    codigo: photo.name === NO_CODE ? 'sin código' : 'con código',
     verdict,
   });
 }
 
-console.log('\nFECHA              QUIEN     RESULTADO');
-for (const r of rows) console.log(`${r.fecha}  ${r.quien} ${r.verdict}`);
+console.log('\nFECHA              QUIEN     CODIGO      RESULTADO');
+for (const r of rows) console.log(`${r.fecha}  ${r.quien} ${r.codigo.padEnd(11)} ${r.verdict}`);
 console.log(`\nCon ticket remoto: ${withTicket} | Sin ticket: ${photos.length - withTicket}`);
+

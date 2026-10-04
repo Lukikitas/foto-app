@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, getPhotoAggregator } from '../lib/aggregators';
-import { isOrderPhoto, isUnidentifiedOrder, isValidOrderDigits } from '../lib/photos';
+import { isOrderPhoto, isValidOrderDigits } from '../lib/photos';
 import { loadOrderTicket, syncTicketToCloud, ticketDownloadFilename } from '../lib/orderTicketViewer';
 import { fetchPhotoBlob, triggerBlobDownload, triggerUrlDownload } from '../lib/photoDownload';
 
@@ -49,10 +49,10 @@ export default function PhotoEditForm({
     setTicketError(null);
     try {
       // Si el ticket está solo en este celular (la cola no llegó a subirlo),
-      // se reintenta la subida en segundo plano: Supabase lo rechaza si el
-      // pedido ya tiene código, así que solo aplica a los que siguen sin código.
+      // se reintenta la subida en segundo plano: Supabase lo acepta para
+      // cualquier pedido dentro de las 72 h.
       const found = await loadOrderTicket(photo.id, {
-        syncLocalTicket: isUnidentifiedOrder(photo) ? syncTicketToCloud : null,
+        syncLocalTicket: syncTicketToCloud,
       });
       if (!found) {
         setTicketState('missing');
@@ -80,7 +80,7 @@ export default function PhotoEditForm({
         } catch (fetchError) {
           // La URL firmada venció (5 min): se pide una fresca y se reintenta.
           const fresh = await loadOrderTicket(photo.id, {
-            syncLocalTicket: isUnidentifiedOrder(photo) ? syncTicketToCloud : null,
+            syncLocalTicket: syncTicketToCloud,
           });
           if (!fresh) throw fetchError;
           source = fresh;
@@ -225,9 +225,8 @@ export default function PhotoEditForm({
           </button>
           {ticketState === 'missing' && (
             <small>
-              {isValidOrderDigits(photo.name)
-                ? 'Este pedido ya tiene código: el ticket se guarda solo mientras el pedido sigue sin código.'
-                : 'No hay ticket guardado para esta foto. Se sube desde el celular que la sacó y se conserva 72 horas.'}
+              No hay ticket guardado para esta foto. Se sube desde el celular que
+              la sacó y se conserva 72 horas.
             </small>
           )}
           {ticketState === 'error' && ticketError && (

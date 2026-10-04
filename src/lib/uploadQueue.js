@@ -6,7 +6,7 @@ import {
   uploadUnidentifiedOrder,
 } from './uploadQueueDeps.js';
 import { processQueueItem } from './uploadQueueProcessor.js';
-import { keepTicketForRecovery, recoverOrderCodeInCloud, releaseCloudTicket } from './cloudOrderRecovery.js';
+import { keepTicketForRecovery, recoverOrderCodeInCloud } from './cloudOrderRecovery.js';
 import {
   requestBackgroundQueueProcessing,
   subscribeBackgroundQueueUpdates,
@@ -267,7 +267,6 @@ async function processQueue() {
       uploadUnidentifiedOrder,
       keepTicketForRecovery,
       recoverOrderCodeInCloud,
-      releaseCloudTicket,
       persist: (entry, options) => pagePaused
         ? Promise.resolve()
         : persistItem(entry, { ...options, reportError: true }),

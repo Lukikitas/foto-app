@@ -2,8 +2,8 @@ import { getUnresolvedTicket } from './unresolvedTicketStore.js';
 import { getCloudTicketUrl, keepTicketForRecovery } from './cloudOrderRecovery.js';
 
 // Reintenta subir a Supabase un ticket que la cola no llegó a guardar (idempotente:
-// si ya existe devuelve sin subir; si el pedido ya tiene código, Supabase rechaza).
-// Nunca lanza: el ticket local siempre se puede ver igual.
+// si ya existe devuelve sin subir; dentro de las 72 h Supabase lo acepta para
+// cualquier pedido). Nunca lanza: el ticket local siempre se puede ver igual.
 export async function syncTicketToCloud(photoId, file, {
   hasRemoteTicket = getCloudTicketUrl,
   uploadTicket = keepTicketForRecovery,

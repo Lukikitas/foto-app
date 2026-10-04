@@ -28,7 +28,6 @@ export async function processQueueItem(item, options = {}) {
     retainUnresolvedTicket = saveUnresolvedTicket,
     keepTicketForRecovery,
     recoverOrderCodeInCloud,
-    releaseCloudTicket,
     signal,
     allowOcr = true,
   } = options;
@@ -96,7 +95,6 @@ export async function processQueueItem(item, options = {}) {
         item.orderDigits = detectedOrder.displayCode;
         item.aggregator = detectedOrder.aggregator;
         item.label = `Pedido #${detectedOrder.displayCode}`;
-        releaseTicket(item);
         await persist(item);
       }
       if (yielded()) return yieldNow();
@@ -149,17 +147,18 @@ export async function processQueueItem(item, options = {}) {
       if (!photo?.id) throw new Error('No se pudo conservar el ticket sin identificar.');
       await retainUnresolvedTicket(photo.id, item.ticketFile);
     }
+    if (item.ticketFile && item.kind === 'order' && photo?.id && keepTicketForRecovery) {
+      // Todos los pedidos conservan su ticket en Supabase durante 72 h para
+      // poder verlo desde Editar, aunque el código ya se haya encontrado.
+      // Un fallo (cuota, red, ventana) no detiene el resto del proceso.
+      try {
+        await keepTicketForRecovery(photo.id, item.ticketFile);
+      } catch (ticketError) {
+        console.warn('No se pudo subir el ticket; la foto se sube igual.', ticketError);
+      }
+    }
     if (!item.orderDigits && item.kind === 'order' && photo?.id && recoverOrderCodeInCloud) {
       try {
-        if (item.ticketFile && keepTicketForRecovery) {
-          try {
-            await keepTicketForRecovery(photo.id, item.ticketFile);
-          } catch (ticketError) {
-            // Un ticket rechazado (ventana, cuota o red) no debe impedir el OCR
-            // en la nube: la evidencia alcanza para leer el código.
-            console.warn('No se pudo subir el ticket; el OCR en la nube sigue igual.', ticketError);
-          }
-        }
         const recovered = await recoverOrderCodeInCloud(photo.id);
         if (recovered?.displayCode && recovered.reliable && recovered.aggregator) {
           photo = await uploadPhoto(
@@ -173,7 +172,6 @@ export async function processQueueItem(item, options = {}) {
           item.orderDigits = recovered.displayCode;
           item.aggregator = recovered.aggregator;
           item.label = `Pedido #${recovered.displayCode}`;
-          await releaseCloudTicket?.(photo.id);
         }
       } catch (cloudError) {
         console.warn('No se pudo completar el OCR en la nube; la foto queda pendiente de revisión.', cloudError);
