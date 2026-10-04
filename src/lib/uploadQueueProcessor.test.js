@@ -323,6 +323,33 @@ test('an uncertain cloud code stays pending for human review', async () => {
   assert.equal(item.status, 'done');
 });
 
+test('a rejected remote ticket does not block the cloud OCR recovery', async () => {
+  // La ventana de Supabase (o la cuota) puede rechazar el ticket: el OCR en la
+  // nube debe correr igual, porque la evidencia también sirve para leer el código.
+  const item = sampleItem();
+  const calls = [];
+  const result = await processQueueItem(item, mockDeps({
+    detectOrderFromPhoto: async () => null,
+    uploadUnidentifiedOrder: async () => ({ id: 'unread-photo', name: 'Código no encontrado' }),
+    keepTicketForRecovery: async () => {
+      calls.push('keep-rejected');
+      throw new Error('El plazo para guardar el ticket terminó.');
+    },
+    recoverOrderCodeInCloud: async (id) => {
+      calls.push(['cloud', id]);
+      return { displayCode: 'PEYA2298878868', aggregator: 'pedidosya', reliable: true };
+    },
+    releaseCloudTicket: async (id) => calls.push(['release', id]),
+  }));
+  assert.deepEqual(calls, [
+    'keep-rejected',
+    ['cloud', 'unread-photo'],
+    ['release', 'photo-1'],
+  ]);
+  assert.equal(result.photo.name, 'PEYA2298878868');
+  assert.equal(item.status, 'done');
+});
+
 test('the background worker retains an unread ticket after uploading its no-code evidence', async () => {
   const store = createMemoryQueueStore();
   useQueueStoreForTests(store);

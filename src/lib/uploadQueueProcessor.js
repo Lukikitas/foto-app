@@ -152,7 +152,13 @@ export async function processQueueItem(item, options = {}) {
     if (!item.orderDigits && item.kind === 'order' && photo?.id && recoverOrderCodeInCloud) {
       try {
         if (item.ticketFile && keepTicketForRecovery) {
-          await keepTicketForRecovery(photo.id, item.ticketFile);
+          try {
+            await keepTicketForRecovery(photo.id, item.ticketFile);
+          } catch (ticketError) {
+            // Un ticket rechazado (ventana, cuota o red) no debe impedir el OCR
+            // en la nube: la evidencia alcanza para leer el código.
+            console.warn('No se pudo subir el ticket; el OCR en la nube sigue igual.', ticketError);
+          }
         }
         const recovered = await recoverOrderCodeInCloud(photo.id);
         if (recovered?.displayCode && recovered.reliable && recovered.aggregator) {

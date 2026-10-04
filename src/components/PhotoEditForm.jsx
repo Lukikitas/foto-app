@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, getPhotoAggregator } from '../lib/aggregators';
-import { isOrderPhoto, isValidOrderDigits } from '../lib/photos';
-import { loadOrderTicket, ticketDownloadFilename } from '../lib/orderTicketViewer';
+import { isOrderPhoto, isUnidentifiedOrder, isValidOrderDigits } from '../lib/photos';
+import { loadOrderTicket, syncTicketToCloud, ticketDownloadFilename } from '../lib/orderTicketViewer';
 import { fetchPhotoBlob, triggerBlobDownload, triggerUrlDownload } from '../lib/photoDownload';
 
 export default function PhotoEditForm({
@@ -48,7 +48,12 @@ export default function PhotoEditForm({
     setTicketState('loading');
     setTicketError(null);
     try {
-      const found = await loadOrderTicket(photo.id);
+      // Si el ticket está solo en este celular (la cola no llegó a subirlo),
+      // se reintenta la subida en segundo plano: Supabase lo rechaza si el
+      // pedido ya tiene código, así que solo aplica a los que siguen sin código.
+      const found = await loadOrderTicket(photo.id, {
+        syncLocalTicket: isUnidentifiedOrder(photo) ? syncTicketToCloud : null,
+      });
       if (!found) {
         setTicketState('missing');
         return;
@@ -74,7 +79,9 @@ export default function PhotoEditForm({
           blob = await fetchPhotoBlob(source.url);
         } catch (fetchError) {
           // La URL firmada venció (5 min): se pide una fresca y se reintenta.
-          const fresh = await loadOrderTicket(photo.id);
+          const fresh = await loadOrderTicket(photo.id, {
+            syncLocalTicket: isUnidentifiedOrder(photo) ? syncTicketToCloud : null,
+          });
           if (!fresh) throw fetchError;
           source = fresh;
           setTicket(source);
@@ -217,7 +224,11 @@ export default function PhotoEditForm({
                 : 'Ver / descargar ticket'}
           </button>
           {ticketState === 'missing' && (
-            <small>No hay ticket guardado para esta foto: solo se conserva 72 horas.</small>
+            <small>
+              {isValidOrderDigits(photo.name)
+                ? 'Este pedido ya tiene código: el ticket se guarda solo mientras el pedido sigue sin código.'
+                : 'No hay ticket guardado para esta foto. Se sube desde el celular que la sacó y se conserva 72 horas.'}
+            </small>
           )}
           {ticketState === 'error' && ticketError && (
             <small>{ticketError}</small>

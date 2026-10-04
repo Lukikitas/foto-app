@@ -355,7 +355,10 @@ Deno.serve(async (request) => {
       }
       const photo = await getPhoto(photoId);
       if (!photo || photo.name !== NO_CODE) return reply({ error: 'Pedido no disponible.' }, 404);
-      if (Date.now() - new Date(photo.created_at).getTime() > 30 * 60 * 1000) {
+      // La cola del celular puede demorar horas (offline o con mucho trabajo):
+      // la ventana se alinea con el TTL del ticket (72 h). Los 30 min originales
+      // rechazaban tickets válidos solo por la demora de subida.
+      if (Date.now() - new Date(photo.created_at).getTime() > 72 * 60 * 60 * 1000) {
         return reply({ error: 'El plazo para guardar el ticket terminó.' }, 409);
       }
       const { data: existingTicket } = await db.from('unresolved_ticket_refs')
