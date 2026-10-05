@@ -13,6 +13,7 @@ import { downloadTextFile } from '../lib/complaints';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
 import { buildTrendSeries } from '../lib/trendChart';
 import { openReportInNewTab } from '../lib/pdfReportGenerator';
+import MetricsReasonTop from './MetricsReasonTop';
 import ReportPdfModal from './ReportPdfModal';
 import TrendCard from './TrendCard';
 
@@ -227,6 +228,16 @@ export default function MetricsReport({ history, range, aggregator, store }) {
             pctLabel="% de quejas"
           />
           <MoneyTable title="Por motivo" rows={report.reasons} nameKey="Motivo" pctLabel="% rec." />
+          <MetricsReasonTop
+            title="Top motivos de refutación rechazada"
+            rows={report.rejectionReasons}
+            emptyMessage="No hay refutaciones rechazadas en este período: cuando marques reclamos como «Ref. rechazado», acá vas a ver por qué el agregador rechazó la refutación."
+          />
+          <MetricsReasonTop
+            title="Top motivos de no refutables"
+            rows={report.unrefutableReasons}
+            emptyMessage="No hay quejas marcadas como «No refutable» en este período: cuando uses «No se puede refutar», acá vas a ver el detalle de motivos."
+          />
           <MoneyTable
             title="Por día"
             rows={report.days.map((row) => ({ ...row, label: formatDayLabel(row.key) }))}

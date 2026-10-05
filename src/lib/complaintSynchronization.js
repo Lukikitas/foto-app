@@ -147,7 +147,7 @@ export async function deleteHistoryRowsSynchronized(rows = []) {
   }
 }
 
-export async function setComplaintStatusSynchronized(row, status, { unrefutableReason } = {}) {
+export async function setComplaintStatusSynchronized(row, status, { unrefutableReason, rejectionReason } = {}) {
   const photo = row?.photo?.id ? (await loadRealPhotos([row]))[0] : null;
   // Solo los estados disputados marcan la foto como refutada; «No refutable»
   // nunca entró en disputa, así que la foto no se marca is_refutado.
@@ -165,7 +165,7 @@ export async function setComplaintStatusSynchronized(row, status, { unrefutableR
     const history = await setHistoryResolution(
       row.complaint,
       updatedPhoto || row.photo,
-      { status, unrefutableReason },
+      { status, unrefutableReason, rejectionReason },
     );
     return { history, updatedPhoto };
   } catch (error) {
@@ -174,7 +174,7 @@ export async function setComplaintStatusSynchronized(row, status, { unrefutableR
   }
 }
 
-export async function setComplaintStatusesSynchronized(rows, status, { unrefutableReason } = {}) {
+export async function setComplaintStatusesSynchronized(rows, status, { unrefutableReason, rejectionReason } = {}) {
   const photos = await loadRealPhotos(rows);
   const disputed = statusIsDisputed(status);
   const updatedPhotos = [];
@@ -192,7 +192,7 @@ export async function setComplaintStatusesSynchronized(rows, status, { unrefutab
       ...row,
       photo: byId.get(row.photo?.id) || row.photo,
     }));
-    const history = await setHistoryResolutions(resolvedRows, { status, unrefutableReason });
+    const history = await setHistoryResolutions(resolvedRows, { status, unrefutableReason, rejectionReason });
     return { history, updatedPhotos };
   } catch (error) {
     await restorePhotos(photos);

@@ -174,6 +174,9 @@ export default function MetricsComplaintsList({
                     {item.status === COMPLAINT_STATUSES.no_refutable && item.unrefutableReason ? (
                       <small>{item.unrefutableReason}</small>
                     ) : null}
+                    {item.status === COMPLAINT_STATUSES.refutado_rechazado && item.rejectionReason ? (
+                      <small>{item.rejectionReason}</small>
+                    ) : null}
                   </td>
                   <td>{item.photoUrl ? <button type="button" className="btn btn--small btn--ghost" onClick={() => setLightboxPhoto({ id: item.photoId, name: item.orderCode, public_url: item.photoUrl, created_at: item.orderAtIso })}>Ver foto</button> : 'No'}</td>
                   <td>

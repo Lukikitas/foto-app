@@ -1,5 +1,5 @@
 import { getAggregatorLabel } from './aggregators.js';
-import { COMPLAINT_STATUS_LABELS } from './complaintHistory.js';
+import { COMPLAINT_STATUSES, COMPLAINT_STATUS_LABELS } from './complaintHistory.js';
 import { extraFieldKeys } from './complaintReport.js';
 import { formatDayLabel, formatMoney, formatNumber, formatPct } from './metrics.js';
 import { buildTrendChartSvg } from './trendChart.js';
@@ -14,15 +14,182 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+export const DEFAULT_REPORT_TITLE = 'Informe Gerencial de Quejas y Recuperos';
+
+// Secciones configurables del armador de informe, en el orden en que se
+// imprimen. El encabezado (período / filtro / fecha) siempre está activo.
+export const REPORT_SECTION_KEYS = [
+  'kpis',
+  'status',
+  'insights',
+  'trend',
+  'aggregators',
+  'combos',
+  'reasons',
+  'days',
+  'rejectionReasons',
+  'unrefutableReasons',
+  'detail',
+];
+
+export const DEFAULT_REPORT_SECTIONS = {
+  kpis: true,
+  status: true,
+  insights: true,
+  trend: true,
+  aggregators: true,
+  combos: true,
+  reasons: true,
+  days: true,
+  rejectionReasons: true,
+  unrefutableReasons: true,
+  detail: false,
+};
+
+export const REPORT_DETAIL_STATUSES = [
+  COMPLAINT_STATUSES.queja,
+  COMPLAINT_STATUSES.refutado,
+  COMPLAINT_STATUSES.refutado_aceptado,
+  COMPLAINT_STATUSES.refutado_rechazado,
+  COMPLAINT_STATUSES.no_refutable,
+];
+
+export const REPORT_COMBO_LIMITS = [5, 10, 12];
+const DEFAULT_COMBO_LIMIT = 12;
+const DEFAULT_TITLE = DEFAULT_REPORT_TITLE;
+
+// El formato viejo no conocía los rankings nuevos: para que { includeDetail,
+// trend } produzca exactamente el informe de antes, esos dos arrancan apagados.
+const LEGACY_SECTIONS = {
+  ...DEFAULT_REPORT_SECTIONS,
+  rejectionReasons: false,
+  unrefutableReasons: false,
+};
+
+function sanitizeSections(raw) {
+  const sections = { ...DEFAULT_REPORT_SECTIONS };
+  if (!raw || typeof raw !== 'object') return sections;
+  for (const key of REPORT_SECTION_KEYS) {
+    if (typeof raw[key] === 'boolean') sections[key] = raw[key];
+  }
+  return sections;
+}
+
+function sanitizeComboLimit(value) {
+  if (value === 'all' || value === Infinity) return 'all';
+  const numeric = Number(value);
+  return REPORT_COMBO_LIMITS.includes(numeric) ? numeric : DEFAULT_COMBO_LIMIT;
+}
+
+function sanitizeDetailStatuses(value) {
+  if (!Array.isArray(value)) return [...REPORT_DETAIL_STATUSES];
+  const valid = value.filter((key) => REPORT_DETAIL_STATUSES.includes(key));
+  // Sin selección válida volvemos al comportamiento de siempre: todos.
+  return valid.length ? valid : [...REPORT_DETAIL_STATUSES];
+}
+
+function sanitizeDetailColumns(value) {
+  const raw = value && typeof value === 'object' ? value : {};
+  return {
+    // null = primeras 4 columnas extra, igual que el informe viejo.
+    extras: Array.isArray(raw.extras)
+      ? raw.extras.filter((key) => typeof key === 'string')
+      : null,
+    statusReason: Boolean(raw.statusReason),
+  };
+}
+
+/**
+ * Única fuente de verdad de las opciones de informe. Acepta el formato nuevo
+ * { sections, comboLimit, detailStatuses, detailColumns, title, note, trend }
+ * y el viejo { includeDetail, trend } (los llamadores preexistentes), y deja
+ * siempre una configuración completa y segura: secciones desconocidas se
+ * ignoran y los valores inválidos caen en los defaults.
+ */
+export function normalizeReportOptions(options = {}) {
+  const source = options && typeof options === 'object' ? options : {};
+  const modern = Boolean(source.sections && typeof source.sections === 'object');
+  const sections = modern
+    ? sanitizeSections(source.sections)
+    : { ...LEGACY_SECTIONS, detail: Boolean(source.includeDetail) };
+  const title = modern && typeof source.title === 'string' ? source.title : '';
+  const note = modern && typeof source.note === 'string' ? source.note.trim() : '';
+
+  return {
+    sections,
+    comboLimit: sanitizeComboLimit(modern ? source.comboLimit : DEFAULT_COMBO_LIMIT),
+    detailStatuses: sanitizeDetailStatuses(modern ? source.detailStatuses : null),
+    detailColumns: sanitizeDetailColumns(modern ? source.detailColumns : null),
+    title: title.trim() || DEFAULT_TITLE,
+    note,
+    trend: source.trend && typeof source.trend === 'object' ? source.trend : null,
+  };
+}
+
+/** Motivo de estado que corresponde a un item (para el anexo de detalle). */
+export function reportStatusReason(item) {
+  if (item?.status === COMPLAINT_STATUSES.refutado_rechazado) {
+    return String(item.rejectionReason || '');
+  }
+  if (item?.status === COMPLAINT_STATUSES.no_refutable) {
+    return String(item.unrefutableReason || '');
+  }
+  return '';
+}
+
 /**
  * Builds the complete, self-contained HTML document string
  * with exact A4 print styles, vector colors, typography,
  * executive KPI cards, distribution bars, and analytical tables.
  */
-export function generateReportHtml(report, { includeDetail = false, trend = null } = {}) {
+/** Tabla HTML de un ranking de motivos (Ref. rechazada / No refutables). */
+function reasonRankingTableHtml(rows) {
+  return `
+    <section class="report-section">
+      <div class="table-container">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Motivo</th>
+              <th class="col-right">Quejas</th>
+              <th class="col-right">% del estado</th>
+              <th class="col-right">$ Reclamado</th>
+              <th class="col-right">$ Perdido</th>
+              <th>Comentarios</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+            <tr>
+              <td><strong>${escapeHtml(row.key)}</strong></td>
+              <td class="col-right">${formatNumber(row.count)}</td>
+              <td class="col-right">${formatPct(row.sharePct)}</td>
+              <td class="col-right">${formatMoney(row.complaintAmount)}</td>
+              <td class="col-right">${formatMoney(row.lostAmount)}</td>
+              <td>${row.comments?.length ? escapeHtml(row.comments.join(' · ')) : '—'}</td>
+            </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </section>`;
+}
+
+export function generateReportHtml(report, options = {}) {
+  const { sections, comboLimit, detailStatuses, detailColumns, title, note, trend } =
+    normalizeReportOptions(options);
   const totals = report?.totals || {};
   const items = report?.items || [];
-  const extras = extraFieldKeys(items).slice(0, 4);
+  const allExtras = extraFieldKeys(items);
+  const extras = detailColumns.extras
+    ? allExtras.filter((key) => detailColumns.extras.includes(key))
+    : allExtras.slice(0, 4);
+  const detailItems = items.filter((item) => detailStatuses.includes(item.status));
+  const comboRows = report?.combos
+    ? comboLimit === 'all'
+      ? report.combos
+      : report.combos.slice(0, comboLimit)
+    : [];
 
   const aggLabel =
     report?.aggregator && report.aggregator !== 'all'
@@ -143,6 +310,16 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
       font-size: 9.5pt;
       font-weight: 600;
       color: #475569;
+    }
+
+    .report-note {
+      margin: 8px 0 0;
+      padding: 6px 10px;
+      border-left: 3px solid #E4002B;
+      background: #f8fafc;
+      font-size: 8.5pt;
+      font-weight: 500;
+      color: #334155;
     }
 
     .report-meta {
@@ -498,6 +675,15 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
       color: #475569;
     }
 
+    .status-reason {
+      display: block;
+      margin-top: 3px;
+      font-size: 6.8pt;
+      line-height: 1.25;
+      color: #64748b;
+      word-break: break-word;
+    }
+
     /* Dense table for full complaint details */
     .table--dense th {
       padding: 5px 8px;
@@ -598,7 +784,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
     <header class="report-header">
       <div class="report-brand">
         <span class="report-brand-tag">DELIVERY LA PLATA</span>
-        <h1 class="report-title">Informe Gerencial de Quejas y Recuperos</h1>
+        <h1 class="report-title">${escapeHtml(title)}</h1>
         <p class="report-subtitle">Control de calidad operativo, reclamos y efectividad de refutaciones</p>
       </div>
       <div class="report-meta">
@@ -617,6 +803,9 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
       </div>
     </header>
 
+    ${note ? `\n    <p class="report-note">${escapeHtml(note)}</p>\n    ` : ''}
+
+    ${sections.kpis ? `
     <!-- KPI Grid -->
     <section class="kpi-grid">
       <div class="kpi-card kpi-card--total">
@@ -649,7 +838,9 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
         <span class="kpi-hint">${totals.refutadoAceptado ? `${formatNumber(totals.refutadoAceptado)} recuperados con éxito` : 'Quejas registradas'}${totals.noRefutable ? ` · ${formatNumber(totals.noRefutable)} no refutables` : ''}</span>
       </div>
     </section>
+    ` : ''}
 
+    ${sections.status ? `
     <!-- Status Distribution Panel -->
     <section class="status-panel">
       <div class="status-panel-title">Estado de Trámites y Gestión de Disputas</div>
@@ -678,7 +869,9 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
         </div>
       </div>
     </section>
+    ` : ''}
 
+    ${sections.insights ? `
     <!-- Executive Insights -->
     <section class="insights-box">
       <div class="insight-col">
@@ -697,8 +890,9 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
         <small>${topReason ? `${formatNumber(topReason.count)} quejas · ${formatMoney(topReason.complaintAmount)}` : 'Sin datos'}</small>
       </div>
     </section>
+    ` : ''}
 
-    ${trend && trend.hasData ? `
+    ${sections.trend && trend && trend.hasData ? `
     <!-- Trend Chart -->
     <section class="report-section">
       <h2 class="report-section-title">Tendencia del Período</h2>
@@ -707,7 +901,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
     ` : ''}
 
     <!-- Table 1: Por Agregador -->
-    ${report.aggregators?.length > 0 ? `
+    ${sections.aggregators && report.aggregators?.length > 0 ? `
     <section class="report-section">
       <h2 class="report-section-title">Desglose por Agregador</h2>
       <div class="table-container">
@@ -756,7 +950,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
     ` : ''}
 
     <!-- Table 2: Top Combos -->
-    ${report.combos?.length > 0 ? `
+    ${sections.combos && comboRows.length > 0 ? `
     <section class="report-section">
       <h2 class="report-section-title">Top Combos con Mayor Porcentaje de Reclamos</h2>
       <div class="table-container">
@@ -773,7 +967,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
             </tr>
           </thead>
           <tbody>
-            ${report.combos.slice(0, 12).map((row) => `
+            ${comboRows.map((row) => `
             <tr>
               <td>${escapeHtml(row.combo || 'Sin combo')}</td>
               <td class="col-right">${formatNumber(row.count)}</td>
@@ -791,7 +985,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
     ` : ''}
 
     <!-- Table 3: Por Motivo -->
-    ${report.reasons?.length > 0 ? `
+    ${sections.reasons && report.reasons?.length > 0 ? `
     <section class="report-section">
       <h2 class="report-section-title">Distribución por Causa / Motivo de Reclamo</h2>
       <div class="table-container">
@@ -840,7 +1034,7 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
     ` : ''}
 
     <!-- Table 4: Por Día -->
-    ${report.days?.length > 0 ? `
+    ${sections.days && report.days?.length > 0 ? `
     <section class="report-section">
       <h2 class="report-section-title">Evolución Cronológica Diaria</h2>
       <div class="table-container">
@@ -874,10 +1068,25 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
     </section>
     ` : ''}
 
+    <!-- Top motivos disciplinarios -->
+    ${sections.rejectionReasons && report.rejectionReasons?.length > 0 ? `
+    <section class="report-section">
+      <h2 class="report-section-title">Top Motivos de Refutación Rechazada</h2>
+      ${reasonRankingTableHtml(report.rejectionReasons)}
+    </section>
+    ` : ''}
+
+    ${sections.unrefutableReasons && report.unrefutableReasons?.length > 0 ? `
+    <section class="report-section">
+      <h2 class="report-section-title">Top Motivos de No Refutables</h2>
+      ${reasonRankingTableHtml(report.unrefutableReasons)}
+    </section>
+    ` : ''}
+
     <!-- Optional Detail Section -->
-    ${includeDetail && items.length > 0 ? `
+    ${sections.detail && detailItems.length > 0 ? `
     <section class="report-section page-break-before">
-      <h2 class="report-section-title">Anexo: Registro Detallado de Reclamos (${formatNumber(items.length)} pedidos)</h2>
+      <h2 class="report-section-title">Anexo: Registro Detallado de Reclamos (${formatNumber(detailItems.length)} pedidos)</h2>
       <div class="table-container">
         <table class="report-table table--dense">
           <thead>
@@ -889,17 +1098,19 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
               <th>Motivo</th>
               <th class="col-right">Monto</th>
               <th class="col-center">Estado</th>
+              ${detailColumns.statusReason ? '<th>Motivo de estado</th>' : ''}
               <th class="col-center">Foto</th>
               ${extras.map((k) => `<th>${escapeHtml(k)}</th>`).join('')}
             </tr>
           </thead>
           <tbody>
-            ${items.map((item) => {
+            ${detailItems.map((item) => {
               const statusClass = item.status === 'refutado_aceptado'
                 ? 'badge-status--accepted'
                 : item.status === 'refutado_rechazado' || item.status === 'no_refutable'
                 ? 'badge-status--rejected'
                 : 'badge-status--pending';
+              const statusReason = reportStatusReason(item);
               return `
               <tr>
                 <td><strong>${escapeHtml(item.orderCode)}</strong></td>
@@ -908,7 +1119,8 @@ export function generateReportHtml(report, { includeDetail = false, trend = null
                 <td>${escapeHtml(item.combo || '—')}</td>
                 <td>${escapeHtml(item.reason || '—')}</td>
                 <td class="col-right"><strong>${formatMoney(item.amount)}</strong></td>
-                <td class="col-center"><span class="badge-status ${statusClass}">${escapeHtml(COMPLAINT_STATUS_LABELS[item.status] || item.status)}</span></td>
+                <td class="col-center"><span class="badge-status ${statusClass}">${escapeHtml(COMPLAINT_STATUS_LABELS[item.status] || item.status)}</span>${statusReason ? `<small class="status-reason">${escapeHtml(statusReason)}</small>` : ''}</td>
+                ${detailColumns.statusReason ? `<td>${statusReason ? escapeHtml(statusReason) : '—'}</td>` : ''}
                 <td class="col-center">${item.photoUrl ? 'Sí' : 'No'}</td>
                 ${extras.map((key) => `<td>${escapeHtml(item.fields?.[key] || '—')}</td>`).join('')}
               </tr>

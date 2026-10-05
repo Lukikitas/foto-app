@@ -1,3 +1,4 @@
+
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -82,6 +83,71 @@ test('report totals count no_refutable separately and keep its money as lost', (
   const csv = buildRegistryCsv(report.items);
   assert.match(csv, /motivo_no_refutable/);
   assert.match(csv, /Queja real/);
+});
+
+test('report ranks rejection and unrefutable reasons with shares, money and comments', () => {
+  let store = upsertHistoryItems(emptyHistory(), [
+    complaint(),
+    complaint({ orderCode: 'PEYA-2', amount: 2000 }),
+    complaint({ orderCode: 'PEYA-3', amount: 1000 }),
+    complaint({ orderCode: 'PEYA-4', amount: 500 }),
+  ]).store;
+  const ids = Object.keys(store.items);
+  store = patchHistoryItem(store, ids[0], {
+    status: COMPLAINT_STATUSES.refutado_rechazado,
+    rejectionReason: 'Ticket ilegible · abajo roto',
+  });
+  store = patchHistoryItem(store, ids[1], {
+    status: COMPLAINT_STATUSES.refutado_rechazado,
+    rejectionReason: 'Ticket ilegible',
+  });
+  store = patchHistoryItem(store, ids[2], {
+    status: COMPLAINT_STATUSES.refutado_rechazado,
+    rejectionReason: 'motivo inventado',
+  });
+  store = patchHistoryItem(store, ids[3], {
+    status: COMPLAINT_STATUSES.no_refutable,
+    unrefutableReason: 'No hay foto · sin evidencia',
+  });
+
+  const report = buildComplaintReport(store, { from: '2026-09-17', to: '2026-09-17' });
+
+  assert.equal(report.rejectionReasons.length, 2, 'se agrupa por preset: preset y Otro');
+  const ticket = report.rejectionReasons[0];
+  assert.equal(ticket.key, 'Ticket ilegible');
+  assert.equal(ticket.count, 2);
+  assert.ok(Math.abs(ticket.sharePct - (2 / 3) * 100) < 0.0001, 'el % es sobre el total de refutado_rechazado');
+  assert.equal(ticket.complaintAmount, 10000);
+  assert.equal(ticket.lostAmount, 10000);
+  assert.deepEqual(ticket.comments, ['abajo roto'], 'solo el comentario libre y sin repetir');
+
+  const unknown = report.rejectionReasons[1];
+  assert.equal(unknown.key, 'Otro');
+  assert.equal(unknown.count, 1);
+  assert.deepEqual(unknown.comments, []);
+
+  assert.equal(report.unrefutableReasons.length, 1);
+  const unrefutable = report.unrefutableReasons[0];
+  assert.equal(unrefutable.key, 'No hay foto');
+  assert.equal(unrefutable.count, 1);
+  assert.equal(unrefutable.sharePct, 100);
+  assert.equal(unrefutable.complaintAmount, 500);
+  assert.equal(unrefutable.lostAmount, 500);
+  assert.deepEqual(unrefutable.comments, ['sin evidencia']);
+});
+
+test('registry CSV includes motivo_rechazo right after motivo_no_refutable', () => {
+  let store = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const id = Object.keys(store.items)[0];
+  store = patchHistoryItem(store, id, {
+    status: COMPLAINT_STATUSES.refutado_rechazado,
+    rejectionReason: 'Foto incompleta · falta medio pedido',
+  });
+  const report = buildComplaintReport(store, { from: '2026-09-17', to: '2026-09-17' });
+  const csv = buildRegistryCsv(report.items);
+  const header = csv.trim().split('\n')[0];
+  assert.match(header, /motivo_no_refutable,motivo_rechazo,foto/);
+  assert.match(csv, /Foto incompleta · falta medio pedido/);
 });
 
 test('buildReportWorkbook produces multi-sheet workbook with 6 sheets and proper data', async () => {

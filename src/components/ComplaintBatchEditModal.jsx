@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AGGREGATORS, getAggregatorLabel } from '../lib/aggregators';
-import { COMPLAINT_STATUSES } from '../lib/complaintHistory';
+import { COMPLAINT_STATUSES, REFUTATION_REJECTED_REASONS } from '../lib/complaintHistory';
 import { formatNumber } from '../lib/metrics';
 
 const COMMON_REASONS = [
@@ -29,6 +29,9 @@ export default function ComplaintBatchEditModal({
   const [commentValue, setCommentValue] = useState('');
   const [amountAction, setAmountAction] = useState('NO_CHANGE'); // 'NO_CHANGE' | 'SET' | 'CLEAR'
   const [amountValue, setAmountValue] = useState('');
+  // «Ref. rechazado» exige motivo: presets + comentario opcional, igual que el modal.
+  const [rejectionPreset, setRejectionPreset] = useState('');
+  const [rejectionComment, setRejectionComment] = useState('');
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -40,6 +43,10 @@ export default function ComplaintBatchEditModal({
 
     if (status !== 'NO_CHANGE') {
       changes.status = status;
+      if (status === COMPLAINT_STATUSES.refutado_rechazado) {
+        const trimmed = rejectionComment.trim();
+        changes.rejectionReason = trimmed ? `${rejectionPreset} · ${trimmed}` : rejectionPreset;
+      }
     }
 
     if (comboAction === 'SET') {
@@ -79,6 +86,8 @@ export default function ComplaintBatchEditModal({
     onApply(changes);
   }
 
+  const needsRejectionReason = status === COMPLAINT_STATUSES.refutado_rechazado;
+  const missingRejectionReason = needsRejectionReason && !rejectionPreset;
   const hasChanges =
     aggregator !== 'NO_CHANGE' ||
     status !== 'NO_CHANGE' ||
@@ -119,6 +128,43 @@ export default function ComplaintBatchEditModal({
                 <option value={COMPLAINT_STATUSES.refutado_rechazado}>Ref. rechazado (Pérdida confirmada)</option>
               </select>
             </label>
+
+            {/* Motivo obligatorio al pasar a «Ref. rechazado» */}
+            {needsRejectionReason && (
+              <div className="complaint-batch-field complaint-batch-field--full">
+                <fieldset className="complaint-unrefutable-presets" disabled={disabled}>
+                  <legend className="complaint-batch-field__label">
+                    Motivo del rechazo (obligatorio)
+                  </legend>
+                  {REFUTATION_REJECTED_REASONS.map((reason) => (
+                    <label
+                      key={reason}
+                      className={`complaint-unrefutable-preset${rejectionPreset === reason ? ' is-selected' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="batch-rejection-reason"
+                        value={reason}
+                        checked={rejectionPreset === reason}
+                        onChange={() => setRejectionPreset(reason)}
+                      />
+                      <span>{reason}</span>
+                    </label>
+                  ))}
+                </fieldset>
+                <label className="complaint-batch-field">
+                  <span className="complaint-batch-field__label">Comentario (opcional)</span>
+                  <input
+                    type="text"
+                    value={rejectionComment}
+                    onChange={(e) => setRejectionComment(e.target.value)}
+                    placeholder="Ej: el ticket no se lee"
+                    maxLength={80}
+                    disabled={disabled}
+                  />
+                </label>
+              </div>
+            )}
 
             {/* Agregador */}
             <label className="complaint-batch-field">
@@ -270,7 +316,8 @@ export default function ComplaintBatchEditModal({
             <button
               type="submit"
               className="btn btn--primary"
-              disabled={disabled || !hasChanges}
+              disabled={disabled || !hasChanges || missingRejectionReason}
+              title={missingRejectionReason ? 'Elegí el motivo del rechazo para continuar.' : undefined}
             >
               Aplicar cambios a {formatNumber(selectedCount)} reclamos
             </button>

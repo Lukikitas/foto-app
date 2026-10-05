@@ -73,7 +73,7 @@ function nextStatus(current, { status, accepted, refutado } = {}) {
   return current.status || COMPLAINT_STATUSES.queja;
 }
 
-function resolutionPatch(current, photo, { status, accepted, refutado, unrefutableReason } = {}) {
+function resolutionPatch(current, photo, { status, accepted, refutado, unrefutableReason, rejectionReason } = {}) {
   const nextStatusValue = nextStatus(current, { status, accepted, refutado });
   const patch = {
     status: nextStatusValue,
@@ -89,6 +89,15 @@ function resolutionPatch(current, photo, { status, accepted, refutado, unrefutab
     // Salir del estado «No refutable» limpia el motivo para no dejar datos viejos.
     patch.unrefutableReason = '';
   }
+  // Mismo tratamiento para «Ref. rechazado»: el motivo entra con el estado y
+  // se limpia en cuanto el item sale de ese estado.
+  if (nextStatusValue === COMPLAINT_STATUSES.refutado_rechazado) {
+    patch.rejectionReason = String(
+      rejectionReason || current.rejectionReason || '',
+    ).trim();
+  } else if (current.rejectionReason) {
+    patch.rejectionReason = '';
+  }
   return patch;
 }
 
@@ -103,7 +112,7 @@ export function importComplaintsToHistory(complaints, rows = []) {
   });
 }
 
-export function setHistoryResolutions(rows, { status, accepted, refutado, unrefutableReason } = {}) {
+export function setHistoryResolutions(rows, { status, accepted, refutado, unrefutableReason, rejectionReason } = {}) {
   return mutateComplaintHistory((store) => {
     let next = store;
     rows.forEach(({ complaint, photo }) => {
@@ -117,15 +126,18 @@ export function setHistoryResolutions(rows, { status, accepted, refutado, unrefu
       next = patchHistoryItem(
         next,
         current.id,
-        resolutionPatch(current, photo, { status, accepted, refutado, unrefutableReason }),
+        resolutionPatch(current, photo, { status, accepted, refutado, unrefutableReason, rejectionReason }),
       );
     });
     return next;
   });
 }
 
-export function setHistoryResolution(complaint, photo, { status, accepted, refutado, unrefutableReason } = {}) {
-  return setHistoryResolutions([{ complaint, photo }], { status, accepted, refutado, unrefutableReason });
+export function setHistoryResolution(complaint, photo, { status, accepted, refutado, unrefutableReason, rejectionReason } = {}) {
+  return setHistoryResolutions(
+    [{ complaint, photo }],
+    { status, accepted, refutado, unrefutableReason, rejectionReason },
+  );
 }
 
 export function setHistoryPhoto(complaint, photo) {
@@ -170,7 +182,7 @@ export function syncGalleryComplaintToHistory(photo) {
   return mutateComplaintHistory((store) => syncGalleryComplaintInStore(store, photo));
 }
 
-export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado, unrefutableReason } = {}) {
+export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado, unrefutableReason, rejectionReason } = {}) {
   return setHistoryResolution(
     {
       orderCode: photo.name,
@@ -179,6 +191,6 @@ export function setHistoryResolutionForPhoto(photo, { status, accepted, refutado
       comment: '',
     },
     photo,
-    { status, accepted, refutado, unrefutableReason },
+    { status, accepted, refutado, unrefutableReason, rejectionReason },
   );
 }

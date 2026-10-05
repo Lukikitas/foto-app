@@ -19,6 +19,10 @@ import {
   patchHistoryItem,
   patchHistoryItems,
   PENDING_COMPLAINT_DETAILS,
+  NO_REFUTABLE_REASONS,
+  reasonComment,
+  reasonPreset,
+  REFUTATION_REJECTED_REASONS,
   syncGalleryComplaintInStore,
   upsertHistoryItems,
 } from './complaintHistory.js';
@@ -512,5 +516,73 @@ test('changing away from no_refutable clears the stored reason', () => {
   const item = parseHistory(store).items[id];
   assert.equal(item.status, COMPLAINT_STATUSES.queja);
   assert.equal(item.unrefutableReason, '', 'el motivo no debe quedar colgado de otro estado');
+});
+
+test('refutado_rechazado stores rejectionReason and clears it on any other status', () => {
+  let store = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const id = Object.keys(store.items)[0];
+  store = patchHistoryItem(store, id, {
+    status: COMPLAINT_STATUSES.refutado_rechazado,
+    rejectionReason: 'Ticket ilegible · se corta abajo',
+  });
+
+  // Ruta rápida y lenta coinciden: el motivo viaja normalizado en el item.
+  const fast = parseHistory(store);
+  const slow = parseHistory(JSON.parse(JSON.stringify(store)));
+  assert.deepEqual(Object.values(fast.items), Object.values(slow.items));
+
+  const item = fast.items[id];
+  assert.equal(item.status, COMPLAINT_STATUSES.refutado_rechazado);
+  assert.equal(item.rejectionReason, 'Ticket ilegible · se corta abajo');
+  assert.equal(item.unrefutableReason, '');
+  assert.equal(
+    listHistoryItems(store, { status: COMPLAINT_STATUSES.refutado_rechazado }).length,
+    1,
+    'el filtro por estado debe encontrarlo',
+  );
+
+  store = patchHistoryItem(store, id, { status: COMPLAINT_STATUSES.refutado_aceptado });
+  const moved = parseHistory(store).items[id];
+  assert.equal(moved.status, COMPLAINT_STATUSES.refutado_aceptado);
+  assert.equal(moved.rejectionReason, '', 'al salir del estado el motivo se limpia');
+});
+
+test('re-importing the sheet keeps refutado_rechazado and its rejection reason', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const id = Object.keys(seeded.items)[0];
+  const marked = patchHistoryItem(seeded, id, {
+    status: COMPLAINT_STATUSES.refutado_rechazado,
+    rejectionReason: 'Calidad de la comida',
+  });
+  const again = upsertHistoryItems(marked, [complaint({ comment: 'Sheet de nuevo' })]);
+  const item = Object.values(again.store.items)[0];
+  assert.equal(item.status, COMPLAINT_STATUSES.refutado_rechazado);
+  assert.equal(item.rejectionReason, 'Calidad de la comida');
+});
+
+test('legacy items without rejectionReason load as Sin motivo without errors', () => {
+  const seeded = upsertHistoryItems(emptyHistory(), [complaint()]).store;
+  const id = Object.keys(seeded.items)[0];
+  const raw = JSON.parse(JSON.stringify(seeded));
+  delete raw.items[id].rejectionReason;
+
+  const parsed = parseHistory(raw);
+  assert.equal(parsed.items[id].status, COMPLAINT_STATUSES.queja);
+  assert.equal(parsed.items[id].rejectionReason, '');
+  assert.equal(reasonPreset(parsed.items[id].rejectionReason, REFUTATION_REJECTED_REASONS), 'Sin motivo');
+});
+
+test('reasonPreset resolves preset, preset plus comment, unknown text and empty', () => {
+  const presets = REFUTATION_REJECTED_REASONS;
+  assert.equal(reasonPreset('Queja real', presets), 'Queja real');
+  assert.equal(reasonPreset('Queja real · el cliente mandó foto', presets), 'Queja real');
+  assert.equal(reasonPreset('Me pareció raro', presets), 'Otro');
+  assert.equal(reasonPreset('No hay foto · sin evidencia', NO_REFUTABLE_REASONS), 'No hay foto');
+  assert.equal(reasonPreset('', presets), 'Sin motivo');
+  assert.equal(reasonPreset('   ', presets), 'Sin motivo');
+  assert.equal(reasonPreset(undefined, NO_REFUTABLE_REASONS), 'Sin motivo');
+  // Comentario libre: lo que sigue al primer separador.
+  assert.equal(reasonComment('Queja real · abajo roto'), 'abajo roto');
+  assert.equal(reasonComment('Queja real'), '');
 });
 

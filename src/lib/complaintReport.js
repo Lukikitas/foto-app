@@ -6,6 +6,10 @@ import {
   EMPTY_COMBO_LABEL,
   emptyHistoryFlags,
   listHistoryItems,
+  NO_REFUTABLE_REASONS,
+  reasonComment,
+  reasonPreset,
+  REFUTATION_REJECTED_REASONS,
 } from './complaintHistory.js';
 import { formatPct, ratioPct } from './metrics.js';
 
@@ -54,6 +58,40 @@ export function comboRanking(items) {
     .sort((left, right) => right.count - left.count || String(left.combo).localeCompare(right.combo));
 }
 
+// Comentarios libres de un motivo guardado ("Preset · comentario"), sin repetir.
+function reasonComments(items, field) {
+  const comments = [];
+  items.forEach((item) => {
+    const comment = reasonComment(item[field]);
+    if (comment && !comments.includes(comment)) comments.push(comment);
+  });
+  return comments;
+}
+
+/**
+ * Top de motivos de un estado puntual (Ref. rechazado / No refutable):
+ * agrupa por preset, mide el % sobre el total de ese estado y ordena por
+ * cantidad y después por monto.
+ */
+export function reasonRanking(items, { status, presets = [], field }) {
+  const statusItems = items.filter((item) => item.status === status);
+  return groupBy(statusItems, (item) => reasonPreset(item[field], presets))
+    .map((row) => ({
+      key: row.key,
+      count: row.count,
+      sharePct: ratioPct(row.count, statusItems.length),
+      complaintAmount: row.complaintAmount,
+      lostAmount: row.lostAmount,
+      comments: reasonComments(row.items, field),
+    }))
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        right.complaintAmount - left.complaintAmount ||
+        String(left.key).localeCompare(String(right.key)),
+    );
+}
+
 export function buildComplaintReport(store, { from = '', to = '', aggregator = 'all' } = {}) {
   const items = listHistoryItems(store, { from, to, aggregator });
   const totals = countStatus(items);
@@ -83,6 +121,17 @@ export function buildComplaintReport(store, { from = '', to = '', aggregator = '
     combos: comboRanking(items),
     reasons,
     days,
+    // Top de motivos por estado «disciplinario» (se agrupan por preset).
+    rejectionReasons: reasonRanking(items, {
+      status: COMPLAINT_STATUSES.refutado_rechazado,
+      presets: REFUTATION_REJECTED_REASONS,
+      field: 'rejectionReason',
+    }),
+    unrefutableReasons: reasonRanking(items, {
+      status: COMPLAINT_STATUSES.no_refutable,
+      presets: NO_REFUTABLE_REASONS,
+      field: 'unrefutableReason',
+    }),
   };
 }
 
@@ -107,6 +156,7 @@ export function buildRegistryCsv(items) {
     'monto',
     'estado',
     'motivo_no_refutable',
+    'motivo_rechazo',
     'foto',
     ...extras,
   ];
@@ -124,6 +174,7 @@ export function buildRegistryCsv(items) {
         item.amount ?? '',
         COMPLAINT_STATUS_LABELS[item.status] || item.status,
         item.unrefutableReason || '',
+        item.rejectionReason || '',
         item.photoUrl ? 'si' : 'no',
         ...extras.map((key) => item.fields?.[key] || ''),
       ]
@@ -166,6 +217,7 @@ export function buildRegistryWorkbook(items) {
     { value: 'Monto ($)', style: CELL_STYLES.HEADER },
     { value: 'Estado', style: CELL_STYLES.HEADER },
     { value: 'Motivo no refutable', style: CELL_STYLES.HEADER },
+    { value: 'Motivo rechazo', style: CELL_STYLES.HEADER },
     { value: 'Foto', style: CELL_STYLES.HEADER },
     ...extras.map((k) => ({ value: k, style: CELL_STYLES.HEADER })),
   ];
@@ -184,6 +236,7 @@ export function buildRegistryWorkbook(items) {
         { value: Number(item.amount) || 0, style: CELL_STYLES.CURRENCY },
         { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.TEXT_BORDER },
         { value: item.unrefutableReason || '', style: CELL_STYLES.TEXT_BORDER },
+        { value: item.rejectionReason || '', style: CELL_STYLES.TEXT_BORDER },
         { value: item.photoUrl ? 'Sí' : 'No', style: CELL_STYLES.CENTER },
         ...extras.map((k) => ({ value: item.fields?.[k] ?? '', style: CELL_STYLES.TEXT_BORDER })),
       ],
@@ -195,7 +248,7 @@ export function buildRegistryWorkbook(items) {
       {
         name: 'Registro Quejas',
         rows,
-        columnWidths: [16, 12, 10, 15, 24, 24, 30, 14, 16, 22, 8, ...extras.map(() => 16)],
+        columnWidths: [16, 12, 10, 15, 24, 24, 30, 14, 16, 22, 22, 8, ...extras.map(() => 16)],
       },
     ],
   };
@@ -443,6 +496,7 @@ export function buildReportWorkbook(report) {
     { value: 'Monto ($)', style: CELL_STYLES.HEADER },
     { value: 'Estado', style: CELL_STYLES.HEADER },
     { value: 'Motivo no refutable', style: CELL_STYLES.HEADER },
+    { value: 'Motivo rechazo', style: CELL_STYLES.HEADER },
     { value: 'Foto', style: CELL_STYLES.HEADER },
     ...extras.map((k) => ({ value: k, style: CELL_STYLES.HEADER })),
   ];
@@ -460,6 +514,7 @@ export function buildReportWorkbook(report) {
         { value: Number(item.amount) || 0, style: CELL_STYLES.CURRENCY },
         { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.CENTER },
         { value: item.unrefutableReason || '', style: CELL_STYLES.TEXT_BORDER },
+        { value: item.rejectionReason || '', style: CELL_STYLES.TEXT_BORDER },
         { value: item.photoUrl ? 'Sí' : 'No', style: CELL_STYLES.CENTER },
         ...extras.map((key) => ({ value: item.fields?.[key] || '—', style: CELL_STYLES.TEXT_BORDER })),
       ],
@@ -501,7 +556,7 @@ export function buildReportWorkbook(report) {
       },
       {
         name: 'Detalle de Quejas',
-        colWidths: [18, 14, 12, 18, 24, 26, 32, 16, 18, 22, 10, ...extras.map(() => 18)],
+        colWidths: [18, 14, 12, 18, 24, 26, 32, 16, 18, 22, 22, 10, ...extras.map(() => 18)],
         autoFilter: `A1:${lastDetailCol}${detailRows.length}`,
         rows: detailRows,
       },

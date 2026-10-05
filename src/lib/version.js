@@ -6,11 +6,12 @@ export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
 // esta versión.
 export const RELEASE_GROUPS = [
   {
-    title: 'No se puede refutar',
+    title: 'Refutación rechazada con motivo',
     notes: [
-      'En Reclamos e Historial, las quejas abiertas tienen el botón «No se puede refutar»: pide el motivo (presets: No hay foto, Queja real, Foto borrosa/invalida, Código no visible + detalle opcional) y la queja queda como «No refutable».',
-      'Una vez marcada como «No refutable» desaparecen «Preparar para refutar» y «Marcar refutado» (igual que con Ref. rechazado o Queja vencida), la foto no se marca refutada y el dinero se cuenta como pérdida. Hay chip de filtro y opción en el menú «Estado» de la barra masiva.',
-      'Desempeño de personal: columnas nuevas «Ref. acept.» (quejas falsas, no juegan en contra) y «No refut.» (pérdidas sin refutar, base para medidas disciplinarias), también en el CSV; el resumen de Métricas muestra «N no refutables» y el registro CSV/Excel incluye el motivo.',
+      'Marcar «Ref. rechazado» ahora pide el motivo: modal con presets (Calidad de la comida, Ticket ilegible, Foto incompleta, Queja real) más comentario opcional. Vale para una queja, para la selección masiva y desde «Editar datos…» en lote; el motivo se guarda en el historial y se limpia si el estado cambia.',
+      'El motivo del rechazo se muestra en la fila de Reclamos e Historial, en Métricas → Quejas, en el anexo del PDF y en las exportaciones CSV/Excel (columna motivo_rechazo, junto a motivo_no_refutable).',
+      'Métricas suma dos bloques nuevos: «Top motivos de refutación rechazada» y «Top motivos de no refutables», con cantidad, % del estado, $ perdido, barra proporcional y comentarios expandibles; el dashboard muestra un mini top 3 de cada uno.',
+      'Exportar informe en PDF ahora es un armador: secciones por plantilla (Gerencial, Operativo, Disciplinario/control, Completo o Personalizado), título y nota propios, anexo filtrado por estado y columnas, vista previa en vivo y la última configuración guardada.',
     ],
   },
 ];

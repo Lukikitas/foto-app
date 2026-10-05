@@ -1,91 +1,188 @@
-import { useState } from 'react';
-import { getAggregatorLabel } from '../lib/aggregators';
-import { COMPLAINT_STATUS_LABELS } from '../lib/complaintHistory';
+import { useEffect, useMemo, useState } from 'react';
+import { COMPLAINT_STATUS_LABELS, COMPLAINT_STATUSES } from '../lib/complaintHistory';
 import { extraFieldKeys } from '../lib/complaintReport';
-import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
-import { buildTrendChartSvg } from '../lib/trendChart';
-import { openReportInNewTab, printReportDocument } from '../lib/pdfReportGenerator';
+import {
+  DEFAULT_REPORT_SECTIONS,
+  DEFAULT_REPORT_TITLE,
+  generateReportHtml,
+  normalizeReportOptions,
+  openReportInNewTab,
+  printReportDocument,
+  REPORT_COMBO_LIMITS,
+  REPORT_DETAIL_STATUSES,
+  REPORT_SECTION_KEYS,
+} from '../lib/pdfReportGenerator';
+
+const STORAGE_KEY = 'foto-app-report-builder';
+
+// Secciones configurables, en el orden en que se imprimen. El encabezado no
+// aparece acá: siempre está activo y no se puede desmarcar.
+const SECTION_OPTIONS = [
+  { id: 'kpis', label: 'Tarjetas KPI' },
+  { id: 'status', label: 'Barra de estado de trámites' },
+  { id: 'insights', label: 'Insights (plataforma, combo, causa)' },
+  { id: 'trend', label: 'Gráfico de tendencia', requiresTrend: true },
+  { id: 'aggregators', label: 'Desglose por agregador' },
+  { id: 'combos', label: 'Top combos' },
+  { id: 'reasons', label: 'Distribución por motivo de reclamo' },
+  { id: 'days', label: 'Evolución diaria' },
+  { id: 'rejectionReasons', label: 'Top motivos de refutación rechazada' },
+  { id: 'unrefutableReasons', label: 'Top motivos de no refutables' },
+  { id: 'detail', label: 'Anexo de detalle' },
+];
+
+const REPORT_TEMPLATES = [
+  {
+    id: 'gerencial',
+    label: 'Gerencial',
+    sections: ['kpis', 'status', 'insights', 'trend', 'aggregators'],
+  },
+  {
+    id: 'operativo',
+    label: 'Operativo',
+    sections: ['combos', 'reasons', 'days'],
+  },
+  {
+    id: 'disciplinario',
+    label: 'Disciplinario / control',
+    sections: ['kpis', 'rejectionReasons', 'unrefutableReasons', 'detail'],
+    detailStatuses: [
+      COMPLAINT_STATUSES.refutado_rechazado,
+      COMPLAINT_STATUSES.no_refutable,
+    ],
+    detailColumns: { statusReason: true },
+  },
+  {
+    id: 'completo',
+    label: 'Completo',
+    sections: [...REPORT_SECTION_KEYS],
+    detailStatuses: [...REPORT_DETAIL_STATUSES],
+  },
+];
 
 export default function ReportPdfModal({ report, trend = null, onClose }) {
-  const [includeDetail, setIncludeDetail] = useState(false);
-  const [includeTrend, setIncludeTrend] = useState(true);
-  const totals = report?.totals || {};
-  const items = report?.items || [];
-  const extras = extraFieldKeys(items).slice(0, 4);
+  const items = useMemo(() => report?.items || [], [report]);
+  const allExtras = useMemo(() => extraFieldKeys(items), [items]);
+  const [config, setConfig] = useState(() => loadConfig(allExtras));
+  const [template, setTemplate] = useState(() => matchTemplateId(config));
+  const [panelOpen, setPanelOpen] = useState(false);
 
-  const aggLabel =
-    report?.aggregator && report.aggregator !== 'all'
-      ? getAggregatorLabel(report.aggregator)
-      : 'Todos los agregadores';
+  // La última configuración queda guardada para la próxima vez.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          sections: config.sections,
+          comboLimit: config.comboLimit,
+          detailStatuses: config.detailStatuses,
+          detailColumns: config.detailColumns,
+          title: config.title,
+          note: config.note,
+        }),
+      );
+    } catch {
+      // El guardado es opcional: si no hay espacio no rompe el modal.
+    }
+  }, [config]);
 
-  const periodLabel = report?.from
-    ? `${formatDayLabel(report.from)}${report.from !== report.to ? ` al ${formatDayLabel(report.to)}` : ''}`
-    : 'Período completo';
+  // Misma configuración para la preview y para la impresión.
+  const options = useMemo(
+    () => ({
+      sections: config.sections,
+      comboLimit: config.comboLimit,
+      detailStatuses: config.detailStatuses,
+      detailColumns: config.detailColumns,
+      title: config.title,
+      note: config.note,
+      trend,
+    }),
+    [config, trend],
+  );
+  const previewHtml = useMemo(() => generateReportHtml(report, options), [report, options]);
 
-  const emissionDate = new Date().toLocaleString('es-AR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  const hasContent = REPORT_SECTION_KEYS.some((key) => config.sections[key]);
+  const warning = hasContent
+    ? ''
+    : 'Marcá al menos una sección de contenido para poder imprimir o abrir el informe.';
 
-  // Calculate Insights
-  const topAggregator = report.aggregators?.[0];
-  const topCombo = report.combos?.[0];
-  const topReason = report.reasons?.[0];
+  function patch(partial) {
+    setConfig((prev) => ({ ...prev, ...partial }));
+    setTemplate('personalizado');
+  }
 
-  const totalAmount = totals.complaintAmount || 0;
-  const pctUndisputed = totalAmount ? ((totals.undisputedAmount || 0) / totalAmount) * 100 : 0;
-  const pctInProgress = totalAmount ? ((totals.inProgressAmount || 0) / totalAmount) * 100 : 0;
-  const pctRejected = totalAmount ? ((totals.confirmedLostAmount || 0) / totalAmount) * 100 : 0;
-  const pctRecovered = totalAmount ? ((totals.recoveredAmount || 0) / totalAmount) * 100 : 0;
+  function patchSection(id, checked) {
+    patch({ sections: { ...config.sections, [id]: checked } });
+  }
+
+  function toggleDetailStatus(status) {
+    const current = config.detailStatuses;
+    if (!current.includes(status)) {
+      patch({ detailStatuses: [...current, status] });
+      return;
+    }
+    // Siempre debe quedar al menos un estado seleccionado.
+    if (current.length === 1) return;
+    patch({ detailStatuses: current.filter((key) => key !== status) });
+  }
+
+  function toggleExtraColumn(key) {
+    const current = config.detailColumns.extras || [];
+    const next = current.includes(key)
+      ? current.filter((item) => item !== key)
+      : [...current, key];
+    patch({ detailColumns: { ...config.detailColumns, extras: next } });
+  }
+
+  function applyTemplate(item) {
+    const sections = Object.fromEntries(
+      REPORT_SECTION_KEYS.map((key) => [key, item.sections.includes(key)]),
+    );
+    setConfig((prev) => ({
+      ...prev,
+      sections,
+      detailStatuses: item.detailStatuses ? [...item.detailStatuses] : prev.detailStatuses,
+      detailColumns: item.detailColumns
+        ? { ...prev.detailColumns, ...item.detailColumns }
+        : prev.detailColumns,
+    }));
+    setTemplate(item.id);
+  }
+
+  function markAll(checked) {
+    patch({
+      sections: Object.fromEntries(REPORT_SECTION_KEYS.map((key) => [key, checked])),
+    });
+  }
 
   function handlePrint() {
-    printReportDocument(report, { includeDetail, trend: includeTrend ? trend : null });
+    if (!hasContent) return;
+    printReportDocument(report, options);
   }
 
   function handleOpenNewTab() {
-    openReportInNewTab(report, { includeDetail, trend: includeTrend ? trend : null });
+    if (!hasContent) return;
+    openReportInNewTab(report, options);
   }
 
   return (
     <div className="report-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pdf-modal-title">
-      <div className="report-modal">
+      <div className="report-modal report-builder">
         <header className="report-modal__header">
           <div>
             <h3 id="pdf-modal-title">Exportar informe en PDF</h3>
             <p className="report-modal__subtitle">
-              Configurá y previsualizá el documento antes de imprimir o guardar como PDF.
+              Armá el informe por secciones: la vista previa se actualiza sola y se imprime tal cual.
             </p>
           </div>
           <div className="report-modal__controls">
-            <div className="report-modal__scope-selector" role="radiogroup" aria-label="Alcance del informe">
-              <button
-                type="button"
-                className={`report-modal__scope-btn${!includeDetail ? ' is-active' : ''}`}
-                onClick={() => setIncludeDetail(false)}
-              >
-                Resumen Ejecutivo (1-2 págs)
-              </button>
-              <button
-                type="button"
-                className={`report-modal__scope-btn${includeDetail ? ' is-active' : ''}`}
-                onClick={() => setIncludeDetail(true)}
-              >
-                Completo con Detalle ({formatNumber(items.length)})
-              </button>
-              {trend?.hasData && (
-                <button
-                  type="button"
-                  className={`report-modal__scope-btn${includeTrend ? ' is-active' : ''}`}
-                  aria-pressed={includeTrend}
-                  onClick={() => setIncludeTrend((prev) => !prev)}
-                  title="Incluir o quitar el gráfico de tendencia del informe"
-                >
-                  Gráfico de tendencia
-                </button>
-              )}
-            </div>
-
-            <button type="button" className="btn btn--primary" onClick={handlePrint} title="Imprimir o guardar directamente como PDF">
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={handlePrint}
+              disabled={!hasContent}
+              title={warning || 'Imprimir o guardar directamente como PDF'}
+            >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 9V2h12v7"></path>
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
@@ -94,7 +191,13 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
               Guardar como PDF / Imprimir
             </button>
 
-            <button type="button" className="btn btn--ghost" onClick={handleOpenNewTab} title="Abrir informe independiente en pestaña nueva">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={handleOpenNewTab}
+              disabled={!hasContent}
+              title={warning || 'Abrir informe independiente en pestaña nueva'}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
@@ -109,363 +212,227 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
           </div>
         </header>
 
-        <div className="report-modal__body">
-          {/* Printable Document Root */}
-          <article className="report-pdf-doc">
-            <div className="report-top-stripe" />
+        {warning ? (
+          <p className="report-builder__warning" role="alert">
+            {warning}
+          </p>
+        ) : null}
 
-            {/* Header / Brand */}
-            <header className="report-pdf-doc__header">
-              <div className="report-pdf-doc__brand">
-                <span className="report-pdf-doc__logo-pill">DELIVERY LA PLATA</span>
-                <h1 className="report-pdf-doc__title">Informe Gerencial de Quejas y Recuperos</h1>
-                <p className="report-pdf-doc__docname">Control de calidad operativo, reclamos y efectividad de refutaciones</p>
-              </div>
-              <div className="report-pdf-doc__meta">
-                <div className="report-pdf-doc__meta-item">
-                  <span className="report-pdf-doc__meta-label">Período analizado:</span>
-                  <strong className="report-pdf-doc__meta-val">{periodLabel}</strong>
-                </div>
-                <div className="report-pdf-doc__meta-item">
-                  <span className="report-pdf-doc__meta-label">Filtro aplicado:</span>
-                  <strong className="report-pdf-doc__meta-val">{aggLabel}</strong>
-                </div>
-                <div className="report-pdf-doc__meta-item">
-                  <span className="report-pdf-doc__meta-label">Fecha de emisión:</span>
-                  <span className="report-pdf-doc__meta-val">{emissionDate}</span>
-                </div>
-              </div>
-            </header>
+        <div className="report-builder__layout">
+          <aside className={`report-builder__panel${panelOpen ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--small report-builder__toggle"
+              onClick={() => setPanelOpen((prev) => !prev)}
+              aria-expanded={panelOpen}
+            >
+              {panelOpen ? 'Ocultar opciones del informe' : 'Opciones del informe'}
+            </button>
 
-            {/* KPI Cards Strip */}
-            <section className="report-pdf-doc__kpis">
-              <div className="report-pdf-kpi report-pdf-kpi--total">
-                <span className="report-pdf-kpi__label">$ Reclamado Total</span>
-                <strong className="report-pdf-kpi__val">{formatMoney(totals.complaintAmount)}</strong>
-                <span className="report-pdf-kpi__hint">Dinero devuelto al cliente en reclamos</span>
-              </div>
-              <div className="report-pdf-kpi report-pdf-kpi--good">
-                <span className="report-pdf-kpi__label">$ Recuperado</span>
-                <strong className="report-pdf-kpi__val">{formatMoney(totals.recoveredAmount)}</strong>
-                <span className="report-pdf-kpi__badge">
-                  {formatPct(totals.recoveredPct)} de efectividad
-                </span>
-              </div>
-              <div className="report-pdf-kpi report-pdf-kpi--dispute">
-                <span className="report-pdf-kpi__label">Dinero en Disputa</span>
-                <strong className="report-pdf-kpi__val">{formatMoney(totals.inProgressAmount ?? totals.disputedAmount)}</strong>
-                <span className="report-pdf-kpi__hint">Refutados en trámite</span>
-              </div>
-              <div className="report-pdf-kpi report-pdf-kpi--bad">
-                <span className="report-pdf-kpi__label">$ Pérdida Neta</span>
-                <strong className="report-pdf-kpi__val">{formatMoney(totals.lostAmount)}</strong>
-                <span className="report-pdf-kpi__hint">Rechazados o sin refutar</span>
-              </div>
-              <div className="report-pdf-kpi report-pdf-kpi--count">
-                <span className="report-pdf-kpi__label">Pedidos con Reclamo</span>
-                <strong className="report-pdf-kpi__val">{formatNumber(totals.count)}</strong>
-                <span className="report-pdf-kpi__hint">
-                  {totals.refutadoAceptado ? `${formatNumber(totals.refutadoAceptado)} recuperados con éxito` : 'Quejas registradas'}
-                  {totals.noRefutable ? ` · ${formatNumber(totals.noRefutable)} no refutables` : ''}
-                </span>
-              </div>
-            </section>
-
-            {/* Status Breakdown Bar */}
-            <section className="report-pdf-status-panel">
-              <div className="report-pdf-status-title">Estado de Trámites y Gestión de Disputas</div>
-              <div className="report-pdf-progress-bar">
-                <div className="report-pdf-progress-seg seg-undisputed" style={{ width: `${pctUndisputed}%` }} />
-                <div className="report-pdf-progress-seg seg-inprogress" style={{ width: `${pctInProgress}%` }} />
-                <div className="report-pdf-progress-seg seg-rejected" style={{ width: `${pctRejected}%` }} />
-                <div className="report-pdf-progress-seg seg-recovered" style={{ width: `${pctRecovered}%` }} />
-              </div>
-              <div className="report-pdf-doc__split">
-                <div className="report-pdf-split-item">
-                  <span className="report-pdf-split-item__dot report-pdf-split-item__dot--pending" />
-                  <span>
-                    Sin disputar: <strong>{formatMoney(totals.undisputedAmount)}</strong> <small>({formatNumber(totals.queja || 0)})</small>
-                  </span>
-                </div>
-                <div className="report-pdf-split-item">
-                  <span className="report-pdf-split-item__dot report-pdf-split-item__dot--process" />
-                  <span>
-                    En trámite: <strong>{formatMoney(totals.inProgressAmount)}</strong> <small>({formatNumber(totals.refutado || 0)})</small>
-                  </span>
-                </div>
-                <div className="report-pdf-split-item">
-                  <span className="report-pdf-split-item__dot report-pdf-split-item__dot--rejected" />
-                  <span>
-                    Rechazada: <strong>{formatMoney(totals.confirmedLostAmount)}</strong> <small>({formatNumber(totals.refutadoRechazado || 0)})</small>
-                  </span>
-                </div>
-                <div className="report-pdf-split-item">
-                  <span className="report-pdf-split-item__dot report-pdf-split-item__dot--accepted" />
-                  <span>
-                    Aceptada: <strong>{formatMoney(totals.recoveredAmount)}</strong> <small>({formatNumber(totals.refutadoAceptado || 0)})</small>
+            <div className="report-builder__panel-body">
+              <div className="report-builder__group">
+                <span className="report-builder__label">Plantillas</span>
+                <div className="report-builder__templates">
+                  {REPORT_TEMPLATES.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`filter-row__btn${template === item.id ? ' filter-row__btn--active' : ''}`}
+                      onClick={() => applyTemplate(item)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  <span
+                    className={`report-builder__template-hint${template === 'personalizado' ? ' is-active' : ''}`}
+                  >
+                    Personalizado
                   </span>
                 </div>
               </div>
-            </section>
 
-            {/* Executive Insights Panel */}
-            <section className="report-pdf-insights">
-              <div className="report-pdf-insight-col">
-                <span className="report-pdf-insight-title">Plataforma Principal</span>
-                <strong className="report-pdf-insight-val">{topAggregator ? topAggregator.label || topAggregator.id : 'N/A'}</strong>
-                <small>{topAggregator ? `${formatMoney(topAggregator.complaintAmount)} (${formatNumber(topAggregator.count)} quejas)` : 'Sin datos'}</small>
+              <div className="report-builder__group">
+                <span className="report-builder__label">Secciones</span>
+                <label className="report-builder__section report-builder__section--always">
+                  <input type="checkbox" checked readOnly disabled />
+                  <span>Encabezado con período, filtro y fecha</span>
+                </label>
+                {SECTION_OPTIONS.filter((option) => !option.requiresTrend || trend?.hasData).map((option) => (
+                  <label key={option.id} className="report-builder__section">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(config.sections[option.id])}
+                      onChange={(event) => patchSection(option.id, event.target.checked)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+                <div className="report-builder__row">
+                  <button type="button" className="btn btn--ghost btn--small" onClick={() => markAll(true)}>
+                    Marcar todo
+                  </button>
+                  <button type="button" className="btn btn--ghost btn--small" onClick={() => markAll(false)}>
+                    Desmarcar todo
+                  </button>
+                </div>
               </div>
-              <div className="report-pdf-insight-col">
-                <span className="report-pdf-insight-title">Combo Más Reclamado</span>
-                <strong className="report-pdf-insight-val">{topCombo ? topCombo.combo || 'Sin combo' : 'N/A'}</strong>
-                <small>{topCombo ? `${formatNumber(topCombo.count)} reclamos (${formatPct(topCombo.sharePct)} del total)` : 'Sin datos'}</small>
+
+              {config.sections.combos ? (
+                <div className="report-builder__group">
+                  <span className="report-builder__label">Cantidad de combos</span>
+                  <div className="filter-row" role="group" aria-label="Cantidad de combos">
+                    {[...REPORT_COMBO_LIMITS, 'all'].map((limit) => (
+                      <button
+                        key={String(limit)}
+                        type="button"
+                        className={`filter-row__btn${config.comboLimit === limit ? ' filter-row__btn--active' : ''}`}
+                        onClick={() => patch({ comboLimit: limit })}
+                      >
+                        {limit === 'all' ? 'Todos' : limit}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {config.sections.detail ? (
+                <div className="report-builder__group">
+                  <span className="report-builder__label">Anexo: filtrar por estado</span>
+                  {REPORT_DETAIL_STATUSES.map((status) => (
+                    <label key={status} className="report-builder__section">
+                      <input
+                        type="checkbox"
+                        checked={config.detailStatuses.includes(status)}
+                        onChange={() => toggleDetailStatus(status)}
+                      />
+                      <span>{COMPLAINT_STATUS_LABELS[status]}</span>
+                    </label>
+                  ))}
+
+                  <span className="report-builder__label">Columnas del anexo</span>
+                  {allExtras.length === 0 ? (
+                    <p className="report-builder__hint">Este período no tiene columnas extra.</p>
+                  ) : (
+                    allExtras.map((key) => (
+                      <label key={key} className="report-builder__section">
+                        <input
+                          type="checkbox"
+                          checked={(config.detailColumns.extras || []).includes(key)}
+                          onChange={() => toggleExtraColumn(key)}
+                        />
+                        <span>{key}</span>
+                      </label>
+                    ))
+                  )}
+                  <label className="report-builder__section">
+                    <input
+                      type="checkbox"
+                      checked={config.detailColumns.statusReason}
+                      onChange={(event) =>
+                        patch({
+                          detailColumns: {
+                            ...config.detailColumns,
+                            statusReason: event.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    <span>Columna de motivo de estado</span>
+                  </label>
+                </div>
+              ) : null}
+
+              <div className="report-builder__group">
+                <label className="report-builder__field">
+                  <span className="report-builder__label">Título del informe</span>
+                  <input
+                    type="text"
+                    value={config.title}
+                    maxLength={90}
+                    onChange={(event) => patch({ title: event.target.value })}
+                  />
+                </label>
+                <label className="report-builder__field">
+                  <span className="report-builder__label">Nota / observaciones</span>
+                  <textarea
+                    rows={2}
+                    value={config.note}
+                    maxLength={240}
+                    placeholder="Se imprime debajo del encabezado."
+                    onChange={(event) => patch({ note: event.target.value })}
+                  />
+                </label>
               </div>
-              <div className="report-pdf-insight-col">
-                <span className="report-pdf-insight-title">Causa Principal</span>
-                <strong className="report-pdf-insight-val">{topReason ? topReason.key : 'N/A'}</strong>
-                <small>{topReason ? `${formatNumber(topReason.count)} quejas · ${formatMoney(topReason.complaintAmount)}` : 'Sin datos'}</small>
+            </div>
+          </aside>
+
+          <div className="report-builder__preview">
+            {hasContent ? (
+              <iframe
+                className="report-builder__frame"
+                title="Vista previa del informe"
+                srcDoc={previewHtml}
+              />
+            ) : (
+              <div className="gallery__state gallery__state--empty">
+                <p>{warning}</p>
               </div>
-            </section>
-
-            {/* Optional Section: Trend Chart */}
-            {includeTrend && trend?.hasData && (
-              <section className="report-pdf-section">
-                <h2 className="report-pdf-section__title">Tendencia del Período</h2>
-                <div
-                  className="report-pdf-trend"
-                  dangerouslySetInnerHTML={{ __html: buildTrendChartSvg(trend, { palette: 'print', view: 'operation' }) }}
-                />
-              </section>
             )}
-
-            {/* Section: Por Agregador */}
-            {report.aggregators?.length > 0 && (
-              <section className="report-pdf-section">
-                <h2 className="report-pdf-section__title">Desglose por Agregador</h2>
-                <div className="report-pdf-table-wrap">
-                  <table className="report-pdf-table">
-                    <thead>
-                      <tr>
-                        <th>Agregador</th>
-                        <th className="report-pdf-col--num">Quejas</th>
-                        <th className="report-pdf-col--num">% Quejas</th>
-                        <th className="report-pdf-col--num">% Recup.</th>
-                        <th className="report-pdf-col--num">$ Reclamado</th>
-                        <th className="report-pdf-col--num">$ Recuperado</th>
-                        <th className="report-pdf-col--num">$ En Disputa</th>
-                        <th className="report-pdf-col--num">$ Pérdida Neta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.aggregators.map((row) => (
-                        <tr key={row.id}>
-                          <td><strong>{row.label || row.id}</strong></td>
-                          <td className="report-pdf-col--num">{formatNumber(row.count)}</td>
-                          <td className="report-pdf-col--num">
-                            {formatPct(totals.count ? (row.count / totals.count) * 100 : 0)}
-                          </td>
-                          <td className="report-pdf-col--num">{formatPct(row.recoveredPct)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td>Total General</td>
-                        <td className="report-pdf-col--num">{formatNumber(totals.count)}</td>
-                        <td className="report-pdf-col--num">100%</td>
-                        <td className="report-pdf-col--num">{formatPct(totals.recoveredPct)}</td>
-                        <td className="report-pdf-col--num">{formatMoney(totals.complaintAmount)}</td>
-                        <td className="report-pdf-col--num">{formatMoney(totals.recoveredAmount)}</td>
-                        <td className="report-pdf-col--num">{formatMoney(totals.inProgressAmount || 0)}</td>
-                        <td className="report-pdf-col--num">{formatMoney(totals.lostAmount)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {/* Section: Combos con mayor % de quejas */}
-            {report.combos?.length > 0 && (
-              <section className="report-pdf-section">
-                <h2 className="report-pdf-section__title">Top Combos con Mayor Porcentaje de Reclamos</h2>
-                <div className="report-pdf-table-wrap">
-                  <table className="report-pdf-table">
-                    <thead>
-                      <tr>
-                        <th>Combo / Producto</th>
-                        <th className="report-pdf-col--num">Quejas</th>
-                        <th className="report-pdf-col--num">% del Total</th>
-                        <th className="report-pdf-col--num">$ Reclamado</th>
-                        <th className="report-pdf-col--num">$ Recuperado</th>
-                        <th className="report-pdf-col--num">$ En Disputa</th>
-                        <th className="report-pdf-col--num">$ Pérdida Neta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.combos.slice(0, 12).map((row) => (
-                        <tr key={row.combo}>
-                          <td>{row.combo || 'Sin combo'}</td>
-                          <td className="report-pdf-col--num">{formatNumber(row.count)}</td>
-                          <td className="report-pdf-col--num">{formatPct(row.sharePct)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {/* Section: Por Motivo */}
-            {report.reasons?.length > 0 && (
-              <section className="report-pdf-section">
-                <h2 className="report-pdf-section__title">Distribución por Causa / Motivo de Reclamo</h2>
-                <div className="report-pdf-table-wrap">
-                  <table className="report-pdf-table">
-                    <thead>
-                      <tr>
-                        <th>Motivo</th>
-                        <th className="report-pdf-col--num">Quejas</th>
-                        <th className="report-pdf-col--num">% Quejas</th>
-                        <th className="report-pdf-col--num">% Recup.</th>
-                        <th className="report-pdf-col--num">$ Reclamado</th>
-                        <th className="report-pdf-col--num">$ Recuperado</th>
-                        <th className="report-pdf-col--num">$ En Disputa</th>
-                        <th className="report-pdf-col--num">$ Pérdida Neta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.reasons.map((row) => (
-                        <tr key={row.key}>
-                          <td>{row.key}</td>
-                          <td className="report-pdf-col--num">{formatNumber(row.count)}</td>
-                          <td className="report-pdf-col--num">
-                            {formatPct(totals.count ? (row.count / totals.count) * 100 : 0)}
-                          </td>
-                          <td className="report-pdf-col--num">{formatPct(row.recoveredPct)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {/* Section: Por Día */}
-            {report.days?.length > 0 && (
-              <section className="report-pdf-section">
-                <h2 className="report-pdf-section__title">Evolución Cronológica Diaria</h2>
-                <div className="report-pdf-table-wrap">
-                  <table className="report-pdf-table">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th className="report-pdf-col--num">Quejas</th>
-                        <th className="report-pdf-col--num">% Recup.</th>
-                        <th className="report-pdf-col--num">$ Reclamado</th>
-                        <th className="report-pdf-col--num">$ Recuperado</th>
-                        <th className="report-pdf-col--num">$ En Disputa</th>
-                        <th className="report-pdf-col--num">$ Pérdida Neta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.days.map((row) => (
-                        <tr key={row.key}>
-                          <td><strong>{formatDayLabel(row.key)}</strong></td>
-                          <td className="report-pdf-col--num">{formatNumber(row.count)}</td>
-                          <td className="report-pdf-col--num">{formatPct(row.recoveredPct)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.complaintAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.recoveredAmount)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.inProgressAmount || 0)}</td>
-                          <td className="report-pdf-col--num">{formatMoney(row.lostAmount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {/* Optional Section: Detalle de Quejas */}
-            {includeDetail && items.length > 0 && (
-              <section className="report-pdf-section report-pdf-section--page-break">
-                <h2 className="report-pdf-section__title">
-                  Anexo: Detalle Exhaustivo de Reclamos ({formatNumber(items.length)} pedidos)
-                </h2>
-                <div className="report-pdf-table-wrap">
-                  <table className="report-pdf-table report-pdf-table--dense">
-                    <thead>
-                      <tr>
-                        <th>Pedido</th>
-                        <th>Fecha / Hora</th>
-                        <th>Agregador</th>
-                        <th>Combo</th>
-                        <th>Motivo</th>
-                        <th className="report-pdf-col--num">Monto</th>
-                        <th className="report-pdf-col--center">Estado</th>
-                        <th className="report-pdf-col--center">Foto</th>
-                        {extras.map((k) => (
-                          <th key={k}>{k}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item) => {
-                        const statusClass =
-                          item.status === 'refutado_aceptado'
-                            ? 'badge-status--accepted'
-                            : item.status === 'refutado_rechazado' || item.status === 'no_refutable'
-                            ? 'badge-status--rejected'
-                            : 'badge-status--pending';
-                        return (
-                          <tr key={item.id}>
-                            <td><strong>{item.orderCode}</strong></td>
-                            <td>{item.day ? formatDayLabel(item.day) : '—'} {item.timeOfDay || ''}</td>
-                            <td>{getAggregatorLabel(item.aggregator)}</td>
-                            <td>{item.combo || '—'}</td>
-                            <td>{item.reason || '—'}</td>
-                            <td className="report-pdf-col--num"><strong>{formatMoney(item.amount)}</strong></td>
-                            <td className="report-pdf-col--center">
-                              <span className={`badge-status ${statusClass}`}>
-                                {COMPLAINT_STATUS_LABELS[item.status] || item.status}
-                              </span>
-                              {item.unrefutableReason ? (
-                                <small className="report-pdf-unref-reason">{item.unrefutableReason}</small>
-                              ) : null}
-                            </td>
-                            <td className="report-pdf-col--center">{item.photoUrl ? 'Sí' : 'No'}</td>
-                            {extras.map((key) => (
-                              <td key={key}>{item.fields?.[key] || '—'}</td>
-                            ))}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {/* Document Footer */}
-            <footer className="report-pdf-doc__footer">
-              <p>Delivery La Plata · Sistema Oficial de Registro y Control de Métricas</p>
-              <p>Generado el {emissionDate} · Documento Confidencial</p>
-            </footer>
-          </article>
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+
+function sameStatuses(a, b) {
+  return a.length === b.length && a.every((key) => b.includes(key));
+}
+
+function matchTemplateId(config) {
+  const tpl = REPORT_TEMPLATES.find(
+    (item) =>
+      REPORT_SECTION_KEYS.every(
+        (key) => Boolean(config.sections[key]) === item.sections.includes(key),
+      ) &&
+      (!item.detailStatuses || sameStatuses(config.detailStatuses, item.detailStatuses)),
+  );
+  return tpl ? tpl.id : 'personalizado';
+}
+
+/**
+ * Carga la última configuración guardada. Todo pasa por
+ * normalizeReportOptions: si el JSON está corrupto o tiene secciones
+ * desconocidas se cae seguro en los defaults.
+ */
+function loadConfig(defaultExtras) {
+  const fallback = {
+    sections: { ...DEFAULT_REPORT_SECTIONS },
+    comboLimit: 12,
+    detailStatuses: [...REPORT_DETAIL_STATUSES],
+    detailColumns: { extras: [...defaultExtras], statusReason: false },
+    title: DEFAULT_REPORT_TITLE,
+    note: '',
+  };
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    const safe = normalizeReportOptions(parsed && typeof parsed === 'object' ? parsed : {});
+    const savedExtras = safe.detailColumns.extras;
+    return {
+      sections: safe.sections,
+      comboLimit: safe.comboLimit,
+      detailStatuses: safe.detailStatuses,
+      detailColumns: {
+        extras: savedExtras === null ? [...defaultExtras] : defaultExtras.filter((key) => savedExtras.includes(key)),
+        statusReason: safe.detailColumns.statusReason,
+      },
+      title: safe.title,
+      note: safe.note,
+    };
+  } catch {
+    return fallback;
+  }
 }

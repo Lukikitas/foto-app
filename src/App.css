@@ -7791,3 +7791,266 @@ button.metrics-agg:focus-visible {
   }
 }
 
+
+/* ==========================================================================
+   Armador de informe PDF (ReportPdfModal): panel de secciones + preview
+   ========================================================================== */
+.report-builder {
+  max-width: 1180px;
+}
+
+.report-builder__warning {
+  margin: 0;
+  padding: 10px 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--danger, #f87171);
+  background: rgba(248, 113, 113, 0.12);
+  border-bottom: 1px solid var(--border, #334155);
+}
+
+.report-builder__layout {
+  display: flex;
+  min-height: 60vh;
+  overflow: hidden;
+  background: #090d16;
+}
+
+.report-builder__panel {
+  flex: 0 0 275px;
+  max-height: 78vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--border, #334155);
+  background: var(--bg-card, #1e293b);
+}
+
+.report-builder__toggle {
+  display: none;
+}
+
+.report-builder__panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 14px;
+}
+
+.report-builder__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.report-builder__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 0.2rem;
+}
+
+.report-builder__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.report-builder__template-hint {
+  align-self: center;
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.report-builder__template-hint.is-active {
+  color: var(--accent, #e4002b);
+  font-weight: 700;
+}
+
+.report-builder__section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.83rem;
+  color: var(--text, #f8fafc);
+  cursor: pointer;
+}
+
+.report-builder__section input {
+  margin: 0;
+  accent-color: var(--accent, #e4002b);
+  flex-shrink: 0;
+}
+
+.report-builder__section--always {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.report-builder__row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.report-builder__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.report-builder__field input,
+.report-builder__field textarea {
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-strong, #334155);
+  border-radius: var(--radius, 8px);
+  background: var(--bg, #0f172a);
+  color: var(--text, #f8fafc);
+}
+
+.report-builder__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.report-builder__preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  padding: 14px;
+  background: #090d16;
+}
+
+.report-builder__frame {
+  width: 100%;
+  min-height: 62vh;
+  border: 1px solid var(--border, #334155);
+  border-radius: 8px;
+  background: #fff;
+}
+
+@media (max-width: 900px) {
+  .report-builder__layout {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .report-builder__panel {
+    flex: 1 1 auto;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--border, #334155);
+  }
+
+  .report-builder__toggle {
+    display: inline-flex;
+    margin: 10px 12px 0;
+  }
+
+  .report-builder__panel-body {
+    display: none;
+  }
+
+  .report-builder__panel.is-open .report-builder__panel-body {
+    display: flex;
+  }
+
+  .report-builder__frame {
+    min-height: 55vh;
+  }
+}
+
+/* ==========================================================================
+   Top de motivos en Métricas (Ref. rechazada / No refutables)
+   ========================================================================== */
+.metrics-reason-top__table td {
+  vertical-align: middle;
+}
+
+.metrics-reason-top__bar-cell {
+  min-width: 130px;
+  width: 18%;
+}
+
+.metrics-reason-top__bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border-strong, #cbd5e1);
+  overflow: hidden;
+}
+
+.metrics-reason-top__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--danger, #b42318);
+}
+
+.metrics-reason-top__comments td {
+  background: var(--accent-bg, rgba(228, 0, 43, 0.08));
+  font-size: 0.82rem;
+}
+
+.metrics-reason-top__comments ul {
+  margin: 0.15rem 0;
+  padding-left: 1.1rem;
+}
+
+.metrics-reason-top__comments li {
+  margin: 0.15rem 0;
+}
+
+/* Mini top 3 en el dashboard (compacto para mobile) */
+.metrics-reason-mini {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.metrics-reason-mini__col {
+  background: var(--surface, #1f1f1f);
+  border: 1px solid var(--border, #2e2e2e);
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  min-width: 0;
+}
+
+.metrics-reason-mini__col h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #8a8f97);
+}
+
+.metrics-reason-mini__col p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted, #8a8f97);
+}
+
+.metrics-reason-mini__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metrics-reason-mini__list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.83rem;
+  padding: 0.12rem 0;
+}
+
+.metrics-reason-mini__list li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

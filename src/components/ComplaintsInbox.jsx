@@ -95,6 +95,7 @@ import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
 import ComplaintBatchEditModal from './ComplaintBatchEditModal';
 import ComplaintNoRefutableModal from './ComplaintNoRefutableModal';
+import ComplaintRejectedReasonModal from './ComplaintRejectedReasonModal';
 import ComplaintsBulkBar from './ComplaintsBulkBar';
 import ComplaintCodeListImport from './ComplaintCodeListImport.jsx';
 
@@ -217,6 +218,8 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   // Fila(s) pendientes de marcar «No se puede refutar»: se confirman con motivo.
   const [unrefutableTarget, setUnrefutableTarget] = useState(null);
+  // Fila(s) pendientes de marcar «Ref. rechazado»: también exige motivo.
+  const [rejectedTarget, setRejectedTarget] = useState(null);
   const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE);
   const [refutadoDays, setRefutadoDays] = useState(null);
   const masterCheckboxRef = useRef(null);
@@ -694,22 +697,30 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     finally { setLoading(false); }
   }
 
-  async function markRow(row, { status, unrefutableReason } = {}) {
-    // «No se puede refutar» siempre pide motivo: se abre el modal y la
-    // confirmación vuelve a llamar a markRow con el motivo cargado.
+  async function markRow(row, { status, unrefutableReason, rejectionReason } = {}) {
+    // «No se puede refutar» y «Ref. rechazado» siempre piden motivo: se abre el
+    // modal y la confirmación vuelve a llamar a markRow con el motivo cargado.
     if (status === COMPLAINT_STATUSES.no_refutable && !unrefutableReason) {
       setUnrefutableTarget({ rows: [row] });
+      return;
+    }
+    if (status === COMPLAINT_STATUSES.refutado_rechazado && !rejectionReason) {
+      setRejectedTarget({ rows: [row] });
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const result = await setComplaintStatusSynchronized(row, status, { unrefutableReason });
+      const result = await setComplaintStatusSynchronized(row, status, {
+        unrefutableReason,
+        rejectionReason,
+      });
       if (result.updatedPhoto) applyUpdatedPhotos([result.updatedPhoto]);
       setHistoryStore(historyFromResult(result.history));
+      const reason = unrefutableReason || rejectionReason;
       setNotice(
         `Pedido ${row.complaint.orderCode} marcado como ${statusLabel(status)}` +
-          `${unrefutableReason ? ` (${unrefutableReason})` : ''}.`,
+          `${reason ? ` (${reason})` : ''}.`,
       );
     } catch (err) {
       setError(err.message || 'No se pudo actualizar el reclamo.');
@@ -929,21 +940,29 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     }
   }
 
-  async function markMany(targetRows, { status, unrefutableReason } = {}) {
+  async function markMany(targetRows, { status, unrefutableReason, rejectionReason } = {}) {
     if (targetRows.length === 0) return;
     if (status === COMPLAINT_STATUSES.no_refutable && !unrefutableReason) {
       setUnrefutableTarget({ rows: targetRows });
       return;
     }
+    if (status === COMPLAINT_STATUSES.refutado_rechazado && !rejectionReason) {
+      setRejectedTarget({ rows: targetRows });
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const result = await setComplaintStatusesSynchronized(targetRows, status, { unrefutableReason });
+      const result = await setComplaintStatusesSynchronized(targetRows, status, {
+        unrefutableReason,
+        rejectionReason,
+      });
       if (result.updatedPhotos.length) applyUpdatedPhotos(result.updatedPhotos);
       setHistoryStore(historyFromResult(result.history));
+      const reason = unrefutableReason || rejectionReason;
       setNotice(
         `${targetRows.length} pedidos marcados como ${statusLabel(status)}` +
-          `${unrefutableReason ? ` (${unrefutableReason})` : ''}.`,
+          `${reason ? ` (${reason})` : ''}.`,
       );
     } catch (err) {
       setError(err.message || 'No se pudieron actualizar los reclamos.');
@@ -957,6 +976,19 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setUnrefutableTarget(null);
     if (!target?.rows?.length || !unrefutableReason) return;
     const payload = { status: COMPLAINT_STATUSES.no_refutable, unrefutableReason };
+    if (target.rows.length === 1) {
+      await markRow(target.rows[0], payload);
+    } else {
+      await markMany(target.rows, payload);
+    }
+    if (target.clearSelection) setSelectedIds(new Set());
+  }
+
+  async function confirmRejected(rejectionReason) {
+    const target = rejectedTarget;
+    setRejectedTarget(null);
+    if (!target?.rows?.length || !rejectionReason) return;
+    const payload = { status: COMPLAINT_STATUSES.refutado_rechazado, rejectionReason };
     if (target.rows.length === 1) {
       await markRow(target.rows[0], payload);
     } else {
@@ -1011,6 +1043,10 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       setUnrefutableTarget({ rows: selectedRows, clearSelection: true });
       return;
     }
+    if (status === COMPLAINT_STATUSES.refutado_rechazado) {
+      setRejectedTarget({ rows: selectedRows, clearSelection: true });
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -1051,12 +1087,15 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setError(null);
     try {
       if (changes.status) {
-        const synchronized = await setComplaintStatusesSynchronized(selectedRows, changes.status);
+        const synchronized = await setComplaintStatusesSynchronized(selectedRows, changes.status, {
+          rejectionReason: changes.rejectionReason,
+        });
         if (synchronized.updatedPhotos.length) applyUpdatedPhotos(synchronized.updatedPhotos);
         setHistoryStore(historyFromResult(synchronized.history));
       }
       const remaining = { ...changes };
       delete remaining.status;
+      delete remaining.rejectionReason;
       if (Object.keys(remaining).length) {
         const updated = await patchHistoryItemsByIds(targetIds, remaining);
         setHistoryStore(historyFromResult(updated));
@@ -1548,6 +1587,16 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         />
       )}
 
+      {/* Pedir motivo antes de marcar «Ref. rechazado» */}
+      {rejectedTarget && (
+        <ComplaintRejectedReasonModal
+          selectedCount={rejectedTarget.rows.length}
+          onConfirm={confirmRejected}
+          onClose={() => setRejectedTarget(null)}
+          disabled={loading}
+        />
+      )}
+
       {lightboxPhoto && isImagePhoto(lightboxPhoto) && (
         <PhotoLightbox
           photo={lightboxPhoto}
@@ -1671,6 +1720,11 @@ function ComplaintCard({
       {status === COMPLAINT_STATUSES.no_refutable && row.history?.unrefutableReason && (
         <p className="complaint-card__comment">
           No refutable: {row.history.unrefutableReason}
+        </p>
+      )}
+      {status === COMPLAINT_STATUSES.refutado_rechazado && row.history?.rejectionReason && (
+        <p className="complaint-card__comment">
+          Rechazo: {row.history.rejectionReason}
         </p>
       )}
       {extraFields.length > 0 && (

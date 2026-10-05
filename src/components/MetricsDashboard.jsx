@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import { groupHistoryFlags } from '../lib/complaintHistory';
+import { buildComplaintReport } from '../lib/complaintReport';
 import TrendCard from './TrendCard';
 import {
   AWT_AGGREGATOR,
@@ -145,6 +146,13 @@ export default function MetricsDashboard({
     () => summarizeRange(store, {}, previous.from, previous.to, historyFlags),
     [store, historyFlags, previous],
   );
+  // Top de motivos de Ref. rechazado y No refutable (mismos filtros del resumen).
+  const reasonReport = useMemo(
+    () => buildComplaintReport(history, { from: range.from, to: range.to, aggregator }),
+    [history, range, aggregator],
+  );
+  const rejectionTop = (reasonReport.rejectionReasons || []).slice(0, 3);
+  const unrefutableTop = (reasonReport.unrefutableReasons || []).slice(0, 3);
 
   const item =
     aggregator && aggregator !== 'all'
@@ -224,6 +232,41 @@ export default function MetricsDashboard({
           {item.noRefutable > 0 ? <> · {formatNumber(item.noRefutable)} no refutables</> : null}
         </p>
       </div>
+
+      {hasData && (
+        <section className="metrics-reason-mini" aria-label="Top de motivos disciplinarios">
+          <div className="metrics-reason-mini__col">
+            <h4>Top 3 rechazados</h4>
+            {rejectionTop.length === 0 ? (
+              <p>Sin refutaciones rechazadas en este período.</p>
+            ) : (
+              <ol className="metrics-reason-mini__list">
+                {rejectionTop.map((row) => (
+                  <li key={row.key}>
+                    <span>{row.key}</span>
+                    <strong>{formatNumber(row.count)}</strong>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          <div className="metrics-reason-mini__col">
+            <h4>Top 3 no refutables</h4>
+            {unrefutableTop.length === 0 ? (
+              <p>Sin quejas no refutables en este período.</p>
+            ) : (
+              <ol className="metrics-reason-mini__list">
+                {unrefutableTop.map((row) => (
+                  <li key={row.key}>
+                    <span>{row.key}</span>
+                    <strong>{formatNumber(row.count)}</strong>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </section>
+      )}
 
       <div className="metrics-aggs metrics-aggs--hero">
         {METRIC_AGGREGATORS.map((id) => {

@@ -29,6 +29,39 @@ export const NO_REFUTABLE_REASONS = [
   'Código no visible',
 ];
 
+// Motivos ofrecidos al marcar «Ref. rechazado». Mismo patrón que
+// NO_REFUTABLE_REASONS: se guardan en el historial (rejectionReason).
+export const REFUTATION_REJECTED_REASONS = [
+  'Calidad de la comida',
+  'Ticket ilegible',
+  'Foto incompleta',
+  'Queja real',
+];
+
+export const REASON_OTHER_LABEL = 'Otro';
+export const REASON_MISSING_LABEL = 'Sin motivo';
+const REASON_SEPARATOR = ' · ';
+
+/**
+ * Devuelve el preset al que pertenece un motivo guardado ("Preset · detalle"):
+ * lo que está antes de " · " si coincide con un preset; si no coincide → «Otro»;
+ * si está vacío → «Sin motivo». Lo usan las métricas para ambos motivos.
+ */
+export function reasonPreset(text, presets = []) {
+  const value = String(text || '').trim();
+  if (!value) return REASON_MISSING_LABEL;
+  const head = String(value.split(REASON_SEPARATOR)[0] || '').trim();
+  return presets.includes(head) ? head : REASON_OTHER_LABEL;
+}
+
+/** Comentario libre de un motivo guardado (la parte después de " · "). */
+export function reasonComment(text) {
+  const value = String(text || '').trim();
+  const index = value.indexOf(REASON_SEPARATOR);
+  if (index === -1) return '';
+  return value.slice(index + REASON_SEPARATOR.length).trim();
+}
+
 export const EMPTY_COMBO_LABEL = 'Sin combo';
 
 export const PENDING_COMPLAINT_DETAILS = 'Pendiente de cargar detalles del reclamo';
@@ -142,6 +175,12 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     status === COMPLAINT_STATUSES.no_refutable
       ? String(raw?.unrefutableReason || fallback.unrefutableReason || '').trim()
       : '';
+  // Mismo criterio para «Ref. rechazado»: el motivo solo se conserva mientras
+  // el estado sea refutado_rechazado; con cualquier otro estado queda ''.
+  const rejectionReason =
+    status === COMPLAINT_STATUSES.refutado_rechazado
+      ? String(raw?.rejectionReason || fallback.rejectionReason || '').trim()
+      : '';
   const amount = toAmount(raw?.amount ?? fallback.amount);
   const combo = String(raw?.combo || fallback.combo || '').trim();
 
@@ -161,6 +200,7 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     fields: mergeFields(fallback.fields, raw?.fields),
     status,
     unrefutableReason,
+    rejectionReason,
     photoId: raw?.photoId || fallback.photoId || null,
     photoName: raw?.photoName || fallback.photoName || null,
     photoUrl: raw?.photoUrl || fallback.photoUrl || null,
@@ -174,6 +214,7 @@ export function normalizeHistoryItem(raw, fallback = {}) {
 const NORMALIZED_KEYS = [
   'id', 'orderCode', 'compact', 'aggregator', 'orderAtIso', 'timeOfDay', 'dateAssumed',
   'day', 'reason', 'comment', 'combo', 'amount', 'fields', 'status', 'unrefutableReason',
+  'rejectionReason',
   'photoId', 'photoName', 'photoUrl', 'sourceId', 'manualEdit', 'importedAt', 'updatedAt',
 ];
 
