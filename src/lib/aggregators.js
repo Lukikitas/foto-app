@@ -11,7 +11,7 @@ export const AGGREGATOR_OPTIONS = Object.entries(AGGREGATORS).map(([id, item]) =
 }));
 
 function compact(value = '') {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 export function detectAggregator(value) {

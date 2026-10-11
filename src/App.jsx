@@ -5,7 +5,7 @@ import { startDailyImportScheduler } from './lib/complaintDailyImport';
 import { restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, saveTheme } from './lib/theme';
 import { getNavCollapsed, saveNavCollapsed } from './lib/storage';
-import { isPhoneViewport } from './lib/viewport';
+import { isPhoneViewport, PHONE_MEDIA_QUERY } from './lib/viewport';
 import { APP_VERSION } from './lib/version';
 import { purgeExpiredUnresolvedTickets } from './lib/unresolvedTicketStore';
 import ComplaintsInbox from './components/ComplaintsInbox';
@@ -20,6 +20,7 @@ import UploadQueueStatus from './components/UploadQueueStatus';
 import './App.css';
 
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
+const DailyPendingPage = lazy(() => import('./components/DailyPendingPage'));
 
 const TABS = {
   capture: 'capture',
@@ -29,9 +30,11 @@ const TABS = {
   files: 'files',
   metrics: 'metrics',
   settings: 'settings',
+  pending: 'pending',
 };
 
 const NAV_ITEMS = [
+  { id: TABS.pending, label: 'Pendientes', short: 'Pendientes', icon: 'pending', desktopOnly: true },
   { id: TABS.metrics, label: 'Métricas', short: 'Métricas', icon: 'metrics' },
   { id: TABS.capture, label: 'Sacar foto', short: 'Foto', icon: 'capture' },
   { id: TABS.orders, label: 'Galería de pedidos', short: 'Galería', icon: 'gallery' },
@@ -44,12 +47,26 @@ const NAV_ITEMS = [
 export default function App() {
   const [metricsDirty,setMetricsDirty] = useState(false);
   const [focusedCase,setFocusedCase] = useState(null);
+  const [metricsRequest, setMetricsRequest] = useState(null);
+  const [desktop, setDesktop] = useState(() => !isPhoneViewport());
+  const [pendingVisited, setPendingVisited] = useState(false);
+  const [pendingReturn, setPendingReturn] = useState(false);
   const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
   const [sessionAuthor, setSessionAuthor] = useState('');
   const [metricsRefreshKey, setMetricsRefreshKey] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(getNavCollapsed);
+
+  useEffect(() => {
+    const media = window.matchMedia(PHONE_MEDIA_QUERY);
+    function resize() {
+      setDesktop(!media.matches);
+      if (media.matches) setTab(current => current === TABS.pending ? TABS.capture : current);
+    }
+    media.addEventListener('change', resize);
+    return () => media.removeEventListener('change', resize);
+  }, []);
 
   useEffect(() => {
     setUploadCompleteHandler(() => {
@@ -72,7 +89,20 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', purge);
   }, []);
 
-  async function navigate(next) { if(next!==tab && metricsDirty && !await confirmAction('Hay cambios sin guardar en Métricas. Podés volver a Cargar para continuar el borrador.',{danger:false,title:'Cambios pendientes',confirmLabel:'Cambiar de sección'})) return; setTab(next); }
+  async function navigate(next, { fromPending = false } = {}) {
+    if (next === TABS.pending && !desktop) return false;
+    if (next !== tab && metricsDirty && !await confirmAction('Hay cambios sin guardar en Métricas. Podés volver a Cargar para continuar el borrador.', { danger: false, title: 'Cambios pendientes', confirmLabel: 'Cambiar de sección' })) return false;
+    if (next === TABS.pending) setPendingVisited(true);
+    setPendingReturn(fromPending);
+    setTab(next);
+    return true;
+  }
+  async function openPendingDay(day, aggregator) {
+    if (await navigate(TABS.metrics, { fromPending: true })) setMetricsRequest({ day, aggregator, id: crypto.randomUUID() });
+  }
+  async function openPendingCase(item) {
+    if (await navigate(TABS.history, { fromPending: true })) setFocusedCase({ ...item, requestId: crypto.randomUUID() });
+  }
   function handleThemeChange(nextTheme) {
     saveTheme(nextTheme);
     setTheme(nextTheme);
@@ -107,7 +137,7 @@ export default function App() {
         </div>
 
         <div className="app-nav__buttons">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter(item => !item.desktopOnly || desktop).map((item) => {
             const active = tab === item.id;
             return (
               <button
@@ -138,6 +168,10 @@ export default function App() {
 
         <main className={`app__main${tab === TABS.capture ? ' app__main--capture' : ''}`}>
           <UploadQueueStatus />
+          {desktop && pendingReturn && (tab === TABS.metrics || tab === TABS.history) && <button className="btn btn--ghost pending-return" onClick={() => navigate(TABS.pending)}>← Volver a pendientes</button>}
+          {desktop && pendingVisited && <div hidden={tab !== TABS.pending}><Suspense fallback={<p className="gallery__state">Cargando pendientes…</p>}>
+            <DailyPendingPage active={tab === TABS.pending} onLoadDay={openPendingDay} onCase={openPendingCase} />
+          </Suspense></div>}
           {tab === TABS.capture && (
             <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
           )}
@@ -163,7 +197,7 @@ export default function App() {
             />
           </div>
           <div hidden={tab !== TABS.metrics}>
-            <MetricsPage refreshKey={metricsRefreshKey} onDirtyChange={setMetricsDirty} onManage={item=>{setFocusedCase(item?.id ? item : null);navigate(item?.id ? TABS.history : TABS.complaints);}} />
+            <MetricsPage entryRequest={metricsRequest} refreshKey={metricsRefreshKey} onDirtyChange={setMetricsDirty} onManage={item=>{setFocusedCase(item?.id ? item : null);navigate(item?.id ? TABS.history : TABS.complaints);}} />
           </div>
           {tab === TABS.settings && (
             <Suspense fallback={<p className="gallery__state">Cargando ajustes…</p>}>

@@ -127,7 +127,7 @@ async function analyzeScheduled(photoId: string) {
     Date.now() - Date.parse(cached.created_at) < 7 * 86400_000)) {
     return {
       status: cached.code ? 'proposed' : 'no_code', code: cached.code,
-      aggregator: cached.aggregator || detectAggregator(cached.code), source: cached.source,
+      aggregator: cached.code ? cached.aggregator || detectAggregator(cached.code) : null, source: cached.source,
       reliable: false, quotaExhausted: false, busy: false, details: { cached: true },
     };
   }

@@ -30,15 +30,20 @@ function fieldsFromStats(stats = {orders:null,complaints:null,awt:null}) {
   };
 }
 
-export default function MetricsEntry({ store, saving, onSave, onImportBusy, onDirty, onManage }) {
+export default function MetricsEntry({ store, saving, onSave, onImportBusy, onDirty, onManage, entryRequest }) {
   const today = argentinaToday();
-  const [day, setDay] = useState(today);
+  const [day, setDay] = useState(entryRequest?.day || today);
   const draftBases = useRef({});
   const [drafts, setDrafts] = useState({});
   const [pasteDirty, setPasteDirty] = useState(false);
-  const [mode, setMode] = useState('excel');
+  const [mode, setMode] = useState(entryRequest ? 'day' : 'excel');
   const [validation, setValidation] = useState('');
   const [copyNotice, setCopyNotice] = useState('');
+  useEffect(() => {
+    if (!entryRequest) return;
+    const timer = window.setTimeout(() => { setDay(entryRequest.day); setMode('day'); setValidation(''); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [entryRequest]);
   useEffect(()=> {onDirty?.(Object.keys(drafts).length>0 || pasteDirty);},[drafts,pasteDirty,onDirty]);
   useEffect(()=>{const handler=event=>{if(Object.keys(drafts).length){event.preventDefault();event.returnValue='';}}; window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler);},[drafts]);
 
@@ -173,6 +178,7 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy, onDi
               <article
                 key={aggregator}
                 className={`metrics-form-card${bad || awtBad ? ' is-bad' : ''}`}
+                style={entryRequest?.day === day && entryRequest?.aggregator === aggregator ? { outline: '2px solid var(--info)', outlineOffset: '3px' } : undefined}
               >
                 <header>
                   <h3>{getAggregatorLabel(aggregator)}</h3>

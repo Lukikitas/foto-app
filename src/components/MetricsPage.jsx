@@ -68,7 +68,7 @@ function useMetricsPeriod() {
   };
 }
 
-export default function MetricsPage({ onManage, onDirtyChange, refreshKey = 0 }) {
+export default function MetricsPage({ onManage, onDirtyChange, refreshKey = 0, entryRequest }) {
   const [view, setView] = useState(getMetricsView);
   const [store, setStore] = useState(emptyStore);
   const [history, setHistory] = useState(cachedComplaintHistory);
@@ -84,6 +84,12 @@ export default function MetricsPage({ onManage, onDirtyChange, refreshKey = 0 })
   const periodState = useMetricsPeriod();
   const range = focusDay ? { from: focusDay, to: focusDay } : periodState.period;
   const hasData = useMemo(() => Object.keys(store.days || {}).length > 0, [store]);
+
+  useEffect(() => {
+    if (!entryRequest) return;
+    const timer = window.setTimeout(() => { setView('entry'); saveMetricsView('entry'); setNotice(null); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [entryRequest]);
 
   useEffect(() => { onDirtyChange?.(dirty); return () => onDirtyChange?.(false); }, [dirty,onDirtyChange]);
   useEffect(() => subscribeComplaintHistory(setHistory), []);
@@ -244,7 +250,7 @@ export default function MetricsPage({ onManage, onDirtyChange, refreshKey = 0 })
             />
           )}
           {view === 'entry' ? (
-            <MetricsEntry store={store} saving={saving} onSave={persist} onImportBusy={setSaving} onDirty={setDirty} onManage={onManage} />
+            <MetricsEntry entryRequest={entryRequest} store={store} saving={saving} onSave={persist} onImportBusy={setSaving} onDirty={setDirty} onManage={onManage} />
           ) : view === 'staff' ? (
             <MetricsStaff history={history} range={range} aggregator={aggregator} store={store} onSave={persist} onManage={onManage} />
           ) : view === 'complaints' ? (

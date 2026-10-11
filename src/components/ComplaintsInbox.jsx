@@ -204,7 +204,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [historyPreset, setHistoryPreset] = useState('month');
   const [historyCustomFrom, setHistoryCustomFrom] = useState('');
   const [historyCustomTo, setHistoryCustomTo] = useState('');
-  useEffect(()=>{ if(!focusedCase)return; const timer=setTimeout(()=>{setHistorySearch(focusedCase.orderCode || '');setHistoryAggregator(focusedCase.aggregator || 'all');setHistoryPreset('custom');setHistoryCustomFrom(focusedCase.day || '');setHistoryCustomTo(focusedCase.day || '');},0);return()=>clearTimeout(timer);},[focusedCase]);
+  useEffect(()=>{ if(!focusedCase)return; const timer=setTimeout(()=>{setFilter('all');setHistorySearch(focusedCase.orderCode || '');setHistoryAggregator(focusedCase.aggregator || 'all');setHistoryPreset(focusedCase.day ? 'custom' : 'undated');setHistoryCustomFrom(focusedCase.day || '');setHistoryCustomTo(focusedCase.day || '');},0);return()=>clearTimeout(timer);},[focusedCase]);
   const [loading, setLoading] = useState(storedBatch.complaints.length > 0);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -270,7 +270,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   }, [refreshKey]);
 
   const historyPeriod = useMemo(
-    () => resolvePeriod(historyPreset, argentinaToday(), historyCustomFrom, historyCustomTo),
+    () => historyPreset === 'undated' ? { from: '', to: '' } : resolvePeriod(historyPreset, argentinaToday(), historyCustomFrom, historyCustomTo),
     [historyPreset, historyCustomFrom, historyCustomTo],
   );
 

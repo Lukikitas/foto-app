@@ -461,7 +461,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
             <p>{progress.pending} pedidos todavía sin código ·
               {' '}{progress.proposals.filter((item) => item.status === 'proposed').length} propuestas recientes pendientes.</p>
             {progress.runs.length ? progress.runs.map((run) => (
-              <p key={run.day}>{run.day} · {RUN_STATUS[run.status] || run.status} · {run.analyzed} analizados ·
+              <p key={run.day}>{run.day} · {run.status === 'complete' && Number(run.failed) > 0 ? 'Terminada con errores' : RUN_STATUS[run.status] || run.status} · {run.analyzed} analizados ·
                 {' '}{run.proposed} propuestos · {run.confirmed} confirmados ·
                 {' '}{run.no_code} sin lectura · {run.failed} errores
                 {run.last_error ? ` · ${run.last_error}` : ''}</p>

@@ -2,11 +2,23 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   assignComplaintsAggregator,
+  detectAggregator,
   getComplaintAggregator,
   getPhotoAggregator,
   openPartnerPortal,
   resetPartnerPortalWindows,
 } from './aggregators.js';
+
+test('OCR with no code has no aggregator and never throws', () => {
+  for (const code of [null, undefined, '', '   ', 123456789]) {
+    assert.equal(detectAggregator(code), null);
+  }
+  assert.equal(getComplaintAggregator({ orderCode: null }), null);
+  assert.equal(getPhotoAggregator({ file_path: 'orders/no_code/photo.jpg', name: null }), null);
+  for (const [code, aggregator] of [['peya-1234', 'pedidosya'], ['rappi1234', 'rappi'], ['rappi turbo1234', 'rappi_turbo'], ['mpd1234', 'mercadopago']]) {
+    assert.equal(detectAggregator(code), aggregator);
+  }
+});
 
 test('assignComplaintsAggregator stamps a known partner on every row', () => {
   const stamped = assignComplaintsAggregator(

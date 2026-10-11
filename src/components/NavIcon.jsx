@@ -1,4 +1,10 @@
 const ICONS = {
+  pending: (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <rect x="4" y="3.5" width="12" height="14" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M7 2v3m6-3v3M7 9l1.5 1.5L11 8M7 14h6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
   metrics: (
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <rect x="3.5" y="9" width="3.2" height="7.5" />
