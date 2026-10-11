@@ -81,6 +81,10 @@ function pickTotals(row, fallback = {}) {
     recoveredAmount: Number(source.recoveredAmount) || 0,
     inProgressAmount: Number(source.inProgressAmount) || 0,
     lostAmount: Number(source.lostAmount) || 0,
+    missingMoney: source.missingMoney || {},
+    finalLostAmount: Number(source.finalLostAmount) || 0,
+    pendingAmount: Number(source.pendingAmount) || 0,
+    missingAmountCount: Number(source.missingAmountCount) || 0,
     recoveredPctOfAmount: source.recoveredPctOfAmount ?? null,
   };
 }
@@ -109,7 +113,7 @@ function formatAxisMoney(value) {
 }
 
 function xLabel(day) {
-  return String(day || '').slice(5).replace('-', '/');
+  return String(day || '').slice(5).split('-').reverse().join('/');
 }
 
 function scaledBarHeight(value, max, height) {
@@ -122,9 +126,9 @@ function scaledBarHeight(value, max, height) {
  * same length, targets and peak days. Reuses the same summarizeRange logic
  * the dashboard table uses so numbers always match.
  */
-export function buildTrendSeries(store, history, { from = '', to = '', aggregator = 'all' } = {}) {
-  const previous = previousPeriod(from, to);
-  const historyFlags = groupHistoryFlags(history, previous.from, to);
+export function buildTrendSeries(store, history, { from = '', to = '', aggregator = 'all', preset = '' } = {}) {
+  const previous = previousPeriod(from, to, preset);
+  const historyFlags = groupHistoryFlags(history, previous.from, to, {refutadoDays:store?.refutadoDays});
   const summary = summarizeRange(store, {}, from, to, historyFlags);
   const previousSummary = summarizeRange(store, {}, previous.from, previous.to, historyFlags);
   const aggId = aggregator && aggregator !== 'all' ? aggregator : 'all';
@@ -177,6 +181,7 @@ export function buildTrendSeries(store, history, { from = '', to = '', aggregato
     rows,
     totals,
     previous: previousTotals,
+    previousRange: previous,
     compared,
     peaks: { worstPct, topComplaints, topRecovered },
     hasData: rows.some((row) => row.orders > 0 || row.complaints > 0 || row.complaintAmount > 0),
@@ -339,7 +344,8 @@ function moneyChart(series, palette, { header = false } = {}) {
   const legendItems = [
     { color: palette.recovered, label: '$ recuperado' },
     { color: palette.dispute, label: '$ en disputa' },
-    { color: palette.lost, label: '$ perdido' },
+    { color: palette.lost, label: 'Pérdida confirmada' },
+    { color: palette.target, label: 'Pendiente' },
   ];
   for (const item of legendItems) {
     const entry = legendItem(legendX, legendY, item.color, item.label, { textColor: palette.text });
@@ -360,9 +366,10 @@ function moneyChart(series, palette, { header = false } = {}) {
     const segments = [
       { value: row.recoveredAmount, color: palette.recovered },
       { value: row.inProgressAmount, color: palette.dispute },
-      { value: row.lostAmount, color: palette.lost },
+      { value: row.finalLostAmount, color: palette.lost },
+      { value: row.pendingAmount, color: palette.target },
     ];
-    const tooltip = `${formatDayLabel(row.day)} · ${formatMoney(row.complaintAmount)} (rec. ${formatMoney(row.recoveredAmount)} · disputa ${formatMoney(row.inProgressAmount)} · perdido ${formatMoney(row.lostAmount)})`;
+    const tooltip = `${formatDayLabel(row.day)} · ${formatMoney(row.complaintAmount)} (rec. ${formatMoney(row.recoveredAmount)} · disputa ${formatMoney(row.inProgressAmount)} · pendiente ${formatMoney(row.pendingAmount)} · pérdida confirmada ${formatMoney(row.finalLostAmount)} · total no recuperado ${formatMoney(row.lostAmount)})`;
     let cursorY = margin.top + plotH;
     const bars = segments
       .map((segment) => {
@@ -406,7 +413,7 @@ export function buildTrendCsv(series) {
     'monto_quejas',
     'monto_recuperado',
     'monto_en_disputa',
-    'monto_perdido',
+    'total_no_recuperado', 'pendiente_refutar', 'perdida_confirmada', 'sin_monto',
   ];
   const lines = [columns.join(',')];
   for (const row of series?.rows || []) {
@@ -420,7 +427,7 @@ export function buildTrendCsv(series) {
       row.complaintAmount,
       row.recoveredAmount,
       row.inProgressAmount,
-      row.lostAmount,
+      row.lostAmount, row.pendingAmount, row.finalLostAmount, row.missingAmountCount,
     ].join(','));
   }
   return `${lines.join('\n')}\n`;

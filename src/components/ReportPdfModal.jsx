@@ -1,3 +1,4 @@
+import Dialog from './Dialog';
 import { useEffect, useMemo, useState } from 'react';
 import { COMPLAINT_STATUS_LABELS, COMPLAINT_STATUSES } from '../lib/complaintHistory';
 import { extraFieldKeys } from '../lib/complaintReport';
@@ -166,7 +167,7 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
   }
 
   return (
-    <div className="report-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pdf-modal-title">
+    <Dialog labelledBy="pdf-modal-title" onClose={onClose} variant="wide">
       <div className="report-modal report-builder">
         <header className="report-modal__header">
           <div>
@@ -381,7 +382,7 @@ export default function ReportPdfModal({ report, trend = null, onClose }) {
           </div>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
 

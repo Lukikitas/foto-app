@@ -1,3 +1,4 @@
+import Dialog from './Dialog';
 import { useState } from 'react';
 import { AGGREGATORS, getAggregatorLabel } from '../lib/aggregators';
 import { COMPLAINT_STATUSES, REFUTATION_REJECTED_REASONS } from '../lib/complaintHistory';
@@ -97,7 +98,7 @@ export default function ComplaintBatchEditModal({
     amountAction !== 'NO_CHANGE';
 
   return (
-    <div className="report-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="batch-modal-title">
+    <Dialog labelledBy="batch-modal-title" onClose={onClose} busy={disabled} variant="wide">
       <div className="report-modal complaint-batch-modal">
         <header className="report-modal__header">
           <div>
@@ -324,6 +325,6 @@ export default function ComplaintBatchEditModal({
           </footer>
         </form>
       </div>
-    </div>
+    </Dialog>
   );
 }

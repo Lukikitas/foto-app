@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from 'react';
+import Dialog from './Dialog';
+import { useId, useState } from 'react';
 import { formatNumber } from '../lib/metrics';
 
 /**
@@ -23,15 +24,7 @@ export default function ComplaintReasonModal({
   const titleId = useId();
   const radioName = useId();
 
-  // Cerrar con Escape, igual que el resto de los modales.
-  useEffect(() => {
-    if (disabled) return undefined;
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') onClose?.();
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [disabled, onClose]);
+
 
   const subtitleText =
     subtitle ??
@@ -47,7 +40,7 @@ export default function ComplaintReasonModal({
   }
 
   return (
-    <div className="report-modal-overlay" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <Dialog labelledBy={titleId} onClose={onClose} busy={disabled}>
       <div className="report-modal complaint-unrefutable-modal">
         <header className="report-modal__header">
           <div>
@@ -105,6 +98,6 @@ export default function ComplaintReasonModal({
           </footer>
         </form>
       </div>
-    </div>
+    </Dialog>
   );
 }

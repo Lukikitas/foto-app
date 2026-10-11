@@ -50,8 +50,8 @@ test('weeks start on Monday and periods cover today to custom ranges', () => {
   assert.deepEqual(resolvePeriod('today', '2026-09-17'), { from: '2026-09-17', to: '2026-09-17' });
   assert.deepEqual(resolvePeriod('yesterday', '2026-09-17'), { from: '2026-09-16', to: '2026-09-16' });
   assert.deepEqual(resolvePeriod('days7', '2026-09-17'), { from: '2026-09-11', to: '2026-09-17' });
-  assert.deepEqual(resolvePeriod('week', '2026-09-17'), { from: '2026-09-14', to: '2026-09-20' });
-  assert.deepEqual(resolvePeriod('month', '2026-09-17'), { from: '2026-09-01', to: '2026-09-30' });
+  assert.deepEqual(resolvePeriod('week', '2026-09-17'), { from: '2026-09-14', to: '2026-09-17' });
+  assert.deepEqual(resolvePeriod('month', '2026-09-17'), { from: '2026-09-01', to: '2026-09-17' });
   assert.deepEqual(resolvePeriod('custom', '2026-09-17', '2026-09-20', '2026-09-10'), {
     from: '2026-09-10',
     to: '2026-09-20',

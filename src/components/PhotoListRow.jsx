@@ -62,11 +62,14 @@ export default function PhotoListRow({
   const isOrder = isOrderPhoto(photo);
   const isImage = isImagePhoto(photo);
   const isUnidentified = isUnidentifiedOrder(photo);
+  // La retención borra el archivo pero deja la fila: sin URL no se puede ver.
+  const hasFile = Boolean(photo.public_url);
   const extension = getFileExtension(photo).toUpperCase() || 'FILE';
 
   const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
 
   function openItem() {
+    if (!hasFile) return;
     if (isImage) {
       setLightbox(true);
       return;
@@ -213,10 +216,12 @@ export default function PhotoListRow({
         <button
           type="button"
           className={`photo-row__thumb${!isImage ? ' photo-row__thumb--file' : ''}`}
-          aria-label={isImage ? `Ver ${title}` : `Abrir ${title}`}
+          aria-label={hasFile ? (isImage ? `Ver ${title}` : `Abrir ${title}`) : `Foto eliminada de ${title}`}
           {...pressHandlers}
         >
-          {isImage ? (
+          {!hasFile ? (
+            <span className="photo-row__removed">Sin foto</span>
+          ) : isImage ? (
             <img src={photo.public_url} alt="" loading="lazy" />
           ) : (
             <span>{extension}</span>
@@ -247,6 +252,7 @@ export default function PhotoListRow({
               type="button"
               className="btn btn--small btn--ghost"
               onClick={openItem}
+              disabled={!hasFile}
             >
               {isImage ? 'Ver' : 'Abrir'}
             </button>
@@ -265,7 +271,7 @@ export default function PhotoListRow({
               type="button"
               className="btn btn--small btn--ghost"
               onClick={handleDownload}
-              disabled={loading}
+              disabled={loading || !hasFile}
             >
               Descargar
             </button>
@@ -292,7 +298,7 @@ export default function PhotoListRow({
                 Completar código
               </button>
             )}
-            <button
+            {!isOrder && <button
               type="button"
               className="btn btn--small btn--danger"
               onClick={() => {
@@ -302,7 +308,7 @@ export default function PhotoListRow({
               disabled={loading}
             >
               Borrar
-            </button>
+            </button>}
           </div>
         )}
 
@@ -389,7 +395,7 @@ export default function PhotoListRow({
         {error && !completing && <span className="photo-row__error">{error}</span>}
       </div>
 
-      {lightbox && isImage && (
+      {lightbox && isImage && hasFile && (
         <PhotoLightbox
           photo={photo}
           onClose={() => setLightbox(false)}

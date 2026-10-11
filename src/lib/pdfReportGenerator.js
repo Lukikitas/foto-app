@@ -1,7 +1,7 @@
 import { getAggregatorLabel } from './aggregators.js';
 import { COMPLAINT_STATUSES, COMPLAINT_STATUS_LABELS } from './complaintHistory.js';
 import { extraFieldKeys } from './complaintReport.js';
-import { formatDayLabel, formatMoney, formatNumber, formatPct } from './metrics.js';
+import { formatDayLabel, formatKnownMoney, formatMoney, formatNumber, formatPct } from './metrics.js';
 import { buildTrendChartSvg } from './trendChart.js';
 
 function escapeHtml(str) {
@@ -164,8 +164,8 @@ function reasonRankingTableHtml(rows) {
               <td><strong>${escapeHtml(row.key)}</strong></td>
               <td class="col-right">${formatNumber(row.count)}</td>
               <td class="col-right">${formatPct(row.sharePct)}</td>
-              <td class="col-right">${formatMoney(row.complaintAmount)}</td>
-              <td class="col-right">${formatMoney(row.lostAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.complaintAmount,row.missingMoney?.complaintAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.lostAmount,row.missingMoney?.lostAmount)}</td>
               <td>${row.comments?.length ? escapeHtml(row.comments.join(' · ')) : '—'}</td>
             </tr>
             `).join('')}
@@ -200,7 +200,8 @@ export function generateReportHtml(report, options = {}) {
     ? `${formatDayLabel(report.from)}${report.from !== report.to ? ` al ${formatDayLabel(report.to)}` : ''}`
     : 'Período completo';
 
-  const emissionDate = new Date().toLocaleString('es-AR', {
+  const emissionDate = new Date(report.generatedAt || Date.now()).toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
     dateStyle: 'medium',
     timeStyle: 'short',
   });
@@ -211,9 +212,9 @@ export function generateReportHtml(report, options = {}) {
   const topReason = report.reasons?.[0];
 
   const totalAmount = totals.complaintAmount || 0;
-  const pctUndisputed = totalAmount ? ((totals.undisputedAmount || 0) / totalAmount) * 100 : 0;
+  const pctUndisputed = totalAmount ? ((totals.pendingAmount || 0) / totalAmount) * 100 : 0;
   const pctInProgress = totalAmount ? ((totals.inProgressAmount || 0) / totalAmount) * 100 : 0;
-  const pctRejected = totalAmount ? ((totals.confirmedLostAmount || 0) / totalAmount) * 100 : 0;
+  const pctRejected = totalAmount ? ((totals.finalLostAmount || 0) / totalAmount) * 100 : 0;
   const pctRecovered = totalAmount ? ((totals.recoveredAmount || 0) / totalAmount) * 100 : 0;
 
   return `<!DOCTYPE html>
@@ -802,6 +803,8 @@ export function generateReportHtml(report, options = {}) {
         </div>
       </div>
     </header>
+    <p class="report-note">${escapeHtml(report.sources || "Fuente: historial de reclamos. Recuperado según el estado registrado.")} Montos conocidos; no se consideran cero los importes faltantes. ${escapeHtml((report.warnings || []).join(" · "))}</p>
+    <p class="report-note">Pendiente de refutar: ${formatKnownMoney(totals.pendingAmount,totals.missingMoney?.pendingAmount)} · Pérdida confirmada: ${formatKnownMoney(totals.finalLostAmount,totals.missingMoney?.finalLostAmount)} (rechazadas, no refutables y vencidas). Total no recuperado conserva pendientes y pérdidas; excluye en disputa. La atribución fotográfica no determina responsabilidad.</p>
 
     ${note ? `\n    <p class="report-note">${escapeHtml(note)}</p>\n    ` : ''}
 
@@ -810,26 +813,26 @@ export function generateReportHtml(report, options = {}) {
     <section class="kpi-grid">
       <div class="kpi-card kpi-card--total">
         <span class="kpi-label">$ Reclamado Total</span>
-        <span class="kpi-val">${formatMoney(totals.complaintAmount)}</span>
+        <span class="kpi-val">${formatKnownMoney(totals.complaintAmount,totals.missingMoney?.complaintAmount)}</span>
         <span class="kpi-hint">Dinero devuelto al cliente en reclamos</span>
       </div>
 
       <div class="kpi-card kpi-card--good">
         <span class="kpi-label">$ Recuperado</span>
-        <span class="kpi-val">${formatMoney(totals.recoveredAmount)}</span>
+        <span class="kpi-val">${formatKnownMoney(totals.recoveredAmount,totals.missingMoney?.recoveredAmount)}</span>
         <span class="kpi-badge">${formatPct(totals.recoveredPct)} de efectividad</span>
       </div>
 
       <div class="kpi-card kpi-card--dispute">
         <span class="kpi-label">Dinero en Disputa</span>
-        <span class="kpi-val">${formatMoney(totals.inProgressAmount)}</span>
+        <span class="kpi-val">${formatKnownMoney(totals.inProgressAmount,totals.missingMoney?.inProgressAmount)}</span>
         <span class="kpi-hint">Refutados en trámite</span>
       </div>
 
       <div class="kpi-card kpi-card--bad">
-        <span class="kpi-label">$ Pérdida Neta</span>
-        <span class="kpi-val">${formatMoney(totals.lostAmount)}</span>
-        <span class="kpi-hint">Rechazados o sin refutar</span>
+        <span class="kpi-label">Total no recuperado</span>
+        <span class="kpi-val">${formatKnownMoney(totals.lostAmount,totals.missingMoney?.lostAmount)}</span>
+        <span class="kpi-hint">Rechazadas y sin refutar; excluye disputa</span>
       </div>
 
       <div class="kpi-card kpi-card--count">
@@ -845,27 +848,27 @@ export function generateReportHtml(report, options = {}) {
     <section class="status-panel">
       <div class="status-panel-title">Estado de Trámites y Gestión de Disputas</div>
       <div class="progress-bar-wrap">
-        <div class="progress-bar-seg seg-undisputed" style="width: ${pctUndisputed}%;" title="Sin disputar: ${formatMoney(totals.undisputedAmount)} (${formatPct(pctUndisputed)})"></div>
-        <div class="progress-bar-seg seg-inprogress" style="width: ${pctInProgress}%;" title="En trámite: ${formatMoney(totals.inProgressAmount)} (${formatPct(pctInProgress)})"></div>
-        <div class="progress-bar-seg seg-rejected" style="width: ${pctRejected}%;" title="Rechazado: ${formatMoney(totals.confirmedLostAmount)} (${formatPct(pctRejected)})"></div>
-        <div class="progress-bar-seg seg-recovered" style="width: ${pctRecovered}%;" title="Recuperado: ${formatMoney(totals.recoveredAmount)} (${formatPct(pctRecovered)})"></div>
+        <div class="progress-bar-seg seg-undisputed" style="width: ${pctUndisputed}%;" title="Pendiente de refutar: ${formatKnownMoney(totals.pendingAmount,totals.missingMoney?.pendingAmount)} (${formatPct(pctUndisputed)})"></div>
+        <div class="progress-bar-seg seg-inprogress" style="width: ${pctInProgress}%;" title="En trámite: ${formatKnownMoney(totals.inProgressAmount,totals.missingMoney?.inProgressAmount)} (${formatPct(pctInProgress)})"></div>
+        <div class="progress-bar-seg seg-rejected" style="width: ${pctRejected}%;" title="Pérdida confirmada: ${formatKnownMoney(totals.finalLostAmount,totals.missingMoney?.finalLostAmount)} (${formatPct(pctRejected)})"></div>
+        <div class="progress-bar-seg seg-recovered" style="width: ${pctRecovered}%;" title="Recuperado: ${formatKnownMoney(totals.recoveredAmount,totals.missingMoney?.recoveredAmount)} (${formatPct(pctRecovered)})"></div>
       </div>
       <div class="status-legend">
         <div class="legend-item">
           <span class="legend-dot seg-undisputed"></span>
-          <span class="legend-text">Sin disputar: <strong>${formatMoney(totals.undisputedAmount)}</strong> <small>(${formatNumber(totals.queja || 0)})</small></span>
+          <span class="legend-text">Pendiente de refutar: <strong>${formatKnownMoney(totals.pendingAmount,totals.missingMoney?.pendingAmount)}</strong> </span>
         </div>
         <div class="legend-item">
           <span class="legend-dot seg-inprogress"></span>
-          <span class="legend-text">En trámite: <strong>${formatMoney(totals.inProgressAmount)}</strong> <small>(${formatNumber(totals.refutado || 0)})</small></span>
+          <span class="legend-text">En trámite: <strong>${formatKnownMoney(totals.inProgressAmount,totals.missingMoney?.inProgressAmount)}</strong> <small>(${formatNumber(totals.refutado || 0)})</small></span>
         </div>
         <div class="legend-item">
           <span class="legend-dot seg-rejected"></span>
-          <span class="legend-text">Rechazada: <strong>${formatMoney(totals.confirmedLostAmount)}</strong> <small>(${formatNumber(totals.refutadoRechazado || 0)})</small></span>
+          <span class="legend-text">Pérdida confirmada: <strong>${formatKnownMoney(totals.finalLostAmount,totals.missingMoney?.finalLostAmount)}</strong> </span>
         </div>
         <div class="legend-item">
           <span class="legend-dot seg-recovered"></span>
-          <span class="legend-text">Aceptada: <strong>${formatMoney(totals.recoveredAmount)}</strong> <small>(${formatNumber(totals.refutadoAceptado || 0)})</small></span>
+          <span class="legend-text">Aceptada: <strong>${formatKnownMoney(totals.recoveredAmount,totals.missingMoney?.recoveredAmount)}</strong> <small>(${formatNumber(totals.refutadoAceptado || 0)})</small></span>
         </div>
       </div>
     </section>
@@ -915,7 +918,7 @@ export function generateReportHtml(report, options = {}) {
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
               <th class="col-right">$ En Disputa</th>
-              <th class="col-right">$ Pérdida Neta</th>
+              <th class="col-right">Total no recuperado</th>
             </tr>
           </thead>
           <tbody>
@@ -925,10 +928,10 @@ export function generateReportHtml(report, options = {}) {
               <td class="col-right">${formatNumber(row.count)}</td>
               <td class="col-right">${formatPct(totals.count ? (row.count / totals.count) * 100 : 0)}</td>
               <td class="col-right">${formatPct(row.recoveredPct)}</td>
-              <td class="col-right">${formatMoney(row.complaintAmount)}</td>
-              <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.complaintAmount,row.missingMoney?.complaintAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.recoveredAmount,row.missingMoney?.recoveredAmount)}</td>
               <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
-              <td class="col-right">${formatMoney(row.lostAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.lostAmount,row.missingMoney?.lostAmount)}</td>
             </tr>
             `).join('')}
           </tbody>
@@ -938,10 +941,10 @@ export function generateReportHtml(report, options = {}) {
               <td class="col-right">${formatNumber(totals.count)}</td>
               <td class="col-right">100%</td>
               <td class="col-right">${formatPct(totals.recoveredPct)}</td>
-              <td class="col-right">${formatMoney(totals.complaintAmount)}</td>
-              <td class="col-right">${formatMoney(totals.recoveredAmount)}</td>
+              <td class="col-right">${formatKnownMoney(totals.complaintAmount,totals.missingMoney?.complaintAmount)}</td>
+              <td class="col-right">${formatKnownMoney(totals.recoveredAmount,totals.missingMoney?.recoveredAmount)}</td>
               <td class="col-right">${formatMoney(totals.inProgressAmount || 0)}</td>
-              <td class="col-right">${formatMoney(totals.lostAmount)}</td>
+              <td class="col-right">${formatKnownMoney(totals.lostAmount,totals.missingMoney?.lostAmount)}</td>
             </tr>
           </tfoot>
         </table>
@@ -952,7 +955,7 @@ export function generateReportHtml(report, options = {}) {
     <!-- Table 2: Top Combos -->
     ${sections.combos && comboRows.length > 0 ? `
     <section class="report-section">
-      <h2 class="report-section-title">Top Combos con Mayor Porcentaje de Reclamos</h2>
+      <h2 class="report-section-title">Combos: participación en las quejas (sin tasa sobre ventas)</h2>
       <div class="table-container">
         <table class="report-table">
           <thead>
@@ -963,7 +966,7 @@ export function generateReportHtml(report, options = {}) {
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
               <th class="col-right">$ En Disputa</th>
-              <th class="col-right">$ Pérdida Neta</th>
+              <th class="col-right">Total no recuperado</th>
             </tr>
           </thead>
           <tbody>
@@ -972,10 +975,10 @@ export function generateReportHtml(report, options = {}) {
               <td>${escapeHtml(row.combo || 'Sin combo')}</td>
               <td class="col-right">${formatNumber(row.count)}</td>
               <td class="col-right">${formatPct(row.sharePct)}</td>
-              <td class="col-right">${formatMoney(row.complaintAmount)}</td>
-              <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.complaintAmount,row.missingMoney?.complaintAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.recoveredAmount,row.missingMoney?.recoveredAmount)}</td>
               <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
-              <td class="col-right">${formatMoney(row.lostAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.lostAmount,row.missingMoney?.lostAmount)}</td>
             </tr>
             `).join('')}
           </tbody>
@@ -999,7 +1002,7 @@ export function generateReportHtml(report, options = {}) {
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
               <th class="col-right">$ En Disputa</th>
-              <th class="col-right">$ Pérdida Neta</th>
+              <th class="col-right">Total no recuperado</th>
             </tr>
           </thead>
           <tbody>
@@ -1009,10 +1012,10 @@ export function generateReportHtml(report, options = {}) {
               <td class="col-right">${formatNumber(row.count)}</td>
               <td class="col-right">${formatPct(totals.count ? (row.count / totals.count) * 100 : 0)}</td>
               <td class="col-right">${formatPct(row.recoveredPct)}</td>
-              <td class="col-right">${formatMoney(row.complaintAmount)}</td>
-              <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.complaintAmount,row.missingMoney?.complaintAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.recoveredAmount,row.missingMoney?.recoveredAmount)}</td>
               <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
-              <td class="col-right">${formatMoney(row.lostAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.lostAmount,row.missingMoney?.lostAmount)}</td>
             </tr>
             `).join('')}
           </tbody>
@@ -1022,10 +1025,10 @@ export function generateReportHtml(report, options = {}) {
               <td class="col-right">${formatNumber(totals.count)}</td>
               <td class="col-right">100%</td>
               <td class="col-right">${formatPct(totals.recoveredPct)}</td>
-              <td class="col-right">${formatMoney(totals.complaintAmount)}</td>
-              <td class="col-right">${formatMoney(totals.recoveredAmount)}</td>
+              <td class="col-right">${formatKnownMoney(totals.complaintAmount,totals.missingMoney?.complaintAmount)}</td>
+              <td class="col-right">${formatKnownMoney(totals.recoveredAmount,totals.missingMoney?.recoveredAmount)}</td>
               <td class="col-right">${formatMoney(totals.inProgressAmount || 0)}</td>
-              <td class="col-right">${formatMoney(totals.lostAmount)}</td>
+              <td class="col-right">${formatKnownMoney(totals.lostAmount,totals.missingMoney?.lostAmount)}</td>
             </tr>
           </tfoot>
         </table>
@@ -1047,7 +1050,7 @@ export function generateReportHtml(report, options = {}) {
               <th class="col-right">$ Reclamado</th>
               <th class="col-right">$ Recuperado</th>
               <th class="col-right">$ En Disputa</th>
-              <th class="col-right">$ Pérdida Neta</th>
+              <th class="col-right">Total no recuperado</th>
             </tr>
           </thead>
           <tbody>
@@ -1056,10 +1059,10 @@ export function generateReportHtml(report, options = {}) {
               <td><strong>${escapeHtml(formatDayLabel(row.key))}</strong></td>
               <td class="col-right">${formatNumber(row.count)}</td>
               <td class="col-right">${formatPct(row.recoveredPct)}</td>
-              <td class="col-right">${formatMoney(row.complaintAmount)}</td>
-              <td class="col-right">${formatMoney(row.recoveredAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.complaintAmount,row.missingMoney?.complaintAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.recoveredAmount,row.missingMoney?.recoveredAmount)}</td>
               <td class="col-right">${formatMoney(row.inProgressAmount || 0)}</td>
-              <td class="col-right">${formatMoney(row.lostAmount)}</td>
+              <td class="col-right">${formatKnownMoney(row.lostAmount,row.missingMoney?.lostAmount)}</td>
             </tr>
             `).join('')}
           </tbody>
@@ -1118,7 +1121,7 @@ export function generateReportHtml(report, options = {}) {
                 <td>${escapeHtml(getAggregatorLabel(item.aggregator))}</td>
                 <td>${escapeHtml(item.combo || '—')}</td>
                 <td>${escapeHtml(item.reason || '—')}</td>
-                <td class="col-right"><strong>${formatMoney(item.amount)}</strong></td>
+                <td class="col-right"><strong>${item.amount == null ? "Sin monto" : formatMoney(item.amount)}</strong></td>
                 <td class="col-center"><span class="badge-status ${statusClass}">${escapeHtml(COMPLAINT_STATUS_LABELS[item.status] || item.status)}</span>${statusReason ? `<small class="status-reason">${escapeHtml(statusReason)}</small>` : ''}</td>
                 ${detailColumns.statusReason ? `<td>${statusReason ? escapeHtml(statusReason) : '—'}</td>` : ''}
                 <td class="col-center">${item.photoUrl ? 'Sí' : 'No'}</td>

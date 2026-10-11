@@ -15,6 +15,7 @@ import CodeRecoveryPanel from './CodeRecoveryPanel';
 import FileUploadCard from './FileUploadCard';
 import PhotoCard from './PhotoCard';
 import PhotoListRow from './PhotoListRow';
+import PhotoCleanupModal from './PhotoCleanupModal';
 
 const EMPTY_FILTERS = {
   kind: '',
@@ -69,6 +70,7 @@ export default function PhotoGallery({
   const [liveNotice, setLiveNotice] = useState(null);
   const [pendingNewPhoto, setPendingNewPhoto] = useState(null);
   const [page, setPage] = useState(1);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
 
   const appliedFiltersRef = useRef(appliedFilters);
   const filtersRef = useRef(filters);
@@ -506,6 +508,8 @@ export default function PhotoGallery({
         </div>
 
         <div className="gallery__header-actions">
+          {kind === 'orders' && <button type="button" className="btn btn--danger btn--small"
+            onClick={() => setCleanupOpen(true)}>Borrar fotos antiguas</button>}
           {kind === 'orders' && (
             <button
               type="button"
@@ -844,10 +848,13 @@ export default function PhotoGallery({
 
       <BulkActionBar
         selectedPhotos={selectedPhotos}
+        allowDelete={kind === 'files'}
         onClearSelection={clearSelection}
         onUpdated={handleUpdated}
         onDeleted={handleDeleted}
       />
+      {cleanupOpen && <PhotoCleanupModal onClose={() => setCleanupOpen(false)}
+        onCompleted={() => { clearSelection(); loadPhotos(appliedFiltersRef.current); }} />}
     </section>
   );
 }

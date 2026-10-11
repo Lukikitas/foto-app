@@ -17,6 +17,10 @@ export {
 } from './photoDownload.js';
 
 const BUCKET = 'photos';
+// Un archivo general faltante no debe impedir borrar su registro.
+function isMissingStorageObject(error) {
+  return /not found|404/i.test(error?.message || String(error?.statusCode || ''));
+}
 const ORDER_CODE = /^(?:\d{4,12}|\d{1,4}-\d{4,}|(?:PEYA|RAPPI(?:TURBO)?|MPD?)[A-Z0-9-]{1,28})$/;
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 export const UNIDENTIFIED_ORDER_NAME = 'Código no encontrado';
@@ -494,7 +498,10 @@ export async function updatePhotoDetails(photo, { name, aggregator, file, ...met
   let nextPath = photo.file_path;
   let newObject = false;
 
-  if (file || folder !== currentFolder) {
+  // Foto ya liberada por la retención (sin archivo): no hay objeto que copiar
+  // ni mover, así que la edición de metadata sigue sin tocar storage.
+  const storedFile = Boolean(photo.public_url);
+  if ((file || folder !== currentFolder) && (file || storedFile)) {
     const prepared = file && order ? await compressImageInWorker(file, EVIDENCE_IMAGE_OPTIONS) : file;
     const extension = prepared
       ? (prepared.name?.split('.').pop()?.toLowerCase() || 'jpg')
@@ -581,11 +588,17 @@ export async function bulkUpdateTakenBy(photos, takenBy) {
 }
 
 export async function deletePhoto(id, filePath) {
+  const { data: photo, error: readError } = await supabase.from('photos')
+    .select('id,name,file_path').eq('id', id).maybeSingle();
+  if (readError) throw readError;
+  if (isOrderPhoto(photo) || String(filePath || '').startsWith('orders/')) {
+    throw new Error('Los pedidos se conservan para las métricas. Usá «Borrar fotos antiguas» para liberar sus imágenes.');
+  }
   const { error: storageError } = await supabase.storage
     .from(BUCKET)
     .remove([filePath]);
 
-  if (storageError) throw storageError;
+  if (storageError && !isMissingStorageObject(storageError)) throw storageError;
 
   const { error: dbError } = await supabase.from('photos').delete().eq('id', id);
 
@@ -598,6 +611,9 @@ export async function deletePhoto(id, filePath) {
 }
 
 export async function bulkDeletePhotos(photos) {
+  if (photos.some(isOrderPhoto)) {
+    throw new Error('Los pedidos se conservan para las métricas. Usá «Borrar fotos antiguas» para liberar sus imágenes.');
+  }
   const filePaths = photos.map((photo) => photo.file_path);
   const ids = photos.map((photo) => photo.id);
 
@@ -605,7 +621,7 @@ export async function bulkDeletePhotos(photos) {
     .from(BUCKET)
     .remove(filePaths);
 
-  if (storageError) throw storageError;
+  if (storageError && !isMissingStorageObject(storageError)) throw storageError;
 
   const { error: dbError } = await supabase.from('photos').delete().in('id', ids);
 

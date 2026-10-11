@@ -25,7 +25,7 @@ test('parses an Excel PedidosYa list with weekday, 1-sept, pedidos, quejas and A
     day: '2026-09-01',
     orders: 174,
     complaints: 5,
-    awt: 14,
+    awt: 14, hasAwt: true,
     raw: 'Martes\t1-sept\t174\t5\t14',
   });
   assert.equal(rows[4].day, '2026-09-05');

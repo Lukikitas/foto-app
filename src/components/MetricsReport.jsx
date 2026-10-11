@@ -10,7 +10,7 @@ import {
   extraFieldKeys,
 } from '../lib/complaintReport';
 import { downloadTextFile } from '../lib/complaints';
-import { formatDayLabel, formatMoney, formatNumber, formatPct } from '../lib/metrics';
+import { formatDayLabel, formatKnownMoney, formatMoney, formatNumber, formatPct } from '../lib/metrics';
 import { buildTrendSeries } from '../lib/trendChart';
 import { openReportInNewTab } from '../lib/pdfReportGenerator';
 import MetricsReasonTop from './MetricsReasonTop';
@@ -20,8 +20,8 @@ import TrendCard from './TrendCard';
 function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
   if (!rows.length) return null;
   return (
-    <section className="metrics-report__block">
-      <h3>{title}</h3>
+    <details className="metrics-report__block" open>
+      <summary>{title}</summary>
       <div className="metrics-table-wrap">
         <table className="metrics-table">
           <thead>
@@ -32,7 +32,7 @@ function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
               <th>$ quejas</th>
               <th>$ recuperado</th>
               <th>En disputa</th>
-              <th>$ perdido</th>
+              <th>Pérdida confirmada</th><th>Pendiente de refutar</th><th>Total no recuperado</th>
             </tr>
           </thead>
           <tbody>
@@ -41,36 +41,36 @@ function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
                 <td>{row.label || row.combo || row.key}</td>
                 <td>{formatNumber(row.count)}</td>
                 <td>{formatPct(row.sharePct ?? row.recoveredPct)}</td>
-                <td>{formatMoney(row.complaintAmount)}</td>
-                <td>{formatMoney(row.recoveredAmount)}</td>
-                <td>{formatMoney(row.inProgressAmount)}</td>
-                <td>{formatMoney(row.lostAmount)}</td>
+                <td>{formatKnownMoney(row.complaintAmount,row.missingMoney?.complaintAmount)}</td>
+                <td>{formatKnownMoney(row.recoveredAmount,row.missingMoney?.recoveredAmount)}</td>
+                <td>{formatKnownMoney(row.inProgressAmount,row.missingMoney?.inProgressAmount)}</td>
+                <td>{formatKnownMoney(row.finalLostAmount,row.missingMoney?.finalLostAmount)}</td><td>{formatKnownMoney(row.pendingAmount,row.missingMoney?.pendingAmount)}</td><td>{formatKnownMoney(row.lostAmount,row.missingMoney?.lostAmount)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </section>
+    </details>
   );
 }
 
-export default function MetricsReport({ history, range, aggregator, store }) {
+export default function MetricsReport({ history, range, aggregator, store, preset = '' }) {
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const report = useMemo(
-    () => buildComplaintReport(history, { from: range.from, to: range.to, aggregator }),
-    [history, range, aggregator],
+    () => buildComplaintReport(history, { from: range.from, to: range.to, aggregator, metrics: store }),
+    [history, range, aggregator, store],
   );
   const trend = useMemo(
-    () => (store ? buildTrendSeries(store, history, { from: range.from, to: range.to, aggregator }) : null),
-    [store, history, range, aggregator],
+    () => (store ? buildTrendSeries(store, history, { from: range.from, to: range.to, aggregator, preset }) : null),
+    [store, history, range, aggregator, preset],
   );
   const totals = report.totals;
   const extras = useMemo(() => extraFieldKeys(report.items).slice(0, 6), [report.items]);
 
   return (
-    <div className="metrics-report">
+    <div className="metrics-report"><p className="metrics-comparison">Generado: {new Date(report.generatedAt).toLocaleString("es-AR", {timeZone:"America/Argentina/Buenos_Aires"})}. {report.sources}</p>{report.warnings.length > 0 && <p className="message message--error">Datos incompletos: {report.warnings.join(" · ")}</p>}<p>Los porcentajes de combos indican su participación entre las quejas con combo informado. Sin combo se muestra sobre todas las quejas; no es una tasa sobre ventas.</p>
       <header className="metrics-report__hero">
         <div>
           <p className="metrics__lead">
@@ -81,17 +81,17 @@ export default function MetricsReport({ history, range, aggregator, store }) {
           <div className="metrics-kpis">
             <article className="metrics-kpi">
               <p>$ quejas</p>
-              <strong>{formatMoney(totals.complaintAmount)}</strong>
+              <strong>{formatKnownMoney(totals.complaintAmount,totals.missingMoney?.complaintAmount)}</strong>
               <span>Plata dada al cliente</span>
             </article>
             <article className={`metrics-kpi${totals.recoveredAmount > 0 ? ' metrics-kpi--good' : ''}`}>
               <p>$ recuperado</p>
-              <strong>{formatMoney(totals.recoveredAmount)}</strong>
-              <span>Volvió con Ref. aceptado</span>
+              <strong>{formatKnownMoney(totals.recoveredAmount,totals.missingMoney?.recoveredAmount)}</strong>
+              <span>Según estado de aceptación registrado</span>
             </article>
             <article className="metrics-kpi">
               <p>Dinero en disputa</p>
-              <strong>{formatMoney(totals.inProgressAmount)}</strong>
+              <strong>{formatKnownMoney(totals.inProgressAmount,totals.missingMoney?.inProgressAmount)}</strong>
               <span>Refutados pendientes</span>
             </article>
             <article
@@ -99,16 +99,12 @@ export default function MetricsReport({ history, range, aggregator, store }) {
                 totals.lostAmount > 0 ? ' metrics-kpi--bad' : totals.complaintAmount ? ' metrics-kpi--good' : ''
               }`}
             >
-              <p>$ perdido</p>
-              <strong>{formatMoney(totals.lostAmount)}</strong>
-              <span>Rechazados o sin refutar</span>
+              <p>Pérdida confirmada</p>
+              <strong>{formatKnownMoney(totals.finalLostAmount,totals.missingMoney?.finalLostAmount)}</strong>
+              <span>Rechazadas, no refutables y vencidas</span>
             </article>
           </div>
-          <p className="metrics-money-split">
-            Sin disputar {formatMoney(totals.undisputedAmount)} · En trámite{' '}
-            {formatMoney(totals.inProgressAmount)} · Rechazado {formatMoney(totals.confirmedLostAmount)}
-            {` · ${formatPct(totals.recoveredPct)} recuperado`}
-          </p>
+          <p className="metrics-money-split">Pendiente de refutar: {formatKnownMoney(totals.pendingAmount,totals.missingMoney?.pendingAmount)} · Total no recuperado: {formatKnownMoney(totals.lostAmount,totals.missingMoney?.lostAmount)} (pendientes y pérdidas, excluye en disputa). {totals.missingAmountCount} casos sin monto informado.</p>
         </div>
         <div className="complaints__batch metrics-report__actions">
           <button
@@ -211,7 +207,7 @@ export default function MetricsReport({ history, range, aggregator, store }) {
       )}
 
       {trend?.hasData && (
-        <TrendCard store={store} history={history} range={range} aggregator={aggregator} series={trend} allowExport={false} />
+        <TrendCard store={store} history={history} range={range} aggregator={aggregator} series={trend} allowExport={false} showSummary={false} preset={preset} />
       )}
 
       {!totals.count ? (
@@ -222,7 +218,7 @@ export default function MetricsReport({ history, range, aggregator, store }) {
         <>
           <MoneyTable title="Por agregador" rows={report.aggregators} nameKey="Agregador" pctLabel="% rec." />
           <MoneyTable
-            title="Combos con mayor % de quejas"
+            title="Combos: participación en las quejas"
             rows={report.combos}
             nameKey="Combo"
             pctLabel="% de quejas"
@@ -273,7 +269,7 @@ export default function MetricsReport({ history, range, aggregator, store }) {
                       <td>{item.day ? formatDayLabel(item.day) : '—'}</td>
                       <td>{item.combo || '—'}</td>
                       <td>{item.reason || '—'}</td>
-                      <td>{formatMoney(item.amount)}</td>
+                      <td>{item.amount == null ? "Sin monto" : formatMoney(item.amount)}</td>
                       <td>{COMPLAINT_STATUS_LABELS[item.status] || item.status}</td>
                       <td>{item.photoUrl ? 'Sí' : 'No'}</td>
                       {extras.map((key) => (

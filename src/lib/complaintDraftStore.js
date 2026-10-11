@@ -9,6 +9,7 @@ import { fetchPhotosByIds } from './photos.js';
 import { loadComplaintHistory } from './complaintHistoryStore.js';
 import { recordManualCruzar } from './complaintSyncStore.js';
 import { announceWorkbookImport } from './workbookImportEvents.js';
+import { acceptCommittedMetrics, loadMetricsStore } from './metricsStore.js';
 
 const listeners = new Set();
 const CACHE_KEY = 'foto-app-review-draft-v1';
@@ -93,12 +94,21 @@ export async function confirmDraft(draft) {
       emit(null);
       await loadComplaintHistory({ force: true, strict: true }).catch(() => {});
       let warning = '';
+      let metrics = null;
+      if (metricsDoc) {
+        try {
+          const document = saved.documents?.find(document => document.key === 'metrics');
+          metrics = document ? acceptCommittedMetrics(document) : await loadMetricsStore({ strict: true });
+        } catch {
+          warning = 'Los datos se guardaron; no se pudo actualizar la vista de métricas.';
+        }
+      }
       if (draft.data.sheetUrl) {
         try { await recordManualCruzar(draft.data.sheetUrl); }
-        catch { warning = 'Los reclamos se guardaron; no se pudo actualizar la hora del cruce manual.'; }
+        catch { warning = [warning, 'Los reclamos se guardaron; no se pudo actualizar la hora del cruce manual.'].filter(Boolean).join(' '); }
       }
       announceWorkbookImport({ historySaved: true, metricsSaved: Boolean(metricsDoc),
-        history: { ...summary, complaints: [] }, warning });
+        metrics, history: { ...summary, complaints: [] }, warning });
       return { ...(saved.result || summary), warning };
     } catch (error) {
       if (!error.message.includes('REVISION_CONFLICT') || attempt === 3) throw error;

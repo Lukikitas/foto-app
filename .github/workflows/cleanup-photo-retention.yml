@@ -1,0 +1,43 @@
+name: Liberar fotos antiguas
+
+on:
+  schedule:
+    - cron: '43 4 * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Simular candidatas o ejecutar limpieza
+        type: choice
+        options: [dry-run, cleanup]
+        default: dry-run
+        required: true
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Revisar o liberar fotos de pedidos fuera del plazo
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          CLEANUP_SECRET: ${{ secrets.PHOTO_CLEANUP_SECRET }}
+          CLEANUP_ACTION: ${{ github.event_name == 'schedule' && 'cleanup' || inputs.action || 'dry-run' }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$CLEANUP_SECRET" ]; then
+            echo "Faltan secretos para liberar fotos (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, PHOTO_CLEANUP_SECRET)" >&2
+            exit 1
+          fi
+          for i in $(seq 1 10); do
+            RESPONSE=$(curl --fail --silent --show-error \
+              -X POST "$SUPABASE_URL/functions/v1/cleanup-photo-retention" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -H "x-cleanup-secret: $CLEANUP_SECRET" \
+              -d "$(jq -nc --arg action "$CLEANUP_ACTION" '{action:$action}')")
+            echo "Corrida $i: $RESPONSE"
+            HAS_MORE=$(echo "$RESPONSE" | jq -r '.hasMore // false')
+            if [ "$HAS_MORE" != "true" ]; then
+              break
+            fi
+          done

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { validateMetricFields } from '../lib/metricsQuality';
 import { getAggregatorLabel } from '../lib/aggregators';
 import { applyMetricList, parseMetricList } from '../lib/metricList';
 import {
@@ -9,8 +10,9 @@ import {
   formatNumber,
 } from '../lib/metrics';
 
-export default function MetricsListPaste({ store, saving, onSave }) {
+export default function MetricsListPaste({ store, saving, onSave, onDirty }) {
   const [aggregator, setAggregator] = useState(AWT_AGGREGATOR);
+  const base = useRef(null);
   const [text, setText] = useState('');
   const [open, setOpen] = useState(true);
   const today = argentinaToday();
@@ -21,12 +23,15 @@ export default function MetricsListPaste({ store, saving, onSave }) {
     [text, today],
   );
 
-  function handleApply() {
+  useEffect(() => { onDirty?.(Boolean(text.trim())); }, [text, onDirty]);
+  useEffect(() => { function warn(event) { if (text.trim()) { event.preventDefault(); event.returnValue = ''; } } window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [text]);
+  const validation = parsed.rows.map(row => validateMetricFields(row.day, { [aggregator]: { orders: row.orders, complaints: row.complaints, ...(showAwt && row.hasAwt ? { awt: row.awt } : {}) } }, today)).filter(Boolean);
+  async function handleApply() {
     if (parsed.rows.length === 0) return;
-    const next = applyMetricList(store, aggregator, parsed.rows);
+    const next = applyMetricList(base.current || store, aggregator, parsed.rows);
     const label = getAggregatorLabel(aggregator);
-    onSave(next, `Cargados ${parsed.rows.length} días de ${label}.`);
-    setText('');
+    const saved = await onSave(next, `Cargados ${parsed.rows.length} días de ${label}.`);
+    if (saved) {setText('');base.current = null;}
   }
 
   return (
@@ -59,7 +64,7 @@ export default function MetricsListPaste({ store, saving, onSave }) {
           <textarea
             className="metrics-paste__input"
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => { base.current ||= structuredClone(store); setText(event.target.value); }}
             rows={6}
             spellCheck={false}
             placeholder={
@@ -75,6 +80,7 @@ export default function MetricsListPaste({ store, saving, onSave }) {
               {parsed.errors.length > 0 ? ` · ${parsed.errors.length} renglón(es) sin leer` : ''}
             </p>
           )}
+          {validation.length > 0 && <p className="message message--error">{validation.join(" · ")}</p>}
           {parsed.errors.length > 0 && (
             <p className="metrics-paste__errors" role="status">
               {parsed.errors[0].message}
@@ -85,7 +91,7 @@ export default function MetricsListPaste({ store, saving, onSave }) {
             type="button"
             className="btn btn--primary metrics-paste__apply"
             onClick={handleApply}
-            disabled={saving || parsed.rows.length === 0}
+            disabled={saving || parsed.rows.length === 0 || parsed.errors.length > 0 || validation.length > 0}
           >
             {saving ? 'Guardando…' : parsed.rows.length
               ? `Cargar ${parsed.rows.length} día${parsed.rows.length === 1 ? '' : 's'}`

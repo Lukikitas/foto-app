@@ -85,6 +85,8 @@ export function applyMetricList(store, aggregator, rows) {
       orders: row.orders,
       complaints: row.complaints,
       awt: aggregator === AWT_AGGREGATOR ? row.awt : existing.awt,
+      reported: { orders: true, complaints: true, awt: aggregator === AWT_AGGREGATOR && row.hasAwt !== false },
+      sources: { orders: 'lista', complaints: 'lista', awt: aggregator === AWT_AGGREGATOR && row.hasAwt !== false ? 'lista' : '' },
     });
   }
 
@@ -98,14 +100,15 @@ function parseMetricLine(line, year, today) {
   const extracted = extractDate(tokens, year, today);
   if (!extracted) return null;
 
-  const numbers = extracted.rest.map(parseCount).filter((value) => value != null);
-  if (numbers.length < 2) return null;
+  const numbers = extracted.rest.map(parseCount);
+  if (numbers.length < 2 || numbers.some(value => value == null) || extracted.day > today || numbers[1] > numbers[0] || (numbers[2] != null && numbers[2] > numbers[0])) return null;
 
   return {
     day: extracted.day,
     orders: numbers[0],
     complaints: numbers[1],
     awt: numbers[2] || 0,
+    hasAwt: numbers.length > 2,
     raw: line,
   };
 }
@@ -168,7 +171,7 @@ function makeDate(year, month, day, today) {
 
 function tokenize(line) {
   const parts = line.includes('\t') ? line.split('\t') : line.trim().split(/\s+/);
-  return parts.map((part) => part.trim()).filter(Boolean).filter((part) => !WEEKDAYS.has(fold(part)));
+  return parts.map((part) => part.trim()).filter((part) => !WEEKDAYS.has(fold(part)));
 }
 
 function isHeaderLine(line) {
@@ -182,8 +185,8 @@ function parseCount(token) {
   const thousands = folded.match(/^\d{1,3}(\.\d{3})+$/);
   const normalized = thousands ? folded.replace(/\./g, '') : folded.replace(',', '.');
   const number = Number(normalized);
-  if (!Number.isFinite(number) || number < 0) return null;
-  return Math.round(number);
+  if (!Number.isSafeInteger(number) || number < 0) return null;
+  return number;
 }
 
 function fold(value) {

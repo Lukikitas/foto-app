@@ -1,14 +1,17 @@
+import MetricsQualityPanel from './MetricsQualityPanel';
+import { buildMetricsQuality } from '../lib/metricsQuality';
 import { useMemo } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import { groupHistoryFlags } from '../lib/complaintHistory';
-import { buildComplaintReport } from '../lib/complaintReport';
 import TrendCard from './TrendCard';
 import {
+  argentinaToday,
   AWT_AGGREGATOR,
   METRIC_AGGREGATORS,
   PERIOD_PRESETS,
   compareSummaries,
   formatDayLabel,
+  formatKnownMoney,
   formatMoney,
   formatNumber,
   formatPct,
@@ -24,9 +27,9 @@ function formatDelta(value, { pct = false, money = false } = {}) {
   return formatted;
 }
 
-function SheetStat({ label, value, hint, tone }) {
+function SheetStat({ label, value, hint, tone, onClick }) {
   return (
-    <div className={`metrics-sheet__row${tone ? ` metrics-sheet__row--${tone}` : ''}`}>
+    <div className={`metrics-sheet__row${tone ? ` metrics-sheet__row--${tone}` : ''}${onClick ? ' metrics-sheet__row--link' : ''}`} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={event => { if (onClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onClick(); } }}>
       <span>{label}</span>
       <strong>{value}</strong>
       {hint ? <em>{hint}</em> : null}
@@ -68,11 +71,11 @@ export function MetricsPeriodBar({
         <div className="metrics-range">
           <label>
             Desde
-            <input type="date" value={customFrom || period.from} onChange={(e) => onCustomFrom(e.target.value)} />
+            <input type="date" max={argentinaToday()} value={customFrom || period.from} onChange={(e) => onCustomFrom(e.target.value)} />
           </label>
           <label>
             Hasta
-            <input type="date" value={customTo || period.to} onChange={(e) => onCustomTo(e.target.value)} />
+            <input type="date" max={argentinaToday()} value={customTo || period.to} onChange={(e) => onCustomTo(e.target.value)} />
           </label>
         </div>
       )}
@@ -99,6 +102,7 @@ export function MetricsPeriodBar({
           ))}
         </div>
       </div>
+      {preset==="custom" && customFrom>customTo && <p className="message message--error" role="alert">Desde es posterior a Hasta; el rango se muestra en orden cronológico. Revisá las fechas.</p>}
       <p className="metrics-period-label">
         {focusDay ? (
           <>
@@ -118,245 +122,63 @@ export function MetricsPeriodBar({
   );
 }
 
-export default function MetricsDashboard({
-  store,
-  history,
-  hasData,
-  period,
-  focusDay,
-  aggregator,
-  onChangeView,
-  onFocusDay,
-  onAggregator,
-}) {
-  const range = useMemo(
-    () => (focusDay ? { from: focusDay, to: focusDay } : period),
-    [focusDay, period],
-  );
-  const previous = useMemo(() => previousPeriod(range.from, range.to), [range]);
-  const historyFlags = useMemo(
-    () => groupHistoryFlags(history, previous.from, range.to),
-    [history, previous.from, range.to],
-  );
-  const current = useMemo(
-    () => summarizeRange(store, {}, range.from, range.to, historyFlags),
-    [store, historyFlags, range],
-  );
-  const previousSummary = useMemo(
-    () => summarizeRange(store, {}, previous.from, previous.to, historyFlags),
-    [store, historyFlags, previous],
-  );
-  // Top de motivos de Ref. rechazado y No refutable (mismos filtros del resumen).
-  const reasonReport = useMemo(
-    () => buildComplaintReport(history, { from: range.from, to: range.to, aggregator }),
-    [history, range, aggregator],
-  );
-  const rejectionTop = (reasonReport.rejectionReasons || []).slice(0, 3);
-  const unrefutableTop = (reasonReport.unrefutableReasons || []).slice(0, 3);
 
-  const item =
-    aggregator && aggregator !== 'all'
-      ? current.aggregators.find((row) => row.id === aggregator)
-      : current.overall;
-  const prev =
-    aggregator && aggregator !== 'all'
-      ? previousSummary.aggregators.find((row) => row.id === aggregator)
-      : previousSummary.overall;
+export default function MetricsDashboard({ store, history, period, focusDay, aggregator, onChangeView, onFocusDay, onAggregator, onCases, preset }) {
+  const range = focusDay ? {from:focusDay,to:focusDay} : period;
+  const previous = previousPeriod(range.from, range.to, focusDay ? '' : preset);
+  const flags = useMemo(() => groupHistoryFlags(history, previous.from, range.to, {refutadoDays:store.refutadoDays}), [history,previous.from,range.to,store.refutadoDays]);
+  const current = summarizeRange(store, {}, range.from, range.to, flags);
+  const before = summarizeRange(store, {}, previous.from, previous.to, flags);
+  const item = aggregator === 'all' ? current.overall : current.aggregators.find(row=>row.id===aggregator);
+  const prev = aggregator === 'all' ? before.overall : before.aggregators.find(row=>row.id===aggregator);
   const compared = compareSummaries(item, prev, store.targetComplaintPct, store.targetAwtPct);
-  const showAwt = !aggregator || aggregator === 'all' || aggregator === AWT_AGGREGATOR;
-  const complaintBad = isOutOfTarget(item.complaintPct, store.targetComplaintPct);
-  const series = current.daily;
-
-  return (
-    <div className="metrics-dash">
-      <div className="metrics-sheet">
-        <section className="metrics-sheet__group">
-          <h3>Operación</h3>
-          <SheetStat label="Pedidos" value={formatNumber(item.orders)} hint={`${formatDelta(compared.orders)} vs anterior`} />
-          <SheetStat
-            label="Quejas"
-            value={formatNumber(item.complaints)}
-            hint={`${formatDelta(compared.complaints)} vs anterior`}
-          />
-          <SheetStat
-            label="% quejas"
-            value={formatPct(item.complaintPct)}
-            hint={`objetivo ${formatPct(store.targetComplaintPct)}`}
-            tone={complaintBad ? 'bad' : item.orders ? 'good' : undefined}
-          />
-          {showAwt && (
-            <SheetStat
-              label="% AWT"
-              value={formatPct(item.awtPct)}
-              hint={`objetivo ${formatPct(store.targetAwtPct)}`}
-              tone={isOutOfTarget(item.awtPct, store.targetAwtPct) ? 'bad' : item.orders ? 'good' : undefined}
-            />
-          )}
-        </section>
-        <section className="metrics-sheet__group">
-          <h3>Dinero</h3>
-          <SheetStat
-            label="$ quejas"
-            value={formatMoney(item.complaintAmount)}
-            hint="Dada al cliente"
-          />
-          <SheetStat
-            label="$ recuperado"
-            value={formatMoney(item.recoveredAmount)}
-            hint="Volvió con Ref. aceptado"
-            tone={item.recoveredAmount > 0 ? 'good' : undefined}
-          />
-          <SheetStat
-            label="Dinero en disputa"
-            value={formatMoney(item.inProgressAmount)}
-            hint="Refutados pendientes"
-            tone={item.inProgressAmount > 0 ? 'neutral' : undefined}
-          />
-          <SheetStat
-            label="$ perdido"
-            value={formatMoney(item.lostAmount)}
-            hint="Rechazados o sin refutar"
-            tone={item.lostAmount > 0 ? 'bad' : item.complaintAmount ? 'good' : undefined}
-          />
-        </section>
-      </div>
-
-      <div className="metrics-money-split">
-        <p>
-          Sin disputar {formatMoney(item.undisputedAmount)} · En trámite {formatMoney(item.inProgressAmount)} ·
-          Rechazado {formatMoney(item.confirmedLostAmount)}
-        </p>
-        <p>
-          {formatNumber(item.queja)} quejas · {formatNumber(item.refutado)} refutados ·{' '}
-          {formatNumber(item.refutadoAceptado)} aceptados · {formatNumber(item.refutadoRechazado)} rechazados
-          {item.noRefutable > 0 ? <> · {formatNumber(item.noRefutable)} no refutables</> : null}
-        </p>
-      </div>
-
-      {hasData && (
-        <section className="metrics-reason-mini" aria-label="Top de motivos disciplinarios">
-          <div className="metrics-reason-mini__col">
-            <h4>Top 3 rechazados</h4>
-            {rejectionTop.length === 0 ? (
-              <p>Sin refutaciones rechazadas en este período.</p>
-            ) : (
-              <ol className="metrics-reason-mini__list">
-                {rejectionTop.map((row) => (
-                  <li key={row.key}>
-                    <span>{row.key}</span>
-                    <strong>{formatNumber(row.count)}</strong>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-          <div className="metrics-reason-mini__col">
-            <h4>Top 3 no refutables</h4>
-            {unrefutableTop.length === 0 ? (
-              <p>Sin quejas no refutables en este período.</p>
-            ) : (
-              <ol className="metrics-reason-mini__list">
-                {unrefutableTop.map((row) => (
-                  <li key={row.key}>
-                    <span>{row.key}</span>
-                    <strong>{formatNumber(row.count)}</strong>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        </section>
-      )}
-
-      <div className="metrics-aggs metrics-aggs--hero">
-        {METRIC_AGGREGATORS.map((id) => {
-          const row = current.aggregators.find((itemRow) => itemRow.id === id);
-          const statusBad = isOutOfTarget(row.complaintPct, store.targetComplaintPct);
-          const has = row.orders > 0 || row.complaints > 0 || row.complaintAmount > 0;
-          return (
-            <button
-              key={id}
-              type="button"
-              className={`metrics-agg metrics-agg--hero${statusBad ? ' metrics-agg--bad' : ''}${!has ? ' metrics-agg--empty' : ''
-                }${id === 'pedidosya' && has ? ' metrics-agg--wide' : ''}${aggregator === id ? ' is-selected' : ''}`}
-              onClick={() => onAggregator(aggregator === id ? 'all' : id)}
-            >
-              <header>
-                <h3>{getAggregatorLabel(id)}</h3>
-              </header>
-              <p className={`metrics-agg__pct${statusBad ? ' is-bad' : has ? ' is-good' : ''}`}>
-                {has ? formatPct(row.complaintPct) : '—'}
-              </p>
-              <p className="metrics-agg__pct-label">quejas sobre pedidos</p>
-              <p className="metrics-agg__meta">
-                {formatNumber(row.orders)} pedidos · {formatNumber(row.complaints)} quejas
-              </p>
-              <p className="metrics-agg__meta">
-                {formatMoney(row.complaintAmount)} quejas · {formatMoney(row.recoveredAmount)} recuperado
-              </p>
-            </button>
-          );
-        })}
-      </div>
-
-      {!hasData && (
-        <div className="gallery__state gallery__state--empty">
-          <p>Todavía no hay pedidos ni quejas cargados.</p>
-          <button type="button" className="btn btn--primary" onClick={() => onChangeView('entry')}>
-            Cargar el primer día
-          </button>
-        </div>
-      )}
-
-      {hasData && (
-        <TrendCard store={store} history={history} range={range} aggregator={aggregator} />
-      )}
-
-      {series.length > 0 && (
-        <div className="metrics-table-wrap">
-          <table className="metrics-table">
-            <thead>
-              <tr>
-                <th>Día</th>
-                <th>Pedidos</th>
-                <th>Quejas</th>
-                <th>%</th>
-                <th>$ quejas</th>
-                <th>$ recuperado</th>
-                <th>En disputa</th>
-                <th>$ perdido</th>
-              </tr>
-            </thead>
-            <tbody>
-              {series.map((day) => {
-                const row =
-                  aggregator && aggregator !== 'all'
-                    ? day.aggregators.find((itemRow) => itemRow.aggregator === aggregator)
-                    : day;
-                return (
-                  <tr
-                    key={day.day}
-                    className={focusDay === day.day ? 'is-active' : ''}
-                    onClick={() => onFocusDay(focusDay === day.day ? '' : day.day)}
-                  >
-                    <td>{formatDayLabel(day.day)}</td>
-                    <td>{formatNumber(row.orders)}</td>
-                    <td>{formatNumber(row.complaints)}</td>
-                    <td className={isOutOfTarget(row.complaintPct, store.targetComplaintPct) ? 'is-bad' : ''}>
-                      {formatPct(row.complaintPct)}
-                    </td>
-                    <td>{formatMoney(row.complaintAmount)}</td>
-                    <td>{formatMoney(row.recoveredAmount)}</td>
-                    <td>{formatMoney(row.inProgressAmount)}</td>
-                    <td>{formatMoney(row.lostAmount)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="metrics-period-label">Tocá un día para ver solo esa fecha.</p>
-        </div>
-      )}
+  const quality = buildMetricsQuality(store, history, range, aggregator);
+  const prevQuality = buildMetricsQuality(store, history, previous, aggregator);
+  const comparisonWarning = quality.missing || quality.partial || prevQuality.missing || prevQuality.partial ||
+    current.days.length !== before.days.length;
+  const showAwt = aggregator === 'all' || aggregator === AWT_AGGREGATOR;
+  const hasData = item.orders > 0 || item.historyCount > 0 || quality.rows.some(row=>row.state!=='missing');
+  const pctHint = item.complaintPct == null ? 'Faltan pedidos para calcular la tasa' :
+    'Objetivo ' + formatPct(store.targetComplaintPct) + ' · ' + formatDelta(item.complaintPct-store.targetComplaintPct,{pct:true}).replace('%',' pp');
+  return <div className="metrics-dash">
+    <div className="metrics-sheet">
+      <section className="metrics-sheet__group"><h3>Operación</h3>
+        <SheetStat label="Pedidos informados" value={formatNumber(item.orders)} hint="Totales diarios cargados"/>
+        <SheetStat label="Quejas informadas" value={formatNumber(item.complaints)} hint="Totales diarios; pueden diferir del historial" onClick={()=>onCases('all')}/>
+        <SheetStat label="Casos en historial" value={formatNumber(item.historyCount)} hint="Reclamos con registro individual" onClick={()=>onCases('all')}/>
+        <SheetStat label="% quejas" value={formatPct(item.complaintPct)} hint={pctHint} tone={isOutOfTarget(item.complaintPct,store.targetComplaintPct)?'bad':item.orders?'good':undefined}/>
+        {showAwt && <SheetStat label="AWT PedidosYa" value={formatPct(item.awtPct)} hint={'Solo pedidos de PedidosYa · objetivo '+formatPct(store.targetAwtPct)} tone={isOutOfTarget(item.awtPct,store.targetAwtPct)?'bad':undefined}/>}
+      </section>
+      <section className="metrics-sheet__group"><h3>Dinero · importes conocidos</h3>
+        <SheetStat label="Reclamado" value={formatKnownMoney(item.complaintAmount,item.missingMoney?.complaintAmount)} hint={item.missingAmountCount ? item.missingAmountCount+' casos sin monto; total parcial':'Importes del historial'}/>
+        <SheetStat label="Recuperado" value={formatKnownMoney(item.recoveredAmount,item.missingMoney?.recoveredAmount)} hint="Según estado Ref. aceptado" tone="good" onClick={()=>onCases('refutado_aceptado')}/>
+        <SheetStat label="En disputa" value={formatKnownMoney(item.inProgressAmount,item.missingMoney?.inProgressAmount)} hint="Refutaciones pendientes" onClick={()=>onCases('refutado')}/>
+        <SheetStat label="Pendiente de refutar" value={formatKnownMoney(item.pendingAmount,item.missingMoney?.pendingAmount)} hint="Quejas abiertas dentro del plazo" onClick={()=>onCases('pending')}/>
+        <SheetStat label="Pérdida confirmada" value={formatKnownMoney(item.finalLostAmount,item.missingMoney?.finalLostAmount)} hint="Rechazados, no refutables y vencidos" tone={item.finalLostAmount>0?'bad':undefined} onClick={()=>onCases('lost')}/>
+        <SheetStat label="Total no recuperado" value={formatKnownMoney(item.lostAmount,item.missingMoney?.lostAmount)} hint="Cálculo anterior: pérdida confirmada + pendiente de refutar"/>
+      </section>
     </div>
-  );
+    <div className="metrics-comparison">
+      <strong>Comparación: {formatDayLabel(range.from)} → {formatDayLabel(range.to)} contra {formatDayLabel(previous.from)} → {formatDayLabel(previous.to)}</strong>
+      <p>{formatDelta(compared.orders)} pedidos · {formatDelta(compared.complaints)} quejas informadas · {formatDelta(compared.complaintPct,{pct:true}).replace('%',' pp')}</p>
+      {comparisonWarning && <p>⚠ Hay diferencias de duración o cargas incompletas: la variación no representa una comparación completa.</p>}
+      {quality.legacy>0 || prevQuality.legacy>0 ? <p>Las cargas anteriores no permiten comprobar la completitud por campo.</p>:null}
+    </div>
+    {hasData && <TrendCard store={store} history={history} range={range} aggregator={aggregator} preset={focusDay?'':preset} showSummary={false}/>}
+    <div className="metrics-aggs metrics-aggs--hero">{current.aggregators.map(row=><button key={row.id} className={'metrics-agg metrics-agg--hero'+(aggregator===row.id?' is-selected':'')} aria-pressed={aggregator===row.id} onClick={()=>onAggregator(aggregator===row.id?'all':row.id)}>
+      <h3>{getAggregatorLabel(row.id)}</h3><p className={'metrics-agg__pct'+(isOutOfTarget(row.complaintPct,store.targetComplaintPct)?' is-bad':'')}>{formatPct(row.complaintPct)}</p>
+      <p className="metrics-agg__pct-label">Quejas informadas sobre pedidos</p><p className="metrics-agg__meta">{formatNumber(row.orders)} pedidos · {formatNumber(row.complaints)} quejas informadas</p>
+      <p className="metrics-agg__meta">{formatNumber(row.historyCount)} casos · {formatKnownMoney(row.recoveredAmount,row.missingMoney?.recoveredAmount)} recuperado</p>
+    </button>)}</div>
+    {!hasData && <div className="gallery__state"><p>No hay datos cargados para este filtro.</p><button className="btn btn--primary" onClick={()=>onChangeView('entry')}>Cargar datos</button></div>}
+    <section className="metrics-daily" aria-label="Detalle diario"><div className="metrics-daily__header"><h3>Detalle diario</h3><p>{current.daily.length} días · {formatDayLabel(range.from)} → {formatDayLabel(range.to)}</p></div><div className="metrics-table-wrap"><table className="metrics-table"><thead><tr><th>Día</th><th>Pedidos</th><th>Quejas informadas</th><th>Casos</th><th>% quejas</th><th>Recuperado</th><th>Pendiente</th><th>Pérdida confirmada</th><th>Totales del día</th></tr></thead><tbody>
+      {current.daily.map(day=>{const row=aggregator==='all'?day:day.aggregators.find(r=>r.aggregator===aggregator); const states=quality.rows.filter(r=>r.day===day.day).map(r=>r.state);return <tr key={day.day}>
+        <td><button type="button" className="metrics-table-link" title="Ver métricas de este día" onClick={()=>onFocusDay(focusDay===day.day?'':day.day)}>{formatDayLabel(day.day)}</button></td>
+        <td>{states.every(s=>s==='missing')?'Sin cargar':formatNumber(row.orders)}</td><td>{states.every(s=>s==='missing')?'Sin cargar':formatNumber(row.complaints)}</td><td>{row.historyCount}</td><td>{formatPct(row.complaintPct)}</td>
+        <td>{formatKnownMoney(row.recoveredAmount,row.missingMoney?.recoveredAmount)}</td><td>{formatKnownMoney(row.pendingAmount,row.missingMoney?.pendingAmount)}</td><td>{formatKnownMoney(row.finalLostAmount,row.missingMoney?.finalLostAmount)}</td>
+        <td>{states.every(s=>s==='missing')?'Sin cargar':states.includes('legacy')?'Datos anteriores':states.some(s=>s!=='complete')?'Parcial':'Completa'}</td>
+      </tr>;})}
+    </tbody></table></div></section>
+    <MetricsQualityPanel store={store} history={history} range={range} aggregator={aggregator}/>
+  </div>;
 }

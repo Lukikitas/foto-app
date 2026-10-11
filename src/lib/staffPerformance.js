@@ -1,7 +1,10 @@
 import { complaintRate, ratioPct } from './metrics.js';
 import { COMPLAINT_STATUSES, moneyForStatus } from './complaintHistory.js';
+import { getPhotoAggregator } from './aggregators.js';
+import { toArgentinaDate } from './metrics.js';
 import { compactCode } from './complaintMatch.js';
 import { argentinaDateTimeParts } from './complaintSync.js';
+import { representativeOrders } from './orderIdentity.js';
 
 export const NO_PERSON = 'Sin asignar';
 
@@ -61,50 +64,35 @@ function codePrefix(value) {
  * `photos` are the period photos; `extraPhotos` are photos referenced by
  * complaints from outside the period, used only for attribution.
  */
-export function buildStaffReport({ photos = [], historyItems = [], extraPhotos = [] } = {}) {
+export function buildStaffReport({ photos = [], historyItems = [], extraPhotos = [], aliases = {} } = {}) {
+  const periodIds = new Set(photos.map(photo => photo.id));
+  const { representatives, representativeById } = representativeOrders([...photos, ...extraPhotos]);
+  const periodOrders = representatives.filter(photo => periodIds.has(photo.id));
   const photoById = new Map();
-  const photoByCompact = new Map();
-  const photoByDigits = new Map();
-  const photoByPrefixedDigits = new Map();
-  for (const photo of [...photos, ...extraPhotos]) {
-    if (photo?.id) photoById.set(photo.id, photo);
-    const compact = compactCode(photo?.name);
-    if (compact && !photoByCompact.has(compact)) photoByCompact.set(compact, photo);
-    const digits = compact.replace(/\D/g, '');
-    if (!digits) continue;
-    if (!photoByDigits.has(digits)) photoByDigits.set(digits, photo);
-    const prefix = codePrefix(compact);
-    // PEYA-1234 y RAPPI-1234 comparten dígitos: se indexan por prefijo propio
-    // para no cruzarlos en la búsqueda numérica.
-    if (prefix && !photoByPrefixedDigits.has(`${prefix}:${digits}`)) {
-      photoByPrefixedDigits.set(`${prefix}:${digits}`, photo);
-    }
-  }
-  // Los nombres de foto traen prefijo (PEYA-1234) y el reclamo puede guardarlo
-  // sin prefijo (1234): si no coincide exacto, se compara solo lo numérico,
-  // respetando el agregador cuando ambos lados tienen prefijo.
-  const findPhotoByCode = (code) => {
+  for (const photo of [...photos, ...extraPhotos]) if (photo?.id) photoById.set(photo.id, photo);
+  const attributionWarnings = [];
+  const findPhotoByCode = (code, item) => {
     if (!code) return null;
     const compact = compactCode(code);
-    const exact = photoByCompact.get(compact);
-    if (exact) return exact;
     const digits = compact.replace(/\D/g, '');
-    if (!digits) return null;
     const prefix = codePrefix(compact);
-    if (prefix) {
-      const samePrefix = photoByPrefixedDigits.get(`${prefix}:${digits}`);
-      if (samePrefix) return samePrefix;
-    }
-    const found = photoByDigits.get(digits);
-    if (!found) return null;
-    const photoPrefix = codePrefix(found.name);
-    if (photoPrefix && prefix && photoPrefix !== prefix) return null;
-    return found;
+    const candidates = [...photoById.values()].filter(photo => {
+      if (item.day && toArgentinaDate(photo.created_at) !== item.day) return false;
+      const agg = getPhotoAggregator(photo) || ({PEYA:"pedidosya",RAPPI:"rappi",RAPPITURBO:"rappi_turbo",MPD:"mercadopago"})[codePrefix(compactCode(photo.name))];
+      if (item.aggregator && agg !== item.aggregator) return false;
+      const photoCode = compactCode(photo.name);
+      if (photoCode === compact) return true;
+      const photoPrefix = codePrefix(photoCode);
+      return digits && photoCode.replace(/\D/g, '') === digits && !(photoPrefix && prefix && photoPrefix !== prefix);
+    });
+    const unique = new Map(candidates.map(photo => [representativeById.get(photo.id)?.id || photo.id, photo]));
+    if (unique.size > 1) { attributionWarnings.push('Código ambiguo: '+code); return null; }
+    return unique.values().next().value || null;
   };
 
   const people = new Map();
   function touchPerson(name) {
-    const display = normalizePerson(name) || NO_PERSON;
+    const display = aliases[personKey(name)] || normalizePerson(name) || NO_PERSON;
     const key = personKey(display);
     let row = people.get(key);
     if (!row) {
@@ -116,8 +104,13 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
         complaints: 0,
         refutadoAceptado: 0,
         noRefutable: 0,
+        rejected: 0,
+        pending: 0,
+        inProgress: 0,
+        items: [],
         complaintAmount: 0,
         recoveredAmount: 0,
+        missingAmountCount: 0, missingRecoveredCount: 0,
       };
       people.set(key, row);
     }
@@ -127,11 +120,13 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
   for (const photo of photos) {
     const row = touchPerson(photo?.taken_by);
     row.photos += 1;
-    if (isOrderPhotoRow(photo)) row.orders += 1;
+  }
+  for (const photo of periodOrders) {
+    if (isOrderPhotoRow(photo)) touchPerson(photo?.taken_by).orders += 1;
   }
 
   const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: 0, complaints: 0 }));
-  for (const photo of photos) {
+  for (const photo of periodOrders) {
     if (!isOrderPhotoRow(photo)) continue;
     const hour = argentinaHour(photo?.created_at);
     if (hour != null) hourly[hour].orders += 1;
@@ -141,21 +136,28 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
   for (const item of historyItems) {
     let photo = null;
     if (item?.photoId && photoById.has(item.photoId)) photo = photoById.get(item.photoId);
-    if (!photo && item?.photoName) photo = findPhotoByCode(item.photoName);
-    if (!photo && item?.compact) photo = findPhotoByCode(item.compact);
-    if (!photo && item?.orderCode) photo = findPhotoByCode(item.orderCode);
+    if (!photo && item?.photoName) photo = findPhotoByCode(item.photoName, item);
+    if (!photo && item?.compact) photo = findPhotoByCode(item.compact, item);
+    if (!photo && item?.orderCode) photo = findPhotoByCode(item.orderCode, item);
+    if (photo) photo = representativeById.get(photo.id) || photo;
 
     const row = touchPerson(photo?.taken_by);
     row.complaints += 1;
+    row.items.push(item);
     row.complaintAmount += moneyForStatus(item);
+    if (item.amount == null) row.missingAmountCount++;
     if (item?.status === COMPLAINT_STATUSES.refutado_aceptado) {
       // Queja falsa: no juega en contra de quien sacó la foto.
       row.refutadoAceptado += 1;
       row.recoveredAmount += moneyForStatus(item);
+      if(item.amount == null) row.missingRecoveredCount++;
     } else if (item?.status === COMPLAINT_STATUSES.no_refutable) {
       // Pérdida sin refutar: es la que sirve para medidas disciplinarias.
       row.noRefutable += 1;
     }
+    if (item.status === COMPLAINT_STATUSES.refutado_rechazado) row.rejected++;
+    if (item.status === COMPLAINT_STATUSES.refutado) row.inProgress++;
+    if (item.status === COMPLAINT_STATUSES.queja) row.pending++;
 
     const hour = complaintHour(item);
     if (hour == null) complaintsWithoutHour += 1;
@@ -170,6 +172,7 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
     noRefutable: 0,
     complaintAmount: 0,
     recoveredAmount: 0,
+    missingAmountCount: 0, missingRecoveredCount: 0,
     people: 0,
     unassignedComplaints: people.get(personKey(NO_PERSON))?.complaints || 0,
   };
@@ -181,16 +184,20 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
     totals.noRefutable += row.noRefutable;
     totals.complaintAmount += row.complaintAmount;
     totals.recoveredAmount += row.recoveredAmount;
+    totals.missingAmountCount += row.missingAmountCount;
+    totals.missingRecoveredCount += row.missingRecoveredCount;
     if (row.key !== personKey(NO_PERSON)) totals.people += 1;
     return {
       ...row,
       photoSharePct: null,
       complaintPct: complaintRate(row.orders, row.complaints),
+      adjustedComplaintPct: complaintRate(row.orders, row.complaints - row.refutadoAceptado),
       isUnassigned: row.key === personKey(NO_PERSON),
     };
   });
   for (const row of rows) row.photoSharePct = ratioPct(row.photos, totals.photos);
   totals.complaintPct = complaintRate(totals.orders, totals.complaints);
+  totals.adjustedComplaintPct = complaintRate(totals.orders, totals.complaints - totals.refutadoAceptado);
 
   const totalHourOrders = hourly.reduce((sum, entry) => sum + entry.orders, 0);
   const totalHourComplaints = hourly.reduce((sum, entry) => sum + entry.complaints, 0) + complaintsWithoutHour;
@@ -214,13 +221,13 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
     });
   }
 
-  return { people: rows, hourly: hourlyRows, totals, complaintsWithoutHour };
+  return { people: rows, hourly: hourlyRows, totals, complaintsWithoutHour, attributionWarnings };
 }
 
 
 export function buildStaffCsv(report) {
   const lines = [];
-  lines.push('persona,fotos,pedidos,porcentaje_fotos,quejas,porcentaje_quejas,refutadas_aceptadas,no_refutables,monto_quejas,monto_recuperado');
+  lines.push('persona,capturas,pedidos_unicos,porcentaje_fotos,quejas,porcentaje_quejas,refutadas_aceptadas,no_refutables,monto_quejas,monto_recuperado,porcentaje_sin_aceptadas,rechazadas,pendientes,en_disputa,montos_faltantes,recuperados_sin_monto');
   for (const row of report?.people || []) {
     lines.push([
       csvEscape(row.name),
@@ -233,6 +240,7 @@ export function buildStaffCsv(report) {
       row.noRefutable,
       row.complaintAmount,
       row.recoveredAmount,
+      csvPct(row.adjustedComplaintPct), row.rejected, row.pending, row.inProgress, row.missingAmountCount, row.missingRecoveredCount,
     ].join(','));
   }
   lines.push('');

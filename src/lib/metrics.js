@@ -49,6 +49,7 @@ export function emptyStore() {
     refutadoDays: emptyRefutadoDays(),
     updatedAt: null,
     days: {},
+    photographerAliases: {},
   };
 }
 
@@ -69,6 +70,7 @@ export function parseStore(raw) {
   store.refutadoDays = normalizeRefutadoDays(raw.refutadoDays);
   store.updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : null;
   store.version = 1;
+  store.photographerAliases = normalizePhotographerAliases(raw.photographerAliases);
   store.days = {};
 
   const days = raw.days && typeof raw.days === 'object' ? raw.days : {};
@@ -87,15 +89,49 @@ export function parseStore(raw) {
 }
 
 export function normalizeDayStats(row = {}) {
-  return {
+  const stats = {
     orders: toCount(row.orders),
     complaints: toCount(row.complaints),
     awt: toCount(row.awt),
   };
+  if (row.reported && typeof row.reported === 'object') {
+    stats.reported = Object.fromEntries(['orders', 'complaints', 'awt'].map(key => [key, row.reported[key] === true ? true : row.reported[key] === false ? false : null]));
+    stats.sources = Object.fromEntries(['orders', 'complaints', 'awt'].map(key => [key, String(row.sources?.[key] || '')]));
+  }
+  return stats;
+}
+
+export function normalizePhotographerAliases(raw = {}) {
+  const aliases = {};
+  for (const [from, to] of Object.entries(raw || {})) {
+    const key = from.trim().replace(/\s+/g, ' ').toLowerCase();
+    const label = String(to || '').trim().replace(/\s+/g, ' ');
+    if (key && label && key !== label.toLowerCase()) aliases[key] = label;
+  }
+  // Flatten aliases and drop cycles; stored authors are never rewritten.
+  const resolved = {};
+  for (const key of Object.keys(aliases)) {
+    const seen = new Set([key]); let target = aliases[key];
+    while (aliases[target.toLowerCase()]) {
+      if (seen.has(target.toLowerCase())) { target = ''; break; }
+      seen.add(target.toLowerCase()); target = aliases[target.toLowerCase()];
+    }
+    if (target) resolved[key] = target;
+  }
+  return resolved;
+}
+
+export function reportedDayStats(stats, source = 'manual', fields = ['orders', 'complaints', 'awt']) {
+  return { ...stats,
+    reported: { ...stats.reported, ...Object.fromEntries(fields.map(key => [key, true])) },
+    sources: { ...stats.sources, ...Object.fromEntries(fields.map(key => [key, source])) },
+  };
 }
 
 export function isIsoDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 export function argentinaToday(now = new Date()) {
@@ -155,6 +191,7 @@ export function formatDayLabel(dateStr) {
     weekday: 'short',
     day: '2-digit',
     month: 'short',
+    year: 'numeric',
     timeZone: 'UTC',
   });
 }
@@ -168,10 +205,10 @@ export function resolvePeriod(preset, today = argentinaToday(), customFrom = '',
     return { from: addDays(today, -6), to: today };
   }
   if (preset === 'week') {
-    return { from: startOfWeek(today), to: endOfWeek(today) };
+    return { from: startOfWeek(today), to: today };
   }
   if (preset === 'month') {
-    return { from: startOfMonth(today), to: endOfMonth(today) };
+    return { from: startOfMonth(today), to: today };
   }
   if (preset === 'custom') {
     const from = isIsoDate(customFrom) ? customFrom : today;
@@ -181,7 +218,13 @@ export function resolvePeriod(preset, today = argentinaToday(), customFrom = '',
   return { from: today, to: today };
 }
 
-export function previousPeriod(from, to) {
+export function previousPeriod(from, to, preset = '') {
+  if (preset === 'week') return { from: addDays(from, -7), to: addDays(to, -7) };
+  if (preset === 'month') {
+    const prevFrom = startOfMonth(addDays(startOfMonth(from), -1));
+    const candidate = `${prevFrom.slice(0, 7)}-${to.slice(8)}`;
+    return { from: prevFrom, to: candidate > endOfMonth(prevFrom) ? endOfMonth(prevFrom) : candidate };
+  }
   const days = enumerateDays(from, to);
   if (days.length === 0) return { from, to };
   const prevTo = addDays(from, -1);
@@ -272,12 +315,16 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator, history
   const orders = toCount(entered.orders);
   const complaints = toCount(entered.complaints);
   const awt = toCount(entered.awt);
-  const rate = complaintRate(orders, complaints);
+  const missingRate = entered.reported?.orders === false || entered.reported?.complaints === false;
+  const missingAwt = entered.reported?.orders === false || entered.reported?.awt === false;
+  const rate = missingRate ? null : complaintRate(orders, complaints);
   const complaintAmount = Number(history.complaintAmount) || 0;
   const recoveredAmount = Number(history.recoveredAmount) || 0;
   const undisputedAmount = Number(history.undisputedAmount) || 0;
   const inProgressAmount = Number(history.inProgressAmount) || 0;
   const confirmedLostAmount = Number(history.confirmedLostAmount) || 0;
+  const pendingAmount = Number(history.pendingAmount) || 0;
+  const finalLostAmount = Number(history.finalLostAmount) || 0;
   const lostAmount = confirmedLostAmount + undisputedAmount;
 
   return {
@@ -298,8 +345,16 @@ export function resolveDayAggregator(store, photoFlags, day, aggregator, history
     inProgressAmount,
     disputedAmount: inProgressAmount,
     confirmedLostAmount,
+    pendingAmount,
+    finalLostAmount,
+    missingMoney: history.missingMoney || {},
+    missingAmountCount: toCount(history.missingAmountCount),
+    historyCount: toCount(history.queja) + toCount(history.refutado) + toCount(history.refutadoAceptado) + toCount(history.refutadoRechazado) + toCount(history.noRefutable),
+    loadState: !store?.days?.[day]?.[aggregator] ? 'missing' : !entered.reported || Object.values(entered.reported).some(value=>value===null) ? 'legacy' :
+      entered.reported.orders && entered.reported.complaints && (aggregator !== AWT_AGGREGATOR || entered.reported.awt) ? 'complete' : 'partial',
+    missingRate, missingAwt,
     complaintPct: rate,
-    awtPct: complaintRate(orders, awt),
+    awtPct: missingAwt ? null : complaintRate(orders, awt),
     recoveredPctOfAmount: ratioPct(recoveredAmount, complaintAmount),
   };
 }
@@ -329,14 +384,18 @@ export function summarizeRange(store, photoFlags, from, to, historyFlags = {}) {
     .filter(hasResolution);
   const overallRows = aggregators.flatMap((item) => item.rows);
   const overall = rollupRows('all', [...overallRows, ...extraRows]);
+  const awtRow = aggregators.find(row => row.id === AWT_AGGREGATOR);
+  overall.awtPct = awtRow.awtPct;
   const daily = days.map((day) => {
     const rows = METRIC_AGGREGATORS.map((aggregator) =>
       resolveDayAggregator(store, photoFlags, day, aggregator, historyFlags),
     );
     const extra = resolveDayAggregator(store, photoFlags, day, 'sin_agregador', historyFlags);
+    const combined = rollupRows(day, hasResolution(extra) ? [...rows, extra] : rows);
+    combined.awtPct = rows.find(row => row.aggregator === AWT_AGGREGATOR).awtPct;
     return {
       day,
-      ...rollupRows(day, hasResolution(extra) ? [...rows, extra] : rows),
+      ...combined,
       aggregators: rows,
     };
   });
@@ -375,7 +434,7 @@ export function upsertDayStats(store, day, aggregator, stats) {
   const empty = normalized.orders === 0 && normalized.complaints === 0 && normalized.awt === 0;
 
   if (!next.days[day]) next.days[day] = {};
-  if (empty) delete next.days[day][aggregator];
+  if (empty && !Object.values(normalized.reported || {}).some(value => value !== false)) delete next.days[day][aggregator];
   else next.days[day][aggregator] = normalized;
   if (Object.keys(next.days[day]).length === 0) delete next.days[day];
   return next;
@@ -445,8 +504,13 @@ function rollupRows(id, rows) {
     inProgressAmount,
     disputedAmount: inProgressAmount,
     confirmedLostAmount,
-    complaintPct: complaintRate(orders, complaints),
-    awtPct: complaintRate(orders, awt),
+    pendingAmount: rows.reduce((sum, row) => sum + (Number(row.pendingAmount) || 0), 0),
+    finalLostAmount: rows.reduce((sum, row) => sum + (Number(row.finalLostAmount) || 0), 0),
+    missingMoney: Object.fromEntries(['complaintAmount','recoveredAmount','inProgressAmount','pendingAmount','finalLostAmount','lostAmount'].map(key => [key, rows.reduce((sum,row) => sum + (row.missingMoney?.[key] || 0),0)])),
+    missingAmountCount: rows.reduce((sum, row) => sum + toCount(row.missingAmountCount), 0),
+    historyCount: rows.reduce((sum, row) => sum + toCount(row.historyCount), 0),
+    complaintPct: rows.some(row=>row.missingRate) ? null : complaintRate(orders, complaints),
+    awtPct: rows.some(row=>row.missingAwt) ? null : complaintRate(orders, awt),
     recoveredPctOfAmount: ratioPct(recoveredAmount, complaintAmount),
   };
 }
@@ -461,3 +525,5 @@ function toCount(value) {
   if (!Number.isFinite(number) || number < 0) return 0;
   return Math.round(number);
 }
+
+export function formatKnownMoney(value, missing = 0) { return missing && !Number(value) ? "Sin montos conocidos" : formatMoney(value) + (missing ? " (parcial)" : ""); }

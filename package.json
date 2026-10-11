@@ -1,15 +1,15 @@
 {
   "name": "foto-app",
   "private": true,
-  "version": "1.9.0",
+  "version": "1.11.0",
   "type": "module",
-
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test src/lib/*.test.js"
+    "test": "node --test src/lib/*.test.js",
+    "test:database": "node tests/database/run-isolated.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
@@ -20,6 +20,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

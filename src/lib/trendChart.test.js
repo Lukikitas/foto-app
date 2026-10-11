@@ -94,7 +94,7 @@ test('money SVG stacks recovered, dispute and lost with fixed colors', () => {
   const svg = buildTrendChartSvg(series, { palette: 'print', view: 'money' });
 
   assert.ok(svg.includes('$ recuperado'));
-  assert.ok(svg.includes('$ perdido'));
+  assert.ok(svg.includes('Pérdida confirmada'));
   assert.ok(svg.includes(TREND_PALETTES.print.recovered));
   assert.ok(!svg.includes('var(--'));
 });
@@ -114,7 +114,7 @@ test('trend CSV lists every day with raw values', () => {
   const series = buildTrendSeries(store, history, { from: '2026-09-20', to: '2026-09-21' });
   const csv = buildTrendCsv(series);
   const lines = csv.trim().split('\n');
-  assert.equal(lines[0], 'dia,pedidos,quejas,porcentaje_quejas,awt,porcentaje_awt,monto_quejas,monto_recuperado,monto_en_disputa,monto_perdido');
+  assert.equal(lines[0], 'dia,pedidos,quejas,porcentaje_quejas,awt,porcentaje_awt,monto_quejas,monto_recuperado,monto_en_disputa,total_no_recuperado,pendiente_refutar,perdida_confirmada,sin_monto');
   assert.equal(lines.length, 3);
   assert.ok(lines[1].startsWith('2026-09-20,180,7,'));
   assert.ok(lines[2].startsWith('2026-09-21,100,1,'));

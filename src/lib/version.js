@@ -1,18 +1,8 @@
 import packageInfo from '../../package.json';
 export const APP_VERSION = packageInfo.version.replace(/\.0$/, '');
-// Novedades que muestra Ajustes → «Ver novedades». Al subir de versión menor
-// se podan los grupos anteriores (convención desde v1.7): el título del modal
-// es «Novedades de la versión {APP_VERSION}», así que solo debe listar las de
-// esta versión.
 export const RELEASE_GROUPS = [
-  {
-    title: 'Refutación rechazada con motivo',
-    notes: [
-      'Marcar «Ref. rechazado» ahora pide el motivo: modal con presets (Calidad de la comida, Ticket ilegible, Foto incompleta, Queja real) más comentario opcional. Vale para una queja, para la selección masiva y desde «Editar datos…» en lote; el motivo se guarda en el historial y se limpia si el estado cambia.',
-      'El motivo del rechazo se muestra en la fila de Reclamos e Historial, en Métricas → Quejas, en el anexo del PDF y en las exportaciones CSV/Excel (columna motivo_rechazo, junto a motivo_no_refutable).',
-      'Métricas suma dos bloques nuevos: «Top motivos de refutación rechazada» y «Top motivos de no refutables», con cantidad, % del estado, $ perdido, barra proporcional y comentarios expandibles; el dashboard muestra un mini top 3 de cada uno.',
-      'Exportar informe en PDF ahora es un armador: secciones por plantilla (Gerencial, Operativo, Disciplinario/control, Completo o Personalizado), título y nota propios, anexo filtrado por estado y columnas, vista previa en vivo y la última configuración guardada.',
-    ],
-  },
+ {title:'Métricas más completas',notes:['AWT de PedidosYa con sus pedidos como base y objetivos compartidos. Comparaciones de períodos transcurridos y diferencias en puntos porcentuales.','Calidad de datos por día y agregador: cargas parciales, ceros explícitos, origen y diferencias entre quejas informadas y casos del historial.','Dinero separado en recuperado, en disputa, pendiente de refutar y pérdida confirmada. Total no recuperado conserva el cálculo anterior; los vencimientos no cambian estados.','Capturas y pedidos únicos, atribución por segunda captura, dos tasas con denominadores y asociación confirmada de variantes de nombres sin alterar los autores originales.','Cargas con borradores seguros, Copiar ayer sin guardar, detalle de quejas, informes plegables y exportaciones con fuentes y advertencias.']},
+ {title:'Coherencia visual',notes:['Diálogos y formularios integrados con ambos temas, navegación por teclado, control de foco y bloqueo durante operaciones críticas.','Mejor lectura de indicadores y tablas en celular.']},
+ {title:'Almacenamiento y fotos',notes:['Panel de Ajustes con espacio remoto, pedidos, archivos, tickets y otros objetos; fotos protegidas, elegibles y registros sin imagen.','Limpieza automática configurable y limpieza manual por calendario con fecha argentina incluida. Solo se eliminan imágenes; los pedidos y las métricas se conservan.','Las evidencias de reclamos e importaciones quedan protegidas. Las confirmaciones revisan el conteo antes de borrar.','Corrección de la actualización de Métricas después de guardar una importación Excel en Historial. Requiere activar las migraciones y funciones descritas en docs/v1.11.md.']}
 ];
 export const RELEASE_NOTES = RELEASE_GROUPS.flatMap(group => group.notes);

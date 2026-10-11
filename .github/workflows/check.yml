@@ -1,8 +1,8 @@
-name: Validate version 1.9
+name: Validate version 1.11
 on:
   pull_request:
   push:
-    branches: ['codex/**']
+    branches: ['codex/**', 'restore-e44b86f']
 permissions:
   contents: read
 jobs:
@@ -16,6 +16,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run test:database
       - run: npm run lint
       - run: npm run build
         env:
@@ -43,4 +44,10 @@ jobs:
       - run: psql -v ON_ERROR_STOP=1 -f tests/database/bootstrap.sql
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260927090000_reviewed_complaint_imports.sql
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260927090000_reviewed_complaint_imports.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008090000_photo_cleanup_settings.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008090000_photo_cleanup_settings.sql
       - run: psql -v ON_ERROR_STOP=1 -f tests/database/reviewed-imports.sql
+
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011090000_storage_usage.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011090000_storage_usage.sql
+      - run: psql -v ON_ERROR_STOP=1 -f tests/database/storage-usage.sql

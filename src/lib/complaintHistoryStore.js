@@ -17,6 +17,8 @@ import {
 
 const CACHE_KEY = 'foto-app-complaints-history';
 let memoryStore = null;
+let historyReadStatus = {cached:false,readAt:null};
+export function complaintHistoryReadStatus(){return historyReadStatus;}
 let loadPromise = null;
 const listeners = new Set();
 function remember(store) {
@@ -41,6 +43,7 @@ export async function loadComplaintHistory({ force = false, strict = false } = {
   if (loadPromise) return loadPromise;
   loadPromise = readDocument('history', emptyHistory)
     .then(doc => {
+      historyReadStatus = {cached:false,readAt:new Date().toISOString()};
       if (memoryStore && typeof doc?.revision === 'number' && doc.revision === lastRevision) {
         return memoryStore;
       }
@@ -51,7 +54,7 @@ export async function loadComplaintHistory({ force = false, strict = false } = {
       if (memoryStore && memoryStore.updatedAt === parsed.updatedAt) return memoryStore;
       return remember(parsed);
     })
-    .catch(error => { if (strict) throw error; if (memoryStore) return memoryStore; throw error; })
+    .catch(error => { historyReadStatus = {cached:true,readAt:new Date().toISOString()}; if (strict) throw error; if (memoryStore) return memoryStore; throw error; })
     .finally(() => { loadPromise = null; });
   return loadPromise;
 }
@@ -62,6 +65,7 @@ export async function mutateComplaintHistory(mutator) {
     next.updatedAt = new Date().toISOString();
     return result;
   });
+  historyReadStatus = {cached:false,readAt:new Date().toISOString()};
   remember(result?.store || result);
   return result;
 }

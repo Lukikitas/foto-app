@@ -67,9 +67,13 @@ export default function PhotoCard({
   const isOrder = isOrderPhoto(photo);
   const isUnidentified = isUnidentifiedOrder(photo);
   const isImage = isImagePhoto(photo);
+  // La retención de Ajustes borra el archivo pero deja la fila: sin URL no hay
+  // imagen que mostrar ni archivo que abrir/descargar.
+  const hasFile = Boolean(photo.public_url);
   const extension = getFileExtension(photo).toUpperCase() || 'FILE';
   const longPress = useLongPress(() => onLongPressSelect?.(photo.id));
   const imagePress = longPress.bind(() => {
+    if (!hasFile) return;
     if (isImage) setLightbox(true);
     else window.open(photo.public_url, '_blank', 'noopener,noreferrer');
   });
@@ -224,10 +228,15 @@ export default function PhotoCard({
           <button
             type="button"
             className={`photo-card__image-btn${!isImage ? ' photo-card__image-btn--file' : ''}`}
-            aria-label={isImage ? `Ver ${title} en grande` : `Abrir ${title}`}
+            aria-label={hasFile ? (isImage ? `Ver ${title} en grande` : `Abrir ${title}`) : `Foto eliminada de ${title}`}
             {...imagePress}
           >
-            {isImage ? (
+            {!hasFile ? (
+              <span className="photo-card__removed">
+                Foto eliminada
+                <small>Pedido conservado</small>
+              </span>
+            ) : isImage ? (
               <img
                 src={photo.public_url}
                 alt={title}
@@ -341,6 +350,7 @@ export default function PhotoCard({
               <button
                 type="button"
                 className="btn btn--small btn--ghost"
+                disabled={!hasFile}
                 onClick={() => {
                   if (isImage) setLightbox(true);
                   else window.open(photo.public_url, '_blank', 'noopener,noreferrer');
@@ -360,6 +370,7 @@ export default function PhotoCard({
                 type="button"
                 className="btn btn--small btn--ghost"
                 onClick={handleDownload}
+                disabled={!hasFile}
               >
                 Descargar
               </button>
@@ -386,7 +397,7 @@ export default function PhotoCard({
                   Completar código
                 </button>
               )}
-              <button
+              {!isOrder && <button
                 type="button"
                 className="btn btn--small btn--danger"
                 onClick={() => {
@@ -396,13 +407,13 @@ export default function PhotoCard({
                 disabled={loading}
               >
                 Borrar
-              </button>
+              </button>}
             </div>
           )}
         </div>
       </article>
 
-      {lightbox && isImage && (
+      {lightbox && isImage && hasFile && (
         <PhotoLightbox
           photo={photo}
           onClose={() => setLightbox(false)}

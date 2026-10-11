@@ -1,8 +1,7 @@
 import RappiExcelImport from './RappiExcelImport';
 import PeyaRefundsImport from './PeyaRefundsImport';
-import { subscribePeyaImport } from '../lib/peyaImportService';
 import PeyaExcelImport from './PeyaExcelImport';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
 import {
   AWT_AGGREGATOR,
@@ -11,33 +10,37 @@ import {
   argentinaToday,
   complaintRate,
   copyDayStats,
-  emptyDayStats,
   formatDayLabel,
   formatPct,
   isOutOfTarget,
   upsertDayStats,
 } from '../lib/metrics';
+import { validateMetricFields } from '../lib/metricsQuality';
 import MetricsListPaste from './MetricsListPaste';
 
 function toField(value) {
-  return value == null || value === 0 ? '' : String(value);
+  return value == null ? '' : String(value);
 }
 
-function fieldsFromStats(stats = emptyDayStats()) {
+function fieldsFromStats(stats = {orders:null,complaints:null,awt:null}) {
   return {
-    orders: toField(stats.orders),
-    complaints: toField(stats.complaints),
-    awt: toField(stats.awt),
+    orders: stats.reported?.orders === false ? '' : toField(stats.orders),
+    complaints: stats.reported?.complaints === false ? '' : toField(stats.complaints),
+    awt: stats.reported?.awt === false ? '' : toField(stats.awt),
   };
 }
 
-export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
+export default function MetricsEntry({ store, saving, onSave, onImportBusy, onDirty, onManage }) {
   const today = argentinaToday();
   const [day, setDay] = useState(today);
+  const draftBases = useRef({});
   const [drafts, setDrafts] = useState({});
-  useEffect(() => subscribePeyaImport(result => {
-    if (result.metricsSaved) setDrafts({});
-  }), []);
+  const [pasteDirty, setPasteDirty] = useState(false);
+  const [mode, setMode] = useState('excel');
+  const [validation, setValidation] = useState('');
+  const [copyNotice, setCopyNotice] = useState('');
+  useEffect(()=> {onDirty?.(Object.keys(drafts).length>0 || pasteDirty);},[drafts,pasteDirty,onDirty]);
+  useEffect(()=>{const handler=event=>{if(Object.keys(drafts).length){event.preventDefault();event.returnValue='';}}; window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler);},[drafts]);
 
   const fields = drafts[day] || Object.fromEntries(
     METRIC_AGGREGATORS.map((id) => [id, fieldsFromStats(store.days?.[day]?.[id])]),
@@ -49,6 +52,7 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
   );
 
   function updateField(aggregator, key, value) {
+    draftBases.current[day] ||= structuredClone(store);
     setDrafts((current) => {
       const row = current[day] || Object.fromEntries(
         METRIC_AGGREGATORS.map((id) => [id, fieldsFromStats(store.days?.[day]?.[id])]),
@@ -63,18 +67,25 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
     });
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    let next = store;
+    const error=validateMetricFields(day,fields,today); setValidation(error); if(error)return;
+    let next = draftBases.current[day] || store;
     for (const aggregator of METRIC_AGGREGATORS) {
       const row = fields[aggregator];
+      const original = (draftBases.current[day] || store).days?.[day]?.[aggregator];
+      const prior = fieldsFromStats(original);
+      const reported = Object.fromEntries(['orders','complaints','awt'].map(key=>[key, row[key] === prior[key] && original ? original.reported?.[key] ?? null : row[key] !== '' && (key !== 'awt' || aggregator === AWT_AGGREGATOR)]));
+      const sources = Object.fromEntries(['orders','complaints','awt'].map(key=>[key, row[key] === prior[key] && original ? original.sources?.[key] || '' : reported[key] ? 'manual' : '']));
       next = upsertDayStats(next, day, aggregator, {
         orders: row.orders,
         complaints: row.complaints,
-        awt: aggregator === AWT_AGGREGATOR ? row.awt : 0,
+        awt: aggregator === AWT_AGGREGATOR ? row.awt : original?.awt ?? 0,
+        reported, sources,
       });
     }
-    onSave(next, `Guardado ${formatDayLabel(day)}.`);
+    if (!await onSave(next, `Guardado ${formatDayLabel(day)}.`)) return;
+    delete draftBases.current[day];
     setDrafts((current) => {
       const nextDrafts = { ...current };
       delete nextDrafts[day];
@@ -85,21 +96,20 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
   function handleCopyYesterday() {
     const source = addDays(day, -1);
     if (!store.days?.[source]) return;
-    setDrafts((current) => {
-      const nextDrafts = { ...current };
-      delete nextDrafts[day];
-      return nextDrafts;
-    });
-    onSave(copyDayStats(store, source, day), `Copiado ${formatDayLabel(source)} a ${formatDayLabel(day)}.`);
+    draftBases.current[day] ||= structuredClone(store);
+    const copy=copyDayStats(store,source,day);
+    setDrafts(current=>({...current,[day]:Object.fromEntries(METRIC_AGGREGATORS.map(id=>[id,fieldsFromStats(copy.days[day]?.[id])]))}));
+    setCopyNotice('Valores de '+formatDayLabel(source)+' copiados al formulario. Revisá los cambios y guardá el día.');
   }
 
   return (
     <div className="metrics-entry-wrap">
-      <PeyaExcelImport disabled={saving} onBusy={onImportBusy} />
-      <RappiExcelImport disabled={saving} onBusy={onImportBusy} />
-      <PeyaRefundsImport disabled={saving} onBusy={onImportBusy} />
-      <MetricsListPaste store={store} saving={saving} onSave={onSave} />
-      <form className="metrics-entry" onSubmit={handleSubmit}>
+      <div className="metrics-entry-selector" role="group" aria-label="Método de carga">{[['excel','Importar Excel'],['day','Cargar un día'],['paste','Pegar varios días'],['refunds','Importar reintegros']].map(([id,label])=><button key={id} className={'btn btn--ghost'+(mode===id?' is-active':'')} onClick={()=>setMode(id)} disabled={saving} aria-pressed={mode===id}>{label}</button>)}</div>
+      {mode==='excel' && <><p className="metrics-entry__note">Seleccionar archivo → revisar cambios → preparar lista → Gestionar → guardar en Historial.</p><PeyaExcelImport disabled={saving} onBusy={onImportBusy} />
+      <RappiExcelImport disabled={saving} onBusy={onImportBusy} /><button className="btn btn--primary" onClick={onManage}>Ir a revisar la lista en Gestionar</button></>}
+      {mode==='refunds' && <PeyaRefundsImport disabled={saving} onBusy={onImportBusy} />}
+      <div hidden={mode!=='paste'}><MetricsListPaste store={store} saving={saving} onSave={onSave} onDirty={setPasteDirty} /></div>
+      <div hidden={mode!=='day'}><form className="metrics-entry" onSubmit={handleSubmit}>
         <div className="metrics-entry__top">
           <label className="metrics-entry__date">
             Día
@@ -222,6 +232,8 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
           })}
         </div>
 
+        {validation && <p className="message message--error" role="alert">{validation}</p>}
+        {copyNotice && <p className="message message--success" role="status">{copyNotice}</p>}
         <div className="metrics-entry__actions">
           <button type="submit" className="btn btn--primary" disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar día'}
@@ -231,7 +243,7 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy }) {
           Acá se cargan pedidos, quejas y AWT del día. Los montos y el estado de cada queja salen
           del Excel de reclamos, en la pestaña Quejas.
         </p>
-      </form>
+      </form></div>
     </div>
   );
 }

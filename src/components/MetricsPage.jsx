@@ -2,12 +2,15 @@ import { subscribePeyaImport } from '../lib/peyaImportService';
 import { useEffect, useMemo, useState } from 'react';
 import {
   cachedComplaintHistory,
-  clearComplaintHistory,
+  complaintHistoryReadStatus,
   deleteHistoryItemById,
   loadComplaintHistory,
   setHistoryPhoto,
   subscribeComplaintHistory,
 } from '../lib/complaintHistoryStore';
+import MetricsQualityPanel from './MetricsQualityPanel';
+import { metricsReadStatus } from '../lib/metricsStore';
+import { confirmAction } from '../lib/confirmAction';
 import { argentinaToday, emptyStore, METRIC_PAGE_TABS, resolvePeriod } from '../lib/metrics';
 import {
   getMetricsView,
@@ -65,7 +68,7 @@ function useMetricsPeriod() {
   };
 }
 
-export default function MetricsPage() {
+export default function MetricsPage({ onManage, onDirtyChange, refreshKey = 0 }) {
   const [view, setView] = useState(getMetricsView);
   const [store, setStore] = useState(emptyStore);
   const [history, setHistory] = useState(cachedComplaintHistory);
@@ -74,15 +77,34 @@ export default function MetricsPage() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [focusDay, setFocusDay] = useState('');
+  const [caseStatus, setCaseStatus] = useState('all');
+  const [dirty, setDirty] = useState(false);
+  const [readStatus, setReadStatus] = useState({});
   const [aggregator, setAggregator] = useState('all');
   const periodState = useMetricsPeriod();
   const range = focusDay ? { from: focusDay, to: focusDay } : periodState.period;
   const hasData = useMemo(() => Object.keys(store.days || {}).length > 0, [store]);
 
+  useEffect(() => { onDirtyChange?.(dirty); return () => onDirtyChange?.(false); }, [dirty,onDirtyChange]);
   useEffect(() => subscribeComplaintHistory(setHistory), []);
-  useEffect(() => subscribePeyaImport(result => {
-    if (result.metricsSaved) setStore(result.metrics);
-  }), []);
+  useEffect(() => {
+    let cancelled = false;
+    const off = subscribePeyaImport(result => {
+      if (!result?.metricsSaved) return;
+      if (result.metrics) {
+        setStore(result.metrics);
+        return;
+      }
+      // An already-committed import can lack a snapshot. Keep the current
+      // store while reading the saved metrics instead of rendering undefined.
+      loadMetricsStore({ strict: true }).then(next => {
+        if (!cancelled) setStore(next);
+      }).catch(() => {
+        if (!cancelled) setError('Los datos se guardaron; no se pudo actualizar la vista de métricas. Volvé a intentar desde Métricas.');
+      });
+    });
+    return () => { cancelled = true; off(); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,8 +113,8 @@ export default function MetricsPage() {
       setError(null);
       try {
         const nextStore = await loadMetricsStore();
-        await loadComplaintHistory();
-        if (!cancelled) setStore(nextStore);
+        await loadComplaintHistory({force:true});
+        if (!cancelled) { setStore(nextStore); setReadStatus(metricsReadStatus()); }
       } catch (err) {
         if (!cancelled) setError(err.message || 'No se pudieron leer las métricas.');
       } finally {
@@ -105,7 +127,16 @@ export default function MetricsPage() {
     };
   }, []);
 
-  function changeView(next) {
+  useEffect(() => {
+    if (!refreshKey) return undefined;
+    let cancelled = false;
+    loadMetricsStore({strict:true}).then(next=>{if(!cancelled){setStore(next);setReadStatus(metricsReadStatus());}}).catch(err=>{if(!cancelled)setError(err.message || 'No se pudieron actualizar los objetivos.');});
+    return ()=>{cancelled=true;};
+  },[refreshKey]);
+
+  async function changeView(next) {
+    if (dirty && next !== view && !await confirmAction('Hay cambios sin guardar. ¿Querés cambiar de sección y descartar el borrador?', {danger:false, title:'Cambios pendientes', confirmLabel:'Salir sin guardar'})) return;
+    setDirty(false);
     setView(next);
     saveMetricsView(next);
     setNotice(null);
@@ -116,10 +147,12 @@ export default function MetricsPage() {
     setError(null);
     try {
       const saved = await saveMetricsStore(next);
-      setStore(saved);
+      setStore(saved); setReadStatus(metricsReadStatus());
       if (message) setNotice(message);
+      return true;
     } catch (err) {
       setError(err.message || 'No se pudieron guardar las métricas.');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -133,8 +166,10 @@ export default function MetricsPage() {
       const next = saved?.store || saved;
       setHistory(next);
       if (message) setNotice(message);
+      return true;
     } catch (err) {
       setError(err.message || 'No se pudo actualizar el historial de quejas.');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -146,8 +181,7 @@ export default function MetricsPage() {
         <div>
           <h2 className="gallery__title">Métricas</h2>
           <p className="metrics__lead">
-            Pedidos y AWT se cargan por día. La plata perdida y recuperada sale de cada queja del
-            Excel.
+            Operación y recuperaciones · consultá los totales, revisá sus fuentes y abrí el detalle.
           </p>
         </div>
         <div className="tab-bar metrics__views metrics__views--tabs" role="tablist" aria-label="Métricas">
@@ -177,6 +211,13 @@ export default function MetricsPage() {
         </p>
       )}
 
+      <div className="metrics-refresh"><span>{readStatus.cached || complaintHistoryReadStatus().cached ? '⚠ Datos de caché; no se pudo consultar el servidor. ' : 'Datos compartidos · '}{store.updatedAt ? 'Actualizados '+new Date(store.updatedAt).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires'}) : 'Sin fecha de actualización'}</span>
+        <button className="btn btn--ghost btn--small" disabled={loading || saving} onClick={async()=>{
+          setSaving(true); setError(null);
+          try { const next=await loadMetricsStore({strict:true}); await loadComplaintHistory({force:true,strict:true}); setStore(next); setReadStatus(metricsReadStatus()); }
+          catch(err){setError(err.message || 'No se pudo actualizar. Se conserva la vista actual.');}
+          finally{setSaving(false);}
+        }}>Actualizar</button></div>
       {loading ? (
         <div className="gallery__state">
           <div className="spinner" aria-hidden="true" />
@@ -196,30 +237,30 @@ export default function MetricsPage() {
                 periodState.applyPreset(id);
                 setFocusDay('');
               }}
-              onCustomFrom={periodState.changeCustomFrom}
-              onCustomTo={periodState.changeCustomTo}
+              onCustomFrom={value=>{periodState.changeCustomFrom(value);setFocusDay('');}}
+              onCustomTo={value=>{periodState.changeCustomTo(value);setFocusDay('');}}
               onAggregator={setAggregator}
               onClearDay={() => setFocusDay('')}
             />
           )}
           {view === 'entry' ? (
-            <MetricsEntry store={store} saving={saving} onSave={persist} onImportBusy={setSaving} />
+            <MetricsEntry store={store} saving={saving} onSave={persist} onImportBusy={setSaving} onDirty={setDirty} onManage={onManage} />
           ) : view === 'staff' ? (
-            <MetricsStaff history={history} range={range} aggregator={aggregator} />
+            <MetricsStaff history={history} range={range} aggregator={aggregator} store={store} onSave={persist} onManage={onManage} />
           ) : view === 'complaints' ? (
             <MetricsComplaintsList
               history={history}
               range={range}
               aggregator={aggregator}
               busy={saving}
+              initialStatus={caseStatus} store={store} onManage={onManage}
               onDelete={(id) => persistHistory(() => deleteHistoryItemById(id), 'Queja borrada.')}
-              onClear={() => persistHistory(() => clearComplaintHistory(), 'Historial de quejas vacío.')}
               onPhoto={(item, photo) => persistHistory(() => setHistoryPhoto(item, photo))}
               onError={setError}
               onNotice={setNotice}
             />
           ) : view === 'report' ? (
-            <MetricsReport history={history} range={range} aggregator={aggregator} store={store} />
+            <MetricsReport history={history} range={range} aggregator={aggregator} store={store} preset={focusDay ? "" : periodState.preset} />
           ) : (
             <MetricsDashboard
               store={store}
@@ -228,11 +269,14 @@ export default function MetricsPage() {
               period={periodState.period}
               focusDay={focusDay}
               aggregator={aggregator}
+              preset={periodState.preset}
+              onCases={status=>{setCaseStatus(status);changeView('complaints');}}
               onChangeView={changeView}
               onFocusDay={setFocusDay}
               onAggregator={setAggregator}
             />
           )}
+          {view !== 'entry' && view !== 'overview' && <MetricsQualityPanel store={store} history={history} range={range} aggregator={aggregator}/>}
         </>
       )}
     </section>

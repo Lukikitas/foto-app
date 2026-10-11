@@ -1,3 +1,5 @@
+import Dialog from './Dialog';
+import { confirmAction } from '../lib/confirmAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, getAggregatorLabel } from '../lib/aggregators';
 import { complaintDay, complaintHistoryId, emptyHistory } from '../lib/complaintHistory';
@@ -262,8 +264,8 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
                 type="button"
                 className="btn btn--ghost btn--small draft-review__btn-discard"
                 disabled={disabled}
-                onClick={() => {
-                  if (window.confirm('¿Descartar esta lista de reclamos? El Historial no se modificara.')) {
+                onClick={async () => {
+                  if (await confirmAction('¿Descartar esta lista de reclamos? El Historial no se modificara.')) {
                     void act(async () => {
                       await discardDraft(draft);
                       onResolved?.();
@@ -679,7 +681,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
 
       {/* MODAL PARA CORREGIR RECLAMO */}
       {editing && (
-        <div className="release-modal" role="dialog" aria-modal="true" aria-labelledby="edit-dialog-title">
+        <Dialog labelledBy="edit-dialog-title" busy={disabled} onClose={() => setEditing(null)}>
           <form
             className="release-modal__dialog draft-review__editor"
             aria-label="Corregir reclamo"
@@ -748,7 +750,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
               </button>
             </div>
           </form>
-        </div>
+        </Dialog>
       )}
 
       {/* LIGHTBOX DE FOTO */}

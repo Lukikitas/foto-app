@@ -53,6 +53,8 @@ export default function TrendCard({
   aggregator = 'all',
   series: seriesProp = null,
   allowExport = true,
+  preset = '',
+  showSummary = true,
 }) {
   const [view, setView] = useState('operation');
   const [busy, setBusy] = useState(false);
@@ -63,9 +65,9 @@ export default function TrendCard({
     () => seriesProp || buildTrendSeries(store, history, {
       from: range?.from || '',
       to: range?.to || '',
-      aggregator,
+      aggregator, preset,
     }),
-    [seriesProp, store, history, range, aggregator],
+    [seriesProp, store, history, range, aggregator, preset],
   );
 
   const svg = useMemo(
@@ -161,7 +163,7 @@ export default function TrendCard({
         </div>
       </header>
 
-      <div className="trend-card__chips">
+      {showSummary && <div className="trend-card__chips">
         <SummaryChip
           label="Pedidos"
           value={formatNumber(totals.orders)}
@@ -176,7 +178,7 @@ export default function TrendCard({
           label="% quejas"
           value={formatPct(totals.complaintPct)}
           hint={hasPrevious
-            ? `objetivo ${formatPct(target)} · ${formatDelta(compared.complaintPct, { pct: true })}`
+            ? `objetivo ${formatPct(target)} · ${formatDelta(compared.complaintPct, { pct: true }).replace('%', ' pp')}`
             : `objetivo ${formatPct(target)}`}
           tone={totals.complaintPct > target ? 'bad' : 'good'}
         />
@@ -187,12 +189,12 @@ export default function TrendCard({
           tone="good"
         />
         <SummaryChip
-          label="$ perdido"
+          label="Total no recuperado"
           value={formatMoney(totals.lostAmount)}
           hint={hasPrevious ? `${formatDelta(compared.lostAmount, { money: true })} vs anterior` : previousHint}
           tone={totals.lostAmount > 0 ? 'bad' : undefined}
         />
-      </div>
+      </div>}
 
       {error ? <p className="message message--error" role="alert">{error}</p> : null}
 

@@ -1,3 +1,4 @@
+import { buildMetricsQuality, translatedReason } from './metricsQuality.js';
 import { getAggregatorLabel } from './aggregators.js';
 import {
   addMoneyToFlags,
@@ -13,13 +14,15 @@ import {
 } from './complaintHistory.js';
 import { formatPct, ratioPct } from './metrics.js';
 
+function knownAmount(row, key) {return !Number(row[key]) && row.missingMoney?.[key] ? 'Sin monto' : row[key] || 0;}
+
 function csvEscape(value) {
   const text = String(value ?? '');
   if (/[",\n;]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
 }
 
-function countStatus(items) {
+function countStatus(items, options = {}) {
   const flags = emptyHistoryFlags();
   flags.count = items.length;
   items.forEach((item) => {
@@ -28,25 +31,25 @@ function countStatus(items) {
     else if (item.status === COMPLAINT_STATUSES.refutado) flags.refutado += 1;
     else if (item.status === COMPLAINT_STATUSES.no_refutable) flags.noRefutable += 1;
     else flags.queja += 1;
-    addMoneyToFlags(flags, item);
+    addMoneyToFlags(flags, item, options);
   });
   flags.recoveredPct = ratioPct(flags.recoveredAmount, flags.complaintAmount);
   return flags;
 }
 
-function groupBy(items, keyFn) {
+function groupBy(items, keyFn, options = {}) {
   const map = new Map();
   items.forEach((item) => {
     const key = keyFn(item) || '';
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(item);
   });
-  return [...map.entries()].map(([key, group]) => ({ key, items: group, ...countStatus(group) }));
+  return [...map.entries()].map(([key, group]) => ({ key, items: group, ...countStatus(group, options) }));
 }
 
-export function comboRanking(items) {
+export function comboRanking(items, options = {}) {
   const informedCount = items.filter((item) => String(item.combo || '').trim()).length;
-  return groupBy(items, (item) => String(item.combo || '').trim() || EMPTY_COMBO_LABEL)
+  return groupBy(items, (item) => String(item.combo || '').trim() || EMPTY_COMBO_LABEL, options)
     .map((row) => ({
       ...row,
       combo: row.key,
@@ -92,10 +95,11 @@ export function reasonRanking(items, { status, presets = [], field }) {
     );
 }
 
-export function buildComplaintReport(store, { from = '', to = '', aggregator = 'all' } = {}) {
+export function buildComplaintReport(store, { from = '', to = '', aggregator = 'all', metrics = null, refutadoDays = metrics?.refutadoDays, today } = {}) {
+  const options = { refutadoDays, today };
   const items = listHistoryItems(store, { from, to, aggregator });
-  const totals = countStatus(items);
-  const aggregators = groupBy(items, (item) => item.aggregator || 'sin_agregador')
+  const totals = countStatus(items, options);
+  const aggregators = groupBy(items, (item) => item.aggregator || 'sin_agregador', options)
     .map((row) => ({
       ...row,
       id: row.key,
@@ -103,11 +107,11 @@ export function buildComplaintReport(store, { from = '', to = '', aggregator = '
     }))
     .sort((left, right) => right.complaintAmount - left.complaintAmount);
 
-  const reasons = groupBy(items, (item) => String(item.reason || '').trim() || 'Sin motivo').sort(
+  const reasons = groupBy(items, (item) => translatedReason(item.reason), options).sort(
     (left, right) => right.count - left.count,
   );
 
-  const days = groupBy(items, (item) => item.day || 'sin-fecha').sort((left, right) =>
+  const days = groupBy(items, (item) => item.day || 'sin-fecha', options).sort((left, right) =>
     String(left.key).localeCompare(String(right.key)),
   );
 
@@ -118,7 +122,10 @@ export function buildComplaintReport(store, { from = '', to = '', aggregator = '
     items,
     totals,
     aggregators,
-    combos: comboRanking(items),
+    combos: comboRanking(items, options),
+    generatedAt: new Date().toISOString(),
+    sources: "Pedidos/quejas/AWT: cargas diarias. Casos, estados y montos: historial. Recuperado según estado aceptado.",
+    warnings: metrics ? buildMetricsQuality(metrics, store, {from,to}, aggregator).warnings : (totals.missingAmountCount ? [totals.missingAmountCount + " casos sin monto; los totales monetarios son parciales"] : []),
     reasons,
     days,
     // Top de motivos por estado «disciplinario» (se agrupan por preset).
@@ -186,14 +193,17 @@ export function buildRegistryCsv(items) {
 }
 
 export function buildReportCsv(report) {
-  const lines = ['seccion,clave,quejas,$ quejas,$ recuperado,$ en disputa,$ perdido,% quejas'];
+  const lines = ['seccion,clave,quejas,$ quejas,$ recuperado,$ en disputa,total_no_recuperado,participacion_quejas,pendiente_refutar,perdida_confirmada,casos_sin_monto'];
   const push = (section, key, row, share) => {
     lines.push(
-      [section, key, row.count, row.complaintAmount, row.recoveredAmount, row.inProgressAmount || 0, row.lostAmount, share ?? '']
+      [section, key, row.count, row.complaintAmount, row.recoveredAmount, row.inProgressAmount || 0, row.lostAmount, share ?? '', row.pendingAmount, row.finalLostAmount, row.missingAmountCount]
         .map(csvEscape)
         .join(','),
     );
   };
+  lines.push(['fuentes',report.sources].map(csvEscape).join(','));
+  lines.push(['generado',report.generatedAt].map(csvEscape).join(','));
+  report.warnings?.forEach(warning=>lines.push(['advertencia',warning].map(csvEscape).join(',')));
   push('total', `${report.from} a ${report.to}`, report.totals);
   report.aggregators.forEach((row) => push('agregador', row.label, row));
   report.combos.forEach((row) => push('combo', row.combo, row, formatPct(row.sharePct)));
@@ -204,7 +214,7 @@ export function buildReportCsv(report) {
 
 import { CELL_STYLES, colToLetter, downloadBlob, generateXlsxBlob } from './xlsxExport.js';
 
-export function buildRegistryWorkbook(items) {
+export function buildRegistryWorkbook(items, context = null) {
   const extras = extraFieldKeys(items);
   const header = [
     { value: 'Código Pedido', style: CELL_STYLES.HEADER },
@@ -233,7 +243,7 @@ export function buildRegistryWorkbook(items) {
         { value: item.combo || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: item.reason || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: item.comment || '—', style: CELL_STYLES.TEXT_BORDER },
-        { value: Number(item.amount) || 0, style: CELL_STYLES.CURRENCY },
+        { value: item.amount == null ? 'Sin monto' : Number(item.amount), style: CELL_STYLES.CURRENCY },
         { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.TEXT_BORDER },
         { value: item.unrefutableReason || '', style: CELL_STYLES.TEXT_BORDER },
         { value: item.rejectionReason || '', style: CELL_STYLES.TEXT_BORDER },
@@ -250,6 +260,7 @@ export function buildRegistryWorkbook(items) {
         rows,
         columnWidths: [16, 12, 10, 15, 24, 24, 30, 14, 16, 22, 22, 8, ...extras.map(() => 16)],
       },
+      ...(context ? [{name:'Contexto',columnWidths:[24,85],rows:Object.entries({...context,Generación:new Date().toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires'}),Fuente:'Casos del historial; estados registrados',Advertencias:items.filter(item=>item.amount==null).length+' casos sin monto. El listado no representa los totales diarios.'}).map(([key,value])=>({cells:[{value:key,style:CELL_STYLES.TEXT_BORDER},{value:String(value),style:CELL_STYLES.TEXT_BORDER}]}))}] : []),
     ],
   };
 }
@@ -264,6 +275,11 @@ export function buildReportWorkbook(report) {
 
   // 1. Hoja Resumen
   const resumenRows = [
+    {cells:[{value:report.sources,style:CELL_STYLES.SUBTITLE}]},
+    ...((report.warnings||[]).map(warning=>({cells:[{value:"Advertencia: "+warning,style:CELL_STYLES.SUBTITLE}]}))),
+    {cells:[{value:"Recuperado = estado aceptado; En disputa = refutado; Pendiente = abierta dentro del plazo; Pérdida confirmada = rechazada, no refutable o vencida. Total no recuperado conserva rechazadas y sin refutar; excluye en disputa. Montos conocidos, parciales si faltan importes.",style:CELL_STYLES.SUBTITLE}]},
+    {cells:[{value:"Pendiente de refutar",style:CELL_STYLES.TEXT_BORDER},{value:totals.pendingAmount,style:CELL_STYLES.CURRENCY}]},
+    {cells:[{value:"Pérdida confirmada",style:CELL_STYLES.TEXT_BORDER},{value:totals.finalLostAmount,style:CELL_STYLES.CURRENCY}]},
     {
       height: 28,
       cells: [{ value: 'DELIVERY LA PLATA — INFORME EJECUTIVO DE RECLAMOS', style: CELL_STYLES.TITLE }],
@@ -286,7 +302,7 @@ export function buildReportWorkbook(report) {
         { value: '$ QUEJAS (TOTAL)', style: CELL_STYLES.KPI_TITLE },
         { value: '$ RECUPERADO', style: CELL_STYLES.KPI_TITLE },
         { value: 'EN DISPUTA', style: CELL_STYLES.KPI_TITLE },
-        { value: '$ PERDIDO (NETO)', style: CELL_STYLES.KPI_TITLE },
+        { value: 'TOTAL NO RECUPERADO', style: CELL_STYLES.KPI_TITLE },
         { value: '% RECUPERO', style: CELL_STYLES.KPI_TITLE },
       ],
     },
@@ -295,10 +311,10 @@ export function buildReportWorkbook(report) {
       height: 26,
       cells: [
         { value: totals.count || 0, style: CELL_STYLES.KPI_VALUE },
-        { value: totals.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: totals.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: totals.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: totals.lostAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(totals, "complaintAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(totals, "recoveredAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(totals, "inProgressAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(totals, "lostAmount"), style: CELL_STYLES.CURRENCY },
         { value: (totals.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
       ],
     },
@@ -315,7 +331,7 @@ export function buildReportWorkbook(report) {
     },
     {
       cells: [
-        { value: 'Sin disputar (pendiente)', style: CELL_STYLES.TEXT_BORDER },
+        { value: 'Sin refutar (cálculo anterior, incluye no refutables)', style: CELL_STYLES.TEXT_BORDER },
         { value: totals.undisputedAmount || 0, style: CELL_STYLES.CURRENCY },
         { value: totals.queja || 0, style: CELL_STYLES.INTEGER },
         {
@@ -327,7 +343,7 @@ export function buildReportWorkbook(report) {
     {
       cells: [
         { value: 'En trámite (Refutado en espera)', style: CELL_STYLES.TEXT_BORDER },
-        { value: totals.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(totals, "inProgressAmount"), style: CELL_STYLES.CURRENCY },
         { value: totals.refutado || 0, style: CELL_STYLES.INTEGER },
         {
           value: totals.complaintAmount ? (totals.inProgressAmount || 0) / totals.complaintAmount : 0,
@@ -349,7 +365,7 @@ export function buildReportWorkbook(report) {
     {
       cells: [
         { value: 'Refutación aceptada (Recuperado)', style: CELL_STYLES.TEXT_BORDER },
-        { value: totals.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(totals, "recoveredAmount"), style: CELL_STYLES.CURRENCY },
         { value: totals.refutadoAceptado || 0, style: CELL_STYLES.INTEGER },
         {
           value: totals.complaintAmount ? (totals.recoveredAmount || 0) / totals.complaintAmount : 0,
@@ -360,7 +376,7 @@ export function buildReportWorkbook(report) {
     {
       cells: [
         { value: 'TOTAL RECLAMOS', style: CELL_STYLES.TOTAL_LABEL },
-        { value: totals.complaintAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
+        { value: knownAmount(totals, "complaintAmount"), style: CELL_STYLES.TOTAL_CURRENCY },
         { value: totals.count || 0, style: CELL_STYLES.TOTAL_INT },
         { value: 1, style: CELL_STYLES.TOTAL_PERCENT },
       ],
@@ -376,7 +392,7 @@ export function buildReportWorkbook(report) {
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
     { value: '$ En Disputa', style: CELL_STYLES.HEADER },
-    { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
+    { value: 'Total no recuperado', style: CELL_STYLES.HEADER },
   ];
   const aggRows = [
     { height: 24, cells: aggHeader },
@@ -386,10 +402,10 @@ export function buildReportWorkbook(report) {
         { value: row.count, style: CELL_STYLES.INTEGER },
         { value: totals.count ? row.count / totals.count : 0, style: CELL_STYLES.PERCENT },
         { value: (row.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
-        { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "complaintAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "recoveredAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "inProgressAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "lostAmount"), style: CELL_STYLES.CURRENCY },
       ],
     })),
     {
@@ -398,14 +414,17 @@ export function buildReportWorkbook(report) {
         { value: totals.count || 0, style: CELL_STYLES.TOTAL_INT },
         { value: 1, style: CELL_STYLES.TOTAL_PERCENT },
         { value: (totals.recoveredPct || 0) / 100, style: CELL_STYLES.TOTAL_PERCENT },
-        { value: totals.complaintAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
-        { value: totals.recoveredAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
-        { value: totals.inProgressAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
-        { value: totals.lostAmount || 0, style: CELL_STYLES.TOTAL_CURRENCY },
+        { value: knownAmount(totals, "complaintAmount"), style: CELL_STYLES.TOTAL_CURRENCY },
+        { value: knownAmount(totals, "recoveredAmount"), style: CELL_STYLES.TOTAL_CURRENCY },
+        { value: knownAmount(totals, "inProgressAmount"), style: CELL_STYLES.TOTAL_CURRENCY },
+        { value: knownAmount(totals, "lostAmount"), style: CELL_STYLES.TOTAL_CURRENCY },
       ],
     },
   ];
 
+  aggRows[0].cells.push({value:'Pendiente de refutar',style:CELL_STYLES.HEADER},{value:'Pérdida confirmada',style:CELL_STYLES.HEADER},{value:'Sin monto',style:CELL_STYLES.HEADER});
+  report.aggregators.forEach((row,index)=>aggRows[index+1].cells.push({value:row.pendingAmount,style:CELL_STYLES.CURRENCY},{value:row.finalLostAmount,style:CELL_STYLES.CURRENCY},{value:row.missingAmountCount,style:CELL_STYLES.INTEGER}));
+  aggRows.at(-1).cells.push({value:knownAmount(totals,"pendingAmount"),style:CELL_STYLES.TOTAL_CURRENCY},{value:knownAmount(totals,"finalLostAmount"),style:CELL_STYLES.TOTAL_CURRENCY},{value:totals.missingAmountCount,style:CELL_STYLES.TOTAL_INT});
   // 3. Top Combos
   const combosHeader = [
     { value: 'Combo / Producto', style: CELL_STYLES.HEADER },
@@ -414,7 +433,7 @@ export function buildReportWorkbook(report) {
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
     { value: '$ En Disputa', style: CELL_STYLES.HEADER },
-    { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
+    { value: 'Total no recuperado', style: CELL_STYLES.HEADER },
   ];
   const combosRows = [
     { height: 24, cells: combosHeader },
@@ -423,14 +442,16 @@ export function buildReportWorkbook(report) {
         { value: row.combo || 'Sin combo', style: CELL_STYLES.TEXT_BORDER },
         { value: row.count, style: CELL_STYLES.INTEGER },
         { value: (row.sharePct || 0) / 100, style: CELL_STYLES.PERCENT },
-        { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "complaintAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "recoveredAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "inProgressAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "lostAmount"), style: CELL_STYLES.CURRENCY },
       ],
     })),
   ];
 
+  combosRows[0].cells.push({value:'Pendiente de refutar',style:CELL_STYLES.HEADER},{value:'Pérdida confirmada',style:CELL_STYLES.HEADER},{value:'Sin monto',style:CELL_STYLES.HEADER});
+  report.combos.forEach((row,index)=>combosRows[index+1].cells.push({value:row.pendingAmount,style:CELL_STYLES.CURRENCY},{value:row.finalLostAmount,style:CELL_STYLES.CURRENCY},{value:row.missingAmountCount,style:CELL_STYLES.INTEGER}));
   // 4. Por Motivo
   const reasonsHeader = [
     { value: 'Motivo de Queja', style: CELL_STYLES.HEADER },
@@ -440,7 +461,7 @@ export function buildReportWorkbook(report) {
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
     { value: '$ En Disputa', style: CELL_STYLES.HEADER },
-    { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
+    { value: 'Total no recuperado', style: CELL_STYLES.HEADER },
   ];
   const reasonsRows = [
     { height: 24, cells: reasonsHeader },
@@ -450,14 +471,16 @@ export function buildReportWorkbook(report) {
         { value: row.count, style: CELL_STYLES.INTEGER },
         { value: totals.count ? row.count / totals.count : 0, style: CELL_STYLES.PERCENT },
         { value: (row.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
-        { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "complaintAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "recoveredAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "inProgressAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "lostAmount"), style: CELL_STYLES.CURRENCY },
       ],
     })),
   ];
 
+  reasonsRows[0].cells.push({value:'Pendiente de refutar',style:CELL_STYLES.HEADER},{value:'Pérdida confirmada',style:CELL_STYLES.HEADER},{value:'Sin monto',style:CELL_STYLES.HEADER});
+  report.reasons.forEach((row,index)=>reasonsRows[index+1].cells.push({value:row.pendingAmount,style:CELL_STYLES.CURRENCY},{value:row.finalLostAmount,style:CELL_STYLES.CURRENCY},{value:row.missingAmountCount,style:CELL_STYLES.INTEGER}));
   // 5. Por Día
   const daysHeader = [
     { value: 'Fecha', style: CELL_STYLES.HEADER },
@@ -466,7 +489,7 @@ export function buildReportWorkbook(report) {
     { value: '$ Reclamado', style: CELL_STYLES.HEADER },
     { value: '$ Recuperado', style: CELL_STYLES.HEADER },
     { value: '$ En Disputa', style: CELL_STYLES.HEADER },
-    { value: '$ Perdido Neto', style: CELL_STYLES.HEADER },
+    { value: 'Total no recuperado', style: CELL_STYLES.HEADER },
   ];
   const daysRows = [
     { height: 24, cells: daysHeader },
@@ -475,14 +498,16 @@ export function buildReportWorkbook(report) {
         { value: row.key || '—', style: CELL_STYLES.CENTER },
         { value: row.count, style: CELL_STYLES.INTEGER },
         { value: (row.recoveredPct || 0) / 100, style: CELL_STYLES.PERCENT },
-        { value: row.complaintAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.recoveredAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.inProgressAmount || 0, style: CELL_STYLES.CURRENCY },
-        { value: row.lostAmount || 0, style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "complaintAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "recoveredAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "inProgressAmount"), style: CELL_STYLES.CURRENCY },
+        { value: knownAmount(row, "lostAmount"), style: CELL_STYLES.CURRENCY },
       ],
     })),
   ];
 
+  daysRows[0].cells.push({value:'Pendiente de refutar',style:CELL_STYLES.HEADER},{value:'Pérdida confirmada',style:CELL_STYLES.HEADER},{value:'Sin monto',style:CELL_STYLES.HEADER});
+  report.days.forEach((row,index)=>daysRows[index+1].cells.push({value:row.pendingAmount,style:CELL_STYLES.CURRENCY},{value:row.finalLostAmount,style:CELL_STYLES.CURRENCY},{value:row.missingAmountCount,style:CELL_STYLES.INTEGER}));
   // 6. Detalle de Quejas
   const extras = extraFieldKeys(report.items);
   const detailHeader = [
@@ -511,7 +536,7 @@ export function buildReportWorkbook(report) {
         { value: item.combo || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: item.reason || '—', style: CELL_STYLES.TEXT_BORDER },
         { value: item.comment || '—', style: CELL_STYLES.TEXT_BORDER },
-        { value: Number(item.amount) || 0, style: CELL_STYLES.CURRENCY },
+        { value: item.amount == null ? 'Sin monto' : Number(item.amount), style: CELL_STYLES.CURRENCY },
         { value: COMPLAINT_STATUS_LABELS[item.status] || item.status, style: CELL_STYLES.CENTER },
         { value: item.unrefutableReason || '', style: CELL_STYLES.TEXT_BORDER },
         { value: item.rejectionReason || '', style: CELL_STYLES.TEXT_BORDER },
@@ -533,25 +558,25 @@ export function buildReportWorkbook(report) {
       {
         name: 'Por Agregador',
         colWidths: [22, 12, 14, 14, 18, 18, 18],
-        autoFilter: `A1:G${aggRows.length}`,
+        autoFilter: `A1:K${aggRows.length}`,
         rows: aggRows,
       },
       {
         name: 'Top Combos',
         colWidths: [32, 12, 14, 18, 18, 18],
-        autoFilter: `A1:F${combosRows.length}`,
+        autoFilter: `A1:J${combosRows.length}`,
         rows: combosRows,
       },
       {
         name: 'Por Motivo',
         colWidths: [30, 12, 14, 14, 18, 18, 18],
-        autoFilter: `A1:G${reasonsRows.length}`,
+        autoFilter: `A1:K${reasonsRows.length}`,
         rows: reasonsRows,
       },
       {
         name: 'Por Día',
         colWidths: [18, 12, 14, 18, 18, 18],
-        autoFilter: `A1:F${daysRows.length}`,
+        autoFilter: `A1:J${daysRows.length}`,
         rows: daysRows,
       },
       {
@@ -572,7 +597,7 @@ export function downloadReportXlsx(report, filename) {
   downloadBlob(blob, name);
 }
 
-export function downloadRegistryXlsx(items, filename = 'registro-quejas.xlsx') {
-  const blob = generateXlsxBlob(buildRegistryWorkbook(items));
+export function downloadRegistryXlsx(items, filename = 'registro-quejas.xlsx', context = null) {
+  const blob = generateXlsxBlob(buildRegistryWorkbook(items, context));
   downloadBlob(blob, filename);
 }

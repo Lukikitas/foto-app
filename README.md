@@ -1,5 +1,19 @@
 # React + Vite
 
+## Versión 1.10
+
+### Liberación automática y manual de fotos
+
+Ajustes → **«Liberación de fotos»** define cuántos días conservar la foto de los pedidos que no tuvieron ninguna queja (7 a 365, **30 por defecto**) y si la limpieza automática está activa. Todos los días a las 04:43 UTC (01:43 en Argentina; workflow `cleanup-photo-retention.yml` + función edge `cleanup-photo-retention`) se borra **solo el archivo** del bucket y la fila queda con `public_url = null`: por eso Desempeño de personal, el Dashboard y todas las métricas siguen idénticos. Nunca se tocan fotos con queja o refutación, las referenciadas por el historial de reclamos ni las de «Código no encontrado»; en la galería las fotos liberadas muestran «Foto eliminada» y los pedidos se pueden seguir editando.
+
+**«Borrar fotos antiguas»**, en la galería de pedidos y en Ajustes, permite elegir una fecha desde un calendario para una limpieza inmediata. **La fecha seleccionada está incluida**: se borran las imágenes de ese día y de los anteriores, según la hora de Argentina. Muestra un popup con la cantidad exacta, requiere confirmación y procesa todas las candidatas, incluso más allá de las 1.000 filas visibles. No modifica el plazo automático. Revalida cada lote, conserva los registros y muestra borrados, omisiones y errores. Los pedidos ya no ofrecen el borrado de registros que alteraba las métricas; los archivos generales conservan su borrado habitual.
+
+Al cambiar el plazo aparece un **popup con cuántas fotos se borrarían** con el valor nuevo (mismo criterio que la limpieza, compartido en `photoRetention.js`) y cuántas dejarían de estar protegidas; con cero candidatas guarda directo. La card informa además la última corrida y cuántas fotos borró. Requiere la migración `20261008090000_photo_cleanup_settings.sql`, desplegar la función y el secreto `PHOTO_CLEANUP_SECRET`: paso a paso en `docs/photo-retention.md`.
+
+Los **tickets** siguen liberándose a las 72 h con el workflow horario existente; verificar `TICKET_CLEANUP_SECRET` y la variable `VITE_CLOUD_OCR_ENABLED=true` (ver `docs/order-code-recovery.md`).
+
+Validación: `npm test`, `npm run lint`, `npm run build`.
+
 ## Versión 1.8
 
 ### No se puede refutar
@@ -126,3 +140,7 @@ Verificado con el archivo de referencia: 24 reclamos, 11 con monto cero y $208.0
 ### Reintegros de PedidosYa
 
 Desde Reclamos o Métricas → Carga, «Importar refutados aceptados» admite .xls/.xlsx. Lee únicamente Reintegros: B (pedido), D (DS) y E (KFC - La Plata, nombre completo normalizado). SI/NO y otros locales se ignoran. La vista previa no escribe; confirmar cambia solo el estado de quejas existentes de PedidosYa a refutado_aceptado, preservando fechas, montos, fotos y correcciones. Los pedidos ausentes o con varias coincidencias se informan y no se crean ni modifican. Reimportar no duplica; ante un error puede reintentarse. No modifica métricas ni el lote de cruce con fotos.
+
+## Versión 1.11.0
+
+Métricas, diálogos y almacenamiento: [activación y criterios](docs/v1.11.md), [validación](docs/v1.11-validation.md).

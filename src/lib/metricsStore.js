@@ -9,16 +9,22 @@ const CACHE_KEY = 'foto-app-metrics-store';
 const VIEW_KEY = 'foto-app-metrics-view';
 const PERIOD_KEY = 'foto-app-metrics-period';
 const snapshots = new Map();
+let lastRead = { cached: false, readAt: null };
+export function metricsReadStatus() { return lastRead; }
 function rememberMetrics(store) {
   snapshots.set(store.updatedAt || 'empty', structuredClone(store));
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(store)); } catch { /* Cache is optional. */ }
   return store;
 }
+export function acceptCommittedMetrics(document) {
+  lastRead = {cached:false,readAt:new Date().toISOString()};
+  return rememberMetrics(parseStore(document.data));
+}
 export async function loadMetricsStore({ strict = false } = {}) {
-  try { const doc = await readDocument('metrics', emptyStore); return rememberMetrics(parseStore(doc.data)); }
+  try { const doc = await readDocument('metrics', emptyStore); lastRead = { cached: false, readAt: new Date().toISOString() }; return rememberMetrics(parseStore(doc.data)); }
   catch (error) {
     if (strict) throw error;
-    try { const raw = localStorage.getItem(CACHE_KEY); if (raw) return rememberMetrics(parseStore(JSON.parse(raw))); } catch { /* Report original error. */ }
+    try { const raw = localStorage.getItem(CACHE_KEY); if (raw) { lastRead = { cached: true, readAt: new Date().toISOString() }; return rememberMetrics(parseStore(JSON.parse(raw))); } } catch { /* Report original error. */ }
     throw error;
   }
 }
@@ -29,6 +35,7 @@ export async function saveMetricsStore(store) {
   const saved = await mutateDocument('metrics', emptyStore, parseStore, current => ({
     ...applyDocumentChanges(current, delta), version: 1, updatedAt: new Date().toISOString(),
   }));
+  lastRead = {cached:false,readAt:new Date().toISOString()};
   return rememberMetrics(saved);
 }
 export async function fetchPhotoFlags(dateFrom, dateTo) {

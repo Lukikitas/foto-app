@@ -202,7 +202,7 @@ test('staff report attributes a complaint whose photo lives outside the fetched 
       created_at: '2026-08-30T21:40:00-03:00',
       taken_by: 'Lu',
     }],
-    historyItems: HISTORY_ITEMS,
+    historyItems: HISTORY_ITEMS.map(item => item.orderCode === 'PEYA-2286878556' ? {...item,photoId:'p9'} : item),
   });
   const lu = report.people.find((row) => row.key === 'lu');
   const unassigned = report.people.find((row) => row.isUnassigned);
@@ -262,7 +262,7 @@ test('staff CSV includes people and hourly sections with headers', () => {
   const report = buildStaffReport({ photos: PERIOD_PHOTOS, historyItems: HISTORY_ITEMS });
   const csv = buildStaffCsv(report);
   const lines = csv.trim().split('\n');
-  assert.equal(lines[0], 'persona,fotos,pedidos,porcentaje_fotos,quejas,porcentaje_quejas,refutadas_aceptadas,no_refutables,monto_quejas,monto_recuperado');
+  assert.equal(lines[0], 'persona,capturas,pedidos_unicos,porcentaje_fotos,quejas,porcentaje_quejas,refutadas_aceptadas,no_refutables,monto_quejas,monto_recuperado,porcentaje_sin_aceptadas,rechazadas,pendientes,en_disputa,montos_faltantes,recuperados_sin_monto');
   assert.ok(lines.some((line) => line.startsWith('Sofi,')));
   assert.ok(lines.some((line) => line.startsWith('Sin asignar,')));
   assert.ok(lines.includes('hora,pedidos,porcentaje_pedidos,quejas,porcentaje_quejas,porcentaje_quejas_sobre_pedidos'));

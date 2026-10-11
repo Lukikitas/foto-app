@@ -1,6 +1,7 @@
 import { detectAggregator, getPhotoAggregator } from './aggregators.js';
 import { compactCode } from './complaintMatch.js';
 import { toArgentinaDate } from './metrics.js';
+import { isRefutadoExpired } from './refutadoDeadline.js';
 
 export const COMPLAINT_STATUSES = {
   queja: 'queja',
@@ -92,6 +93,9 @@ export function emptyHistoryFlags() {
     inProgressAmount: 0,
     disputedAmount: 0,
     confirmedLostAmount: 0,
+    pendingAmount: 0,
+    finalLostAmount: 0,
+    missingAmountCount: 0,
   };
 }
 
@@ -643,8 +647,20 @@ export function moneyForStatus(item) {
   return amount;
 }
 
-export function addMoneyToFlags(flags, item) {
+export function addMoneyToFlags(flags, item, { refutadoDays, today } = {}) {
   const amount = moneyForStatus(item);
+  flags.pendingAmount ??= 0; flags.finalLostAmount ??= 0; flags.missingAmountCount ??= 0;
+  const missing = item.amount == null || item.amount === '' || !Number.isFinite(Number(item.amount));
+  if (missing) flags.missingAmountCount++;
+  const expired = item.status === COMPLAINT_STATUSES.queja && isRefutadoExpired(item.day, refutadoDays, item.aggregator, today);
+  const moneyGroup = item.status === COMPLAINT_STATUSES.refutado_aceptado ? 'recoveredAmount' : item.status === COMPLAINT_STATUSES.refutado ? 'inProgressAmount' : item.status === COMPLAINT_STATUSES.refutado_rechazado || item.status === COMPLAINT_STATUSES.no_refutable || expired ? 'finalLostAmount' : 'pendingAmount';
+  if (missing) { flags.missingMoney ??= {}; for (const key of ['complaintAmount', moneyGroup, ...(item.status !== COMPLAINT_STATUSES.refutado && item.status !== COMPLAINT_STATUSES.refutado_aceptado ? ['lostAmount'] : [])]) flags.missingMoney[key] = (flags.missingMoney[key] || 0) + 1; }
+  if (item.status === COMPLAINT_STATUSES.refutado_rechazado || item.status === COMPLAINT_STATUSES.no_refutable ||
+      expired) {
+    flags.finalLostAmount += amount;
+  } else if (item.status !== COMPLAINT_STATUSES.refutado && item.status !== COMPLAINT_STATUSES.refutado_aceptado) {
+    flags.pendingAmount += amount;
+  }
   flags.complaintAmount += amount;
   if (item.status === COMPLAINT_STATUSES.refutado_aceptado) flags.recoveredAmount += amount;
   else if (item.status === COMPLAINT_STATUSES.refutado) flags.inProgressAmount += amount;
@@ -655,7 +671,7 @@ export function addMoneyToFlags(flags, item) {
   return flags;
 }
 
-export function groupHistoryFlags(store, from, to) {
+export function groupHistoryFlags(store, from, to, options = {}) {
   const map = {};
   Object.values(parseHistory(store).items).forEach((item) => {
     if (!item.day || (from && item.day < from) || (to && item.day > to)) return;
@@ -670,7 +686,7 @@ export function groupHistoryFlags(store, from, to) {
     else if (item.status === COMPLAINT_STATUSES.refutado) bucket.refutado += 1;
     else if (item.status === COMPLAINT_STATUSES.no_refutable) bucket.noRefutable += 1;
     else bucket.queja += 1;
-    addMoneyToFlags(bucket, item);
+    addMoneyToFlags(bucket, item, options);
   });
   return map;
 }

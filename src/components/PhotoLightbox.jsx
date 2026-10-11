@@ -1,9 +1,12 @@
+import Dialog from './Dialog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDateTime } from '../lib/date';
 import { getPhotoTimestamp, getPhotoTitle } from '../lib/photos';
 import { clamp, clampOffset, pinchDistance, zoomAt } from '../lib/touchZoom';
 
 export default function PhotoLightbox(props) {
+  // Fotos liberadas por la retención: sin archivo no hay nada que ampliar.
+  if (!props.photo?.public_url) return null;
   return <PhotoViewer key={props.photo.id || props.photo.public_url} {...props} />;
 }
 function PhotoViewer({ photo, onClose, onDownload, badges = null, actions = null }) {
@@ -99,24 +102,7 @@ function PhotoViewer({ photo, onClose, onDownload, badges = null, actions = null
     resize.observe(stage);
     return () => { stage.removeEventListener('wheel', wheel); resize.disconnect(); };
   }, [zoom, commit]);
-  const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => {
-    const opener = document.activeElement; const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden'; closeRef.current?.focus();
-    function key(event) {
-      if (event.key === 'Escape') onCloseRef.current();
-      if (event.key === 'Tab') {
-        const buttons = [...closeRef.current.closest('.lightbox').querySelectorAll('button:not(:disabled)')];
-        const index = buttons.indexOf(document.activeElement);
-        event.preventDefault(); buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
-      }
-    }
-    window.addEventListener('keydown', key);
-    return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', key); opener?.focus?.(); };
-  }, []);
-  return <div className="lightbox" role="dialog" aria-modal="true" aria-label={title}
-    onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return <Dialog variant="viewer" label={title} onClose={onClose}><div className="lightbox">
     <button ref={closeRef} type="button" className="lightbox__close" onClick={onClose} aria-label="Cerrar">×</button>
     <div className="lightbox__content">
       <div ref={stageRef} className={`lightbox__stage${view.scale > 1 ? ' lightbox__stage--zoomed' : ''}`}
@@ -145,5 +131,5 @@ function PhotoViewer({ photo, onClose, onDownload, badges = null, actions = null
         )}
       </div>
     </div>
-  </div>;
+  </div></Dialog>;
 }

@@ -79,6 +79,8 @@ export function parseRappiWorkbook(book) {
 export function mergeRappiMetrics(store, report) {
   return report.daily.reduce((next, row) => upsertDayStats(next, row.day, row.aggregator, {
     ...next.days?.[row.day]?.[row.aggregator], complaints: row.complaints,
+    reported: { ...next.days?.[row.day]?.[row.aggregator]?.reported, complaints: true },
+    sources: { ...next.days?.[row.day]?.[row.aggregator]?.sources, complaints: 'excel_rappi' },
   }), store);
 }
 const core = code => compactCode(code).replace(/^(RAPPITURBO|RAPPI)/, '');

@@ -3,7 +3,7 @@ create role anon;
 create role authenticated;
 create role service_role;
 create schema storage;
-create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
+create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,metadata jsonb);
 alter table storage.objects enable row level security;
 create policy legacy_access on storage.objects to anon using(true) with check(true);
 grant usage on schema storage to anon;

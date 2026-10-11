@@ -1,3 +1,7 @@
+import { confirmAction } from '../lib/confirmAction';
+import ComplaintDetailDialog from './ComplaintDetailDialog';
+import { isRefutadoExpired, refutadoDeadlineDate } from '../lib/refutadoDeadline';
+import { translatedReason } from '../lib/metricsQuality';
 import PhotoLightbox from './PhotoLightbox';
 import { useMemo, useState } from 'react';
 import { getAggregatorLabel } from '../lib/aggregators';
@@ -26,14 +30,16 @@ export default function MetricsComplaintsList({
   aggregator,
   busy,
   onDelete,
-  onClear,
+  initialStatus = 'all', store, onManage,
   onPhoto,
   onError,
   onNotice,
 }) {
   const [search, setSearch] = useState('');
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
-  const [status, setStatus] = useState('all');
+  const [status, setStatus] = useState(initialStatus);
+  const [selected,setSelected] = useState(null);
+  const [sort,setSort] = useState('date-desc');
   const items = useMemo(
     () =>
       listHistoryItems(history, {
@@ -41,30 +47,24 @@ export default function MetricsComplaintsList({
         to: range.to,
         aggregator,
         search,
-        status,
-      }),
-    [history, range, aggregator, search, status],
+        status: ["expired","pending","lost"].includes(status) ? "all" : status,
+      }).filter(item => status === "expired" ? item.status === "queja" && isRefutadoExpired(item.day,store?.refutadoDays,item.aggregator) : status === "pending" ? item.status === "queja" && !isRefutadoExpired(item.day,store?.refutadoDays,item.aggregator) : status === "lost" ? ["no_refutable","refutado_rechazado"].includes(item.status) || (item.status === "queja" && isRefutadoExpired(item.day,store?.refutadoDays,item.aggregator)) : true).sort((a,b)=>sort === "amount" ? (b.amount??-1)-(a.amount??-1) : sort === "deadline" ? String(refutadoDeadlineDate(a.day,store?.refutadoDays,a.aggregator)||"9999").localeCompare(String(refutadoDeadlineDate(b.day,store?.refutadoDays,b.aggregator)||"9999")) : String(b.day).localeCompare(String(a.day))),
+    [history, range, aggregator, search, status, sort, store?.refutadoDays],
   );
   const total = Object.keys(history.items || {}).length;
 
   async function handlePhoto(item, file) {
     try {
       const photo = await uploadComplaintPhotoFile(file, item, item.aggregator);
-      await onPhoto(item, photo);
+      if (!await onPhoto(item, photo)) return;
       onNotice(`Foto cargada en ${item.orderCode}.`);
     } catch (err) {
       onError(err.message || 'No se pudo subir la foto.');
     }
   }
 
-  function handleClear() {
-    if (!total) return;
-    if (!window.confirm(`Se van a borrar ${total} quejas del historial. Las fotos no se borran.`)) return;
-    onClear();
-  }
-
-  function handleDelete(item) {
-    if (!window.confirm(`¿Borrar la queja ${item.orderCode}?`)) return;
+  async function handleDelete(item) {
+    if (!await confirmAction(`¿Borrar la queja ${item.orderCode}? Su estado y monto dejarán de contar en las métricas económicas; la foto y los totales diarios se conservan.`)) return;
     onDelete(item.id);
   }
 
@@ -81,7 +81,7 @@ export default function MetricsComplaintsList({
           />
         </label>
         <div className="gallery__view-toggle complaints__filters" role="group" aria-label="Estado">
-          {STATUS_FILTERS.map((item) => (
+          {[...STATUS_FILTERS,{id:"expired",label:"Vencidas"},{id:"pending",label:"Dentro del plazo"},{id:"lost",label:"Pérdida confirmada"}].map((item) => (
             <button
               key={item.id}
               type="button"
@@ -94,6 +94,8 @@ export default function MetricsComplaintsList({
         </div>
       </div>
 
+      <label>Ordenar<select value={sort} onChange={event=>setSort(event.target.value)}><option value="date-desc">Más recientes</option><option value="amount">Mayor importe</option><option value="deadline">Vencimiento</option></select></label>
+      <p className="metrics-comparison">{items.filter(item=>item.amount==null).length} casos sin monto · Importe conocido del filtro: {formatMoney(items.reduce((sum,item)=>sum+(item.amount||0),0))}</p>
       <div className="complaints__summary">
         <p className="gallery__count">
           {items.length} queja{items.length !== 1 ? 's' : ''} en este período · {total} en el historial
@@ -102,7 +104,7 @@ export default function MetricsComplaintsList({
           <button
             type="button"
             className="btn btn--primary btn--small report-btn-excel"
-            onClick={() => downloadRegistryXlsx(items, 'quejas.xlsx')}
+            onClick={() => downloadRegistryXlsx(items, 'quejas.xlsx', {Desde:range.from,Hasta:range.to,Agregador:getAggregatorLabel(aggregator)||'Todos',Estado:status,Búsqueda:search||'Sin búsqueda'})}
             disabled={!items.length}
             title="Descargar listado de quejas formateado en Excel (.xlsx)"
           >
@@ -123,9 +125,7 @@ export default function MetricsComplaintsList({
           >
             CSV
           </button>
-          <button type="button" className="btn btn--ghost btn--small" onClick={handleClear} disabled={!total || busy}>
-            Vaciar historial
-          </button>
+
         </div>
       </div>
 
@@ -152,13 +152,13 @@ export default function MetricsComplaintsList({
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>
-                    <strong>{item.orderCode}</strong>
+                    <button className="btn btn--ghost btn--small" onClick={()=>setSelected(item)}>{item.orderCode}</button>
                     <small>{getAggregatorLabel(item.aggregator)}</small>
                   </td>
                   <td>{item.day ? formatDayLabel(item.day) : '—'}</td>
                   <td>{item.combo || '—'}</td>
                   <td>
-                    {item.reason || '—'}
+                    {translatedReason(item.reason)}
                     {item.fields && Object.keys(item.fields).length > 0 && (
                       <small>
                         {Object.entries(item.fields)
@@ -168,9 +168,9 @@ export default function MetricsComplaintsList({
                       </small>
                     )}
                   </td>
-                  <td>{formatMoney(item.amount)}</td>
+                  <td>{item.amount == null ? "Sin monto" : formatMoney(item.amount)}</td>
                   <td>
-                    {COMPLAINT_STATUS_LABELS[item.status] || item.status}
+                    {item.status === "queja" && isRefutadoExpired(item.day,store?.refutadoDays,item.aggregator) ? "⚠ Queja vencida" : COMPLAINT_STATUS_LABELS[item.status] || item.status}
                     {item.status === COMPLAINT_STATUSES.no_refutable && item.unrefutableReason ? (
                       <small>{item.unrefutableReason}</small>
                     ) : null}
@@ -203,6 +203,7 @@ export default function MetricsComplaintsList({
           </table>
         </div>
       )}
+    {selected && <ComplaintDetailDialog key={selected.id} item={selected} refutadoDays={store?.refutadoDays} onClose={()=>setSelected(null)} onManage={onManage}/>}
     {lightboxPhoto && <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />}
     </div>
   );

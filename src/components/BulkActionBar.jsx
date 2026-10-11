@@ -10,6 +10,7 @@ export default function BulkActionBar({
   onClearSelection,
   onUpdated,
   onDeleted,
+  allowDelete = false,
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -151,14 +152,14 @@ export default function BulkActionBar({
           >
             Cambiar autor
           </button>
-          <button
+          {allowDelete && <button
             type="button"
             className="btn btn--small btn--danger"
             onClick={() => setConfirmDelete(true)}
             disabled={loading}
           >
             Eliminar
-          </button>
+          </button>}
         </div>
       )}
     </div>

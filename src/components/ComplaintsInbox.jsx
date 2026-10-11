@@ -1,3 +1,4 @@
+import { confirmAction } from '../lib/confirmAction';
 import RappiExcelImport from './RappiExcelImport';
 import PeyaRefundsImport from './PeyaRefundsImport';
 import PeyaExcelImport from './PeyaExcelImport';
@@ -183,7 +184,7 @@ function historyFromResult(result) {
   return result?.store || result;
 }
 
-export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory, refreshKey = 0 } = {}) {
+export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory, refreshKey = 0, focusedCase = null } = {}) {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
   const [importOpen, setImportOpen] = useState(false);
@@ -203,6 +204,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [historyPreset, setHistoryPreset] = useState('month');
   const [historyCustomFrom, setHistoryCustomFrom] = useState('');
   const [historyCustomTo, setHistoryCustomTo] = useState('');
+  useEffect(()=>{ if(!focusedCase)return; const timer=setTimeout(()=>{setHistorySearch(focusedCase.orderCode || '');setHistoryAggregator(focusedCase.aggregator || 'all');setHistoryPreset('custom');setHistoryCustomFrom(focusedCase.day || '');setHistoryCustomTo(focusedCase.day || '');},0);return()=>clearTimeout(timer);},[focusedCase]);
   const [loading, setLoading] = useState(storedBatch.complaints.length > 0);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -756,7 +758,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   async function deleteRow(row) {
     const id = row.history?.id;
     if (!id) return;
-    if (!window.confirm(`¿Borrar la queja ${row.complaint.orderCode}?`)) return;
+    if (!await confirmAction(`¿Borrar la queja ${row.complaint.orderCode}?`)) return;
     setLoading(true);
     setError(null);
     try {
@@ -1025,7 +1027,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setNotice('CSV listo para pegar de vuelta en el Google Sheet.');
   }
 
-  function handleClear() {
+  async function handleClear() {
     clearComplaintBatch();
     setComplaints([]);
     setPhotos([]);
@@ -1113,7 +1115,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   async function handleBatchDelete() {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
-    if (!window.confirm(`¿Seguro que querés eliminar ${count} reclamos del historial? Las fotos no se borran.`)) {
+    if (!await confirmAction(`¿Seguro que querés eliminar ${count} reclamos del historial? Las fotos no se borran.`)) {
       return;
     }
     setLoading(true);
@@ -1751,7 +1753,11 @@ function ComplaintCard({
                 onClick={() => onPick(row.complaint.id, candidate.id)}
                 disabled={disabled}
               >
-                <img src={candidate.public_url} alt="" loading="lazy" decoding="async" />
+                {candidate.public_url ? (
+                  <img src={candidate.public_url} alt="" loading="lazy" decoding="async" />
+                ) : (
+                  <span className="complaint-card__candidate-missing">Sin foto</span>
+                )}
                 <span>{candidate.name}</span>
                 <small>{formatDateTime(candidate.created_at)}</small>
               </button>

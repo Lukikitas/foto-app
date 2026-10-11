@@ -119,7 +119,10 @@ export function parsePeyaWorkbook(book) {
   return { complaints, daily, excluded, duplicates };
 }
 export function mergePeyaMetrics(store, report) {
-  return report.daily.reduce((next, row) => upsertDayStats(next, row.day, 'pedidosya', row), store);
+  return report.daily.reduce((next, row) => upsertDayStats(next, row.day, 'pedidosya', { ...row,
+    reported: { orders: true, complaints: true, awt: true },
+    sources: { orders: 'excel_pedidosya', complaints: 'excel_pedidosya', awt: 'excel_pedidosya' },
+  }), store);
 }
 const core = code => compactCode(code).replace(/^PEYA/, '');
 export function mergePeyaHistory(store, report, rows = []) {

@@ -1,3 +1,4 @@
+import { confirmAction } from './lib/confirmAction';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { startDailyImportScheduler } from './lib/complaintDailyImport';
@@ -10,6 +11,7 @@ import { purgeExpiredUnresolvedTickets } from './lib/unresolvedTicketStore';
 import ComplaintsInbox from './components/ComplaintsInbox';
 import InstallPrompt from './components/InstallPrompt';
 import MetricsPage from './components/MetricsPage';
+import ConfirmationHost from './components/ConfirmationHost';
 import NavIcon from './components/NavIcon';
 import UpdatePrompt from './components/UpdatePrompt';
 import PhotoGallery from './components/PhotoGallery';
@@ -40,6 +42,8 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
+  const [metricsDirty,setMetricsDirty] = useState(false);
+  const [focusedCase,setFocusedCase] = useState(null);
   const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
@@ -68,6 +72,7 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', purge);
   }, []);
 
+  async function navigate(next) { if(next!==tab && metricsDirty && !await confirmAction('Hay cambios sin guardar en Métricas. Podés volver a Cargar para continuar el borrador.',{danger:false,title:'Cambios pendientes',confirmLabel:'Cambiar de sección'})) return; setTab(next); }
   function handleThemeChange(nextTheme) {
     saveTheme(nextTheme);
     setTheme(nextTheme);
@@ -109,7 +114,7 @@ export default function App() {
                 key={item.id}
                 type="button"
                 className={`app-nav__btn app-nav__btn--${item.id}${active ? ' app-nav__btn--active' : ''}`}
-                onClick={() => setTab(item.id)}
+                onClick={() => navigate(item.id)}
                 aria-current={active ? 'page' : undefined}
                 title={navCollapsed ? item.label : undefined}
               >
@@ -127,6 +132,7 @@ export default function App() {
       </nav>
 
       <div className="app__shell">
+        <ConfirmationHost />
         <UpdatePrompt />
         <InstallPrompt />
 
@@ -149,6 +155,7 @@ export default function App() {
           )}
           <div hidden={!complaintsOpen} className="app__panel">
             <ComplaintsInbox
+              focusedCase={focusedCase}
               view={tab === TABS.history ? 'historial' : 'cruzar'}
               refreshKey={metricsRefreshKey}
               onRequestCruzar={() => setTab(TABS.complaints)}
@@ -156,7 +163,7 @@ export default function App() {
             />
           </div>
           <div hidden={tab !== TABS.metrics}>
-            <MetricsPage key={metricsRefreshKey} />
+            <MetricsPage refreshKey={metricsRefreshKey} onDirtyChange={setMetricsDirty} onManage={item=>{setFocusedCase(item?.id ? item : null);navigate(item?.id ? TABS.history : TABS.complaints);}} />
           </div>
           {tab === TABS.settings && (
             <Suspense fallback={<p className="gallery__state">Cargando ajustes…</p>}>

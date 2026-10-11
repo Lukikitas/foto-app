@@ -1,9 +1,26 @@
+import Dialog from './Dialog';
+import StoragePanel from './StoragePanel';
+import { confirmAction } from '../lib/confirmAction';
+import { clearComplaintHistory, loadComplaintHistory } from '../lib/complaintHistoryStore';
 import PhotoLightbox from './PhotoLightbox';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AGGREGATOR_OPTIONS, detectAggregator, getAggregatorLabel } from '../lib/aggregators';
-import { setRefutadoDays, setTargetAwtPct, setTargetComplaintPct } from '../lib/metrics';
+import { formatNumber, setRefutadoDays, setTargetAwtPct, setTargetComplaintPct } from '../lib/metrics';
 import { loadMetricsStore, saveMetricsStore } from '../lib/metricsStore';
 import { fetchPhotosByIds, UNIDENTIFIED_ORDER_NAME } from '../lib/photos';
+import {
+  countPhotoRetentionCandidates,
+  loadPhotoCleanupSettings,
+  savePhotoCleanupSettings,
+} from '../lib/photoCleanupSettings';
+import {
+  normalizeRetentionDays,
+  PHOTO_RETENTION_DEFAULT_DAYS,
+  PHOTO_RETENTION_MAX_DAYS,
+  PHOTO_RETENTION_MIN_DAYS,
+} from '../lib/photoRetention';
+import PhotoRetentionConfirmModal from './PhotoRetentionConfirmModal';
+import PhotoCleanupModal from './PhotoCleanupModal';
 import {
   normalizeRefutadoDays,
   REFUTADO_DAYS_MAX,
@@ -40,6 +57,14 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
   // Borrador en crudo (strings) de los plazos de refutación, para que borrar
   // un campo no lo reemplace solo con el default mientras se escribe.
   const [deadlines, setDeadlines] = useState(null);
+  // «Liberación de fotos»: fila del servidor, borrador editable y el popup de
+  // confirmación con el conteo de fotos que se borrarían con el plazo nuevo.
+  const [retention, setRetention] = useState(null);
+  const [retentionDraft, setRetentionDraft] = useState(null);
+  const [retentionPreview, setRetentionPreview] = useState(null);
+  const [retentionCounting, setRetentionCounting] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [storageRefresh, setStorageRefresh] = useState(0);
   const [progress, setProgress] = useState(null);
   const [photos, setPhotos] = useState({});
   const [drafts, setDrafts] = useState({});
@@ -73,6 +98,22 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
     setSettings(nextSettings);
     setTargets(nextTargets);
     setDeadlines(toDeadlineDraft(nextTargets.refutadoDays));
+    // Si falta la migración, el resto de Ajustes sigue funcionando: la card
+    // queda en default y el error aparece al intentar guardar.
+    const nextRetention = await loadPhotoCleanupSettings().catch((failure) => {
+      setError(failure.message || 'No se pudo cargar la liberación de fotos.');
+      return {
+        enabled: true,
+        retention_days: PHOTO_RETENTION_DEFAULT_DAYS,
+        last_run_at: null,
+        last_removed: 0,
+      };
+    });
+    setRetention(nextRetention);
+    setRetentionDraft({
+      enabled: nextRetention.enabled,
+      retention_days: String(nextRetention.retention_days),
+    });
     await refreshProgress();
   }, [refreshProgress]);
 
@@ -92,23 +133,6 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
     }, 15_000);
     return () => window.clearInterval(timer);
   }, [refreshProgress]);
-  useEffect(() => {
-    if (!releaseOpen) return undefined;
-    const opener = releaseButtonRef.current;
-    releaseCloseRef.current?.focus();
-    function handleDialogKey(event) {
-      if (event.key === 'Escape') setReleaseOpen(false);
-      if (event.key === 'Tab') {
-        event.preventDefault();
-        releaseCloseRef.current?.focus();
-      }
-    }
-    window.addEventListener('keydown', handleDialogKey);
-    return () => {
-      window.removeEventListener('keydown', handleDialogKey);
-      opener?.focus();
-    };
-  }, [releaseOpen]);
 
   async function saveOperation(event) {
     event.preventDefault();
@@ -156,6 +180,79 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
     } catch (failure) {
       setError(failure.message || 'No se pudieron guardar los plazos.');
     } finally { setBusy(false); }
+  }
+
+  async function persistRetention(patch, message) {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const saved = await savePhotoCleanupSettings(patch);
+      setRetention(saved);
+      setRetentionDraft({
+        enabled: saved.enabled,
+        retention_days: String(saved.retention_days),
+      });
+      setNotice(message);
+    } catch (failure) {
+      setError(failure.message || 'No se pudo guardar la liberación de fotos.');
+    } finally { setBusy(false); }
+  }
+
+  async function saveRetention(event) {
+    event.preventDefault();
+    if (!retention || !retentionDraft || retentionCounting || busy) return;
+    const days = normalizeRetentionDays(retentionDraft.retention_days);
+    const currentDays = normalizeRetentionDays(retention.retention_days);
+    const enabledChanged = retentionDraft.enabled !== retention.enabled;
+
+    if (days === currentDays) {
+      if (!enabledChanged) { setNotice('Sin cambios en la liberación de fotos.'); return; }
+      await persistRetention({ enabled: retentionDraft.enabled }, 'Limpieza automática actualizada.');
+      return;
+    }
+
+    // Plazo nuevo: primero calculamos cuántas fotos se borrarían con él (mismo
+    // criterio que la limpieza) y recién ahí pedimos confirmación.
+    setRetentionCounting(true); setError(''); setNotice('');
+    let count = null;
+    let currentCount = null;
+    let countFailed = false;
+    try {
+      count = await countPhotoRetentionCandidates({ days });
+      if (count > 0 && currentDays !== days) {
+        currentCount = await countPhotoRetentionCandidates({ days: currentDays });
+      }
+    } catch {
+      countFailed = true;
+    } finally {
+      setRetentionCounting(false);
+    }
+
+    if (!countFailed && count === 0) {
+      await persistRetention(
+        { retention_days: days, enabled: retentionDraft.enabled },
+        `Plazo actualizado a ${days} días. Todavía no hay fotos candidatas.`,
+      );
+      return;
+    }
+
+    setRetentionPreview({
+      days,
+      currentDays,
+      count,
+      currentCount,
+      countFailed,
+      enabled: retentionDraft.enabled,
+    });
+  }
+
+  async function confirmRetentionPreview() {
+    const preview = retentionPreview;
+    if (!preview) return;
+    setRetentionPreview(null);
+    await persistRetention(
+      { retention_days: preview.days, enabled: preview.enabled },
+      `Liberación de fotos: plazo de ${preview.days} días. Las fotos se borran en la próxima limpieza.`,
+    );
   }
 
   async function applyProposal(item, clear = false) {
@@ -267,6 +364,44 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           )}
         </section>
 
+        <section className="settings__card settings__retention">
+          <h3>Liberación de fotos</h3>
+          <p>Podés liberar espacio ahora eligiendo hasta qué fecha borrar las fotos, sin modificar las métricas. La fecha seleccionada está incluida.</p>
+          <button type="button" className="btn btn--danger btn--small" onClick={() => setCleanupOpen(true)}>
+            Borrar fotos antiguas ahora
+          </button>
+          {!retention || !retentionDraft ? <p>Cargando…</p> : (
+            <form onSubmit={saveRetention}>
+              <label className="settings__check">
+                <input type="checkbox" checked={retentionDraft.enabled}
+                  onChange={(event) => setRetentionDraft({ ...retentionDraft, enabled: event.target.checked })} />
+                Activar limpieza automática
+              </label>
+              <label>Días antes de borrar fotos sin queja
+                <input type="number" min={PHOTO_RETENTION_MIN_DAYS} max={PHOTO_RETENTION_MAX_DAYS} required
+                  value={retentionDraft.retention_days}
+                  onChange={(event) => setRetentionDraft({ ...retentionDraft, retention_days: event.target.value })} />
+              </label>
+              <p>
+                Se borra solo el archivo de los pedidos que no tuvieron ninguna queja
+                pasados esos días; la fila de la foto queda guardada para que las métricas
+                no cambien. Las fotos de quejas, refutadas y las evidencias nunca se borran.
+                Los tickets se liberan a las 72 h.
+              </p>
+              <p>
+                {retention.last_run_at
+                  ? `Última limpieza: ${argentinaDate(retention.last_run_at)} · ${formatNumber(retention.last_removed)} fotos borradas.`
+                  : 'Todavía no corrió la limpieza automática.'}
+              </p>
+              <button className="btn btn--primary" disabled={busy || retentionCounting}>
+                {retentionCounting ? 'Calculando fotos…' : 'Guardar liberación'}
+              </button>
+            </form>
+          )}
+        </section>
+
+        <StoragePanel retention={retention} onCleanup={() => setCleanupOpen(true)} refreshKey={storageRefresh} />
+        <section className="settings__card"><h3>Administración del historial</h3><p>Eliminar el historial de reclamos modifica las métricas económicas. Los totales diarios y las fotos se conservan.</p><button type="button" className="btn btn--danger" disabled={busy} onClick={async () => { try { const history = await loadComplaintHistory({ force: true, strict: true }); const count = Object.keys(history.items || {}).length; if (!await confirmAction({ title: "Vaciar historial de reclamos", message: `Se eliminarán ${count} casos de todos los períodos. Esto borra sus estados e importes de las métricas económicas. No elimina fotos ni totales diarios.`, confirmLabel: "Eliminar historial" })) return; setBusy(true); await clearComplaintHistory(); setNotice("Historial de reclamos eliminado."); onTargetsSaved(); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }}>Vaciar historial de reclamos</button></section>
         <section className="settings__card settings__appearance">
           <h3>Apariencia</h3>
           <label>Tema
@@ -391,10 +526,21 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           </>
         )}
       </section>
+      {retentionPreview && (
+        <PhotoRetentionConfirmModal
+          days={retentionPreview.days}
+          currentDays={retentionPreview.currentDays}
+          count={retentionPreview.count}
+          currentCount={retentionPreview.currentCount}
+          countFailed={retentionPreview.countFailed}
+          enabled={retentionPreview.enabled}
+          onConfirm={confirmRetentionPreview}
+          onClose={() => setRetentionPreview(null)}
+        />
+      )}
+      {cleanupOpen && <PhotoCleanupModal onClose={() => { setCleanupOpen(false); setStorageRefresh(value => value + 1); }} />}
       {lightboxPhoto && <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />}
-      {releaseOpen && <div className="release-modal" onMouseDown={(event) => {
-        if (event.target === event.currentTarget) setReleaseOpen(false);
-      }}>
+      {releaseOpen && <Dialog variant="wide" labelledBy="release-modal-title" onClose={() => setReleaseOpen(false)}>
         <section className="release-modal__dialog" role="dialog" aria-modal="true"
           aria-labelledby="release-modal-title">
           <div className="release-modal__head">
@@ -404,7 +550,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved }) {
           </div>
           <div>{RELEASE_GROUPS.map(group => <section className="release-modal__group" key={group.title}><h3>{group.title}</h3><ul>{group.notes.map(note => <li key={note}>{note}</li>)}</ul></section>)}</div>
         </section>
-      </div>}
+      </Dialog>}
     </section>
   );
 }
