@@ -42,6 +42,13 @@ export const REFUTATION_REJECTED_REASONS = [
 export const REASON_OTHER_LABEL = 'Otro';
 export const REASON_MISSING_LABEL = 'Sin motivo';
 const REASON_SEPARATOR = ' · ';
+const DETAIL_ORIGINS = new Set(['manual', 'sheet', 'codes', 'photo', 'excel_pedidosya', 'excel_rappi']);
+const DETAIL_FIELDS = ['reason', 'comment', 'combo', 'amount', 'fields', 'timeOfDay', 'orderAtIso', 'day'];
+function detailEditMetadata(current, patch) {
+  return DETAIL_FIELDS.some(key => Object.hasOwn(patch, key)) ? {
+    detailOrigin: current.detailOrigin && !['photo', 'codes'].includes(current.detailOrigin) ? current.detailOrigin : 'manual', detailEdited: true,
+  } : {};
+}
 
 /**
  * Devuelve el preset al que pertenece un motivo guardado ("Preset · detalle"):
@@ -210,6 +217,8 @@ export function normalizeHistoryItem(raw, fallback = {}) {
     photoUrl: raw?.photoUrl || fallback.photoUrl || null,
     sourceId: raw?.sourceId || fallback.sourceId || null,
     manualEdit: Boolean(raw?.manualEdit ?? fallback.manualEdit),
+    detailOrigin: DETAIL_ORIGINS.has(raw?.detailOrigin ?? fallback.detailOrigin) ? raw?.detailOrigin ?? fallback.detailOrigin : '',
+    detailEdited: Boolean(raw?.detailEdited ?? fallback.detailEdited),
     importedAt: raw?.importedAt || fallback.importedAt || nowIso(),
     updatedAt: raw?.updatedAt || nowIso(),
   };
@@ -219,7 +228,7 @@ const NORMALIZED_KEYS = [
   'id', 'orderCode', 'compact', 'aggregator', 'orderAtIso', 'timeOfDay', 'dateAssumed',
   'day', 'reason', 'comment', 'combo', 'amount', 'fields', 'status', 'unrefutableReason',
   'rejectionReason',
-  'photoId', 'photoName', 'photoUrl', 'sourceId', 'manualEdit', 'importedAt', 'updatedAt',
+  'photoId', 'photoName', 'photoUrl', 'sourceId', 'manualEdit', 'detailOrigin', 'detailEdited', 'importedAt', 'updatedAt',
 ];
 
 function alreadyNormalized(item) {
@@ -234,6 +243,8 @@ function alreadyNormalized(item) {
     && typeof item.compact === 'string' && item.compact
     && typeof item.status === 'string' && Boolean(COMPLAINT_STATUSES[item.status])
     && typeof item.manualEdit === 'boolean'
+    && typeof item.detailOrigin === 'string'
+    && typeof item.detailEdited === 'boolean'
     && typeof item.importedAt === 'string'
     && typeof item.updatedAt === 'string'
     && Boolean(item.fields) && typeof item.fields === 'object' && !Array.isArray(item.fields)
@@ -314,6 +325,7 @@ export function upsertHistoryItems(store, complaints, { importedAt } = {}) {
       incoming.combo = String(complaint.combo || existing.combo || '').trim();
       incoming.amount = toAmount(complaint.amount ?? existing.amount);
       incoming.fields = mergeFields(existing.fields, complaint.fields);
+      incoming.detailEdited = existing.detailEdited || incoming.detailEdited;
       incoming.status = existing.status;
       incoming.photoId = existing.photoId || incoming.photoId;
       incoming.photoName = existing.photoName || incoming.photoName;
@@ -343,6 +355,7 @@ export function patchHistoryItem(store, id, patch) {
     {
       ...current,
       ...patch,
+      ...detailEditMetadata(current, patch),
       id,
       updatedAt: nowIso(),
     },
@@ -375,6 +388,7 @@ export function patchHistoryItems(store, ids, patch = {}) {
       {
         ...current,
         ...itemPatch,
+        ...detailEditMetadata(current, itemPatch),
         id,
         updatedAt: stamp,
       },
@@ -432,6 +446,7 @@ function galleryComplaintFromPhoto(photo) {
     aggregator: getPhotoAggregator(photo),
     orderAtIso: photo?.created_at || null,
     reason: PENDING_COMPLAINT_DETAILS,
+    detailOrigin: 'photo',
     comment: '',
     status: photo?.is_refutado ? COMPLAINT_STATUSES.refutado : COMPLAINT_STATUSES.queja,
     photoId: photo?.id || null,

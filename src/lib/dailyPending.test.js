@@ -1,12 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDailyPending, dailyLoadState } from './dailyPending.js';
+import { buildDailyPending, buildPendingManualLoad, dailyLoadState } from './dailyPending.js';
 import { argentinaToday, emptyStore, METRIC_AGGREGATORS } from './metrics.js';
 
 const today = '2026-10-11';
 const complete = (complaints = 0) => ({ orders: 100, complaints, awt: 0, reported: { orders: true, complaints: true, awt: true } });
 const dayStats = () => Object.fromEntries(METRIC_AGGREGATORS.map(id => [id, complete()]));
 const item = (id, day, status = 'queja', aggregator = 'pedidosya', extra = {}) => ({ id, day, status, aggregator, orderCode: `PEYA${id}`, ...extra });
+
+test('inline loading affects only the selected day and platform and records manual origin including zero', () => {
+  const metrics = { ...emptyStore(), days: { '2026-10-08': { pedidosya: { ...complete(), sources: { orders: 'manual', complaints: 'manual', awt: 'manual' } } } } };
+  const before = structuredClone(metrics);
+  const saved = buildPendingManualLoad(metrics, '2026-10-08', 'rappi', { orders: '0', complaints: '0' }, today);
+  assert.deepEqual(metrics, before);
+  assert.deepEqual(saved.days['2026-10-08'].pedidosya, metrics.days['2026-10-08'].pedidosya);
+  assert.equal(saved.days['2026-10-08'].rappi.orders, 0);
+  assert.equal(saved.days['2026-10-08'].rappi.sources.complaints, 'manual');
+  assert.equal(saved.days['2026-10-08'].rappi.reported.orders, true);
+  assert.equal(saved.targetComplaintPct, metrics.targetComplaintPct);
+});
+
+test('inline loading rejects missing values, invalid dates, future data and impossible totals before saving', () => {
+  for (const fields of [{ orders: '10' }, { orders: '10', complaints: '11' }, { orders: '-1', complaints: '0' }, { orders: '10', complaints: '1', awt: '11' }]) {
+    assert.throws(() => buildPendingManualLoad(emptyStore(), today, 'pedidosya', fields, today));
+  }
+  assert.throws(() => buildPendingManualLoad(emptyStore(), '2026-10-12', 'rappi', { orders: '1', complaints: '0' }, today));
+  assert.throws(() => buildPendingManualLoad(emptyStore(), today, 'unknown', { orders: '1', complaints: '0' }, today));
+});
 function report(days, cases = [], options = {}) {
   return buildDailyPending({ metrics: { ...emptyStore(), days }, history: { items: Object.fromEntries(cases.map(row => [row.id, row])) },
     today, from: '2026-10-01', to: today, ...options });
@@ -62,7 +82,7 @@ test('pending work outside either boundary cannot disappear behind a range filte
   assert.equal(result.outsideTotals.inAnalysis, 1);
 });
 
-test('today stays in progress and older loads or discrepancies cannot create a pending day', () => {
+test('saved loads stay complete but reported complaints absent from history create pending work, including today', () => {
   const result = report({ '2026-10-10': { ...dayStats(), rappi: { orders: 10, complaints: 0, awt: 0 } } });
   assert.equal(result.days[0].hasPending, false);
   assert.equal(result.totals.missingDays, 1); // only today has no saved rows
@@ -71,8 +91,37 @@ test('today stays in progress and older loads or discrepancies cannot create a p
   const difference = report({ [today]: { ...dayStats(), pedidosya: complete(2) } }, [item('1', today)]);
   assert.equal(difference.days[0].groups[0].discrepancy, true);
   assert.equal(difference.days[0].groups[0].load.state, 'complete');
+  assert.equal(difference.days[0].missingHistory, 1);
+  assert.equal(difference.days[0].hasPending, true);
   const onlyDifference = report({ '2026-10-10': { ...dayStats(), pedidosya: complete(2) } });
-  assert.equal(onlyDifference.days[0].hasPending, false);
+  assert.equal(onlyDifference.days[0].hasPending, true);
+  assert.equal(onlyDifference.days[0].needsData, false);
+  assert.equal(onlyDifference.totals.missingHistory, 2);
+});
+
+test('history gaps count resolved and marked cases, stay isolated by day and platform, and close when registered', () => {
+  const days = { '2026-10-10': { ...dayStats(), pedidosya: complete(5) }, [today]: dayStats() };
+  const cases = [item('1', '2026-10-10', 'no_refutable'), item('2', '2026-10-10', 'refutado_aceptado'),
+    item('3', '2026-10-10', 'refutado_rechazado', 'pedidosya', { reason: 'Pendiente de cargar detalles del reclamo' }),
+    item('4', '2026-10-10', 'no_refutable', 'rappi'), item('5', today, 'no_refutable')];
+  const result = report(days, cases, { from: today, to: today });
+  assert.equal(result.outsideTotals.missingHistory, 2);
+  assert.equal(result.outside[0].missingHistory, 2);
+  assert.equal(result.outside[0].hasPending, true);
+  assert.equal(result.outsideTotals.unrefuted, 0);
+  assert.equal(report(days, cases, { aggregator: 'rappi' }).totals.missingHistory, 0);
+  const closed = report(days, [...cases, item('6', '2026-10-10', 'refutado_aceptado'), item('7', '2026-10-10', 'no_refutable')]);
+  assert.equal(closed.totals.missingHistory, 0);
+  assert.equal(closed.days[0].hasPending, false);
+  assert.equal(closed.days[0].groups[0].load.state, 'complete');
+});
+
+test('unreported counts, zeros and more history than reported do not create missing history tasks', () => {
+  for (const stats of [complete(0), { ...complete(5), reported: { complaints: false } }, { orders: 10 }, { ...complete(), complaints: null }]) {
+    const result = report({ [today]: { ...dayStats(), pedidosya: stats } }, [item('1', today, 'no_refutable')]);
+    assert.equal(result.totals.missingHistory, 0);
+    assert.equal(result.days[0].hasPending, false);
+  }
 });
 
 test('unassigned and undated open cases remain visible, using Argentina rather than UTC for timestamps', () => {

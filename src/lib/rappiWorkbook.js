@@ -57,6 +57,7 @@ export function parseRappiWorkbook(book) {
         aggregator, day, orderAtIso: null, timeOfDay: null, dateAssumed: false,
         reason: text(value(sheet,'F' + row)), comment: text(value(sheet,'N' + row)), combo: '', amount,
         fields: { Tienda: local, 'Detalle del motivo': text(value(sheet,'J' + row)) },
+        detailOrigin: 'excel_rappi', detailEdited: false,
       };
       complaint.id = complaintHistoryId(complaint);
       const signature = JSON.stringify(complaint);
@@ -102,6 +103,8 @@ export function mergeRappiHistory(store, report, rows = []) {
     if (!existing && next.items[complaint.id]) throw new Error('El código ' + complaint.orderCode + ' coincide con otro registro. Revisá el historial.');
     const item = existing ? normalizeHistoryItem({
       ...existing,
+      detailOrigin: complaint.detailOrigin || existing.detailOrigin,
+      detailEdited: Boolean(complaint.detailEdited || existing.detailEdited),
       reason: complaint.reason && !isPendingComplaintDetails(complaint.reason) ? complaint.reason : existing.reason,
       comment: complaint.comment || existing.comment,
       combo: complaint.combo || existing.combo,

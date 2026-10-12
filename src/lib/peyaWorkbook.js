@@ -102,6 +102,7 @@ export function parsePeyaWorkbook(book) {
         reason: text(cell(complaintsSheet, 'F' + r)), comment: text(cell(complaintsSheet, 'G' + r)),
         combo: text(cell(complaintsSheet, 'H' + r)), amount,
         fields: optional ? { 'Nombre opcional': optional } : {},
+        detailOrigin: 'excel_pedidosya', detailEdited: false,
       };
       complaint.id = complaintHistoryId(complaint);
       const signature = JSON.stringify(complaint);

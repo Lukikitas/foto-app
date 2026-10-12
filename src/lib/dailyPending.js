@@ -1,7 +1,21 @@
 import { getAggregatorLabel } from './aggregators.js';
 import { complaintDay, COMPLAINT_STATUSES } from './complaintHistory.js';
-import { argentinaToday, enumerateDays, isIsoDate, METRIC_AGGREGATORS } from './metrics.js';
+import { argentinaToday, enumerateDays, isIsoDate, METRIC_AGGREGATORS, upsertDayStats } from './metrics.js';
 import { refutadoDaysLeft } from './refutadoDeadline.js';
+import { complaintDetails, dailyDataOrigin } from './pendingDetails.js';
+import { validateMetricFields } from './metricsQuality.js';
+
+export function buildPendingManualLoad(metrics, day, aggregator, fields, today = argentinaToday()) {
+  if (!METRIC_AGGREGATORS.includes(aggregator)) throw new Error('Elegí un agregador válido.');
+  const required = ['orders', 'complaints', ...(aggregator === 'pedidosya' ? ['awt'] : [])];
+  if (required.some(key => fields[key] == null || fields[key] === '')) throw new Error('Completá los campos de la carga, incluido cero cuando corresponda.');
+  const error = validateMetricFields(day, { [aggregator]: fields }, today);
+  if (error) throw new Error(error);
+  return upsertDayStats(metrics, day, aggregator, { ...fields, awt: aggregator === 'pedidosya' ? fields.awt : 0,
+    reported: Object.fromEntries(['orders', 'complaints', 'awt'].map(key => [key, required.includes(key)])),
+    sources: Object.fromEntries(['orders', 'complaints', 'awt'].map(key => [key, required.includes(key) ? 'manual' : ''])),
+  });
+}
 
 export function dailyLoadState(stats) {
   // A saved row is loaded, including older imports and explicit zeros.
@@ -10,7 +24,7 @@ export function dailyLoadState(stats) {
 }
 
 export function pendingCase(item, deadlines, today) {
-  return { ...item, day: complaintDay(item), daysLeft: item.status === COMPLAINT_STATUSES.queja
+  return { ...item, day: complaintDay(item), details: complaintDetails(item), daysLeft: item.status === COMPLAINT_STATUSES.queja
     ? refutadoDaysLeft(complaintDay(item), deadlines, item.aggregator, today) : null };
 }
 
@@ -19,6 +33,7 @@ export function summarizePendingDays(days) {
     missingDays: days.filter(day => day.groups.some(group => group.load.state === 'missing')).length,
     unrefuted: days.reduce((sum, day) => sum + day.unrefuted, 0),
     inAnalysis: days.reduce((sum, day) => sum + day.inAnalysis, 0),
+    missingHistory: days.reduce((sum, day) => sum + day.missingHistory, 0),
   };
 }
 
@@ -51,15 +66,24 @@ export function buildDailyPending({ metrics, history, from, to, aggregator = 'al
         .map(item => pendingCase(item, metrics?.refutadoDays, today));
       const discrepancy = Boolean(stats && stats.reported?.complaints !== false &&
         Number.isSafeInteger(stats.complaints) && stats.complaints !== groupItems.length);
-      return { id, label: getAggregatorLabel(id), load, unrefuted, inAnalysis,
-        reportedComplaints: stats?.complaints, historyCases: groupItems.length, discrepancy };
+      const missingHistory = stats && stats.reported?.complaints !== false && Number.isSafeInteger(stats.complaints)
+        ? Math.max(0, stats.complaints - groupItems.length) : 0;
+      const details = groupItems.map(complaintDetails);
+      return { id, label: getAggregatorLabel(id), load, stats, origin: dailyDataOrigin(stats, id), unrefuted, inAnalysis,
+        details: { total: details.length, complete: details.filter(item => item.state === 'complete').length,
+          marked: details.filter(item => item.state === 'marked').length, partial: details.filter(item => item.state === 'partial').length,
+          excel: details.filter(item => item.excel).length },
+        reportedComplaints: stats?.complaints, historyCases: groupItems.length, discrepancy, missingHistory };
     });
     const unrefuted = groups.reduce((sum, group) => sum + group.unrefuted.length, 0);
     const inAnalysis = groups.reduce((sum, group) => sum + group.inAnalysis.length, 0);
     const needsData = groups.some(group => group.load.state === 'missing');
+    const missingHistory = groups.reduce((sum, group) => sum + group.missingHistory, 0);
+    const details = groups.reduce((sum, group) => ({ total: sum.total + group.details.total,
+      complete: sum.complete + group.details.complete, marked: sum.marked + group.details.marked }), { total: 0, complete: 0, marked: 0 });
     return { day, groups, unrefuted, inAnalysis, inProgress: day === today,
       // Today's incomplete data is work in progress, not a missed daily closing.
-      hasPending: unrefuted > 0 || inAnalysis > 0 || (day !== today && needsData), needsData };
+      hasPending: unrefuted > 0 || inAnalysis > 0 || missingHistory > 0 || (day !== today && needsData), needsData, missingHistory, details };
   }) : [];
   const validRange = isIsoDate(from) && isIsoDate(to) && from <= to && to <= today;
   const visible = validRange ? days.filter(day => day.day >= from && day.day <= to) : [];

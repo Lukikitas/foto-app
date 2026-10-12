@@ -184,11 +184,16 @@ function historyFromResult(result) {
   return result?.store || result;
 }
 
-export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory, refreshKey = 0, focusedCase = null } = {}) {
+export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory, refreshKey = 0, focusedCase = null, loadRequest = null } = {}) {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [importMethod, setImportMethod] = useState('peya');
+  useEffect(() => {
+    if (!loadRequest) return;
+    const timer = window.setTimeout(() => { setImportOpen(true); setImportMethod('codes'); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadRequest]);
   const [sync, setSync] = useState(cachedComplaintSync);
   const [sheetUrl, setSheetUrl] = useState(() => cachedComplaintSync().sheetUrl || getSavedSheetUrl());
   const [complaints, setComplaints] = useState(storedBatch.complaints);
@@ -608,7 +613,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       throw new Error('No encontré códigos de pedido. Copiá las columnas de código, hora y motivo.');
     }
     const nextComplaints = assignComplaintsAggregator(parsed.complaints, importAggregator);
-    await prepareComplaintDraft(nextComplaints, { source: 'manual', sheetUrl: fromSheetUrl ? sheetUrl.trim() : '' });
+    await prepareComplaintDraft(nextComplaints, { source: fromSheetUrl ? 'sheet' : 'manual', sheetUrl: fromSheetUrl ? sheetUrl.trim() : '' });
     setSkipped(parsed.skipped);
     setPasteText('');
     setImportOpen(false);
@@ -1232,7 +1237,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
           <div hidden={importMethod !== 'peya'}><PeyaExcelImport disabled={loading} onBusy={setLoading} /></div>
           <div hidden={importMethod !== 'rappi'}><RappiExcelImport disabled={loading} onBusy={setLoading} /></div>
           <div hidden={importMethod !== 'refunds'}><PeyaRefundsImport disabled={loading} onBusy={setLoading} /></div>
-          <div hidden={importMethod !== 'codes'}><ComplaintCodeListImport disabled={loading} onBusy={setLoading} onImported={handleCodeListImported} /></div>
+          <div hidden={importMethod !== 'codes'}><ComplaintCodeListImport defaults={loadRequest} disabled={loading} onBusy={setLoading} onImported={handleCodeListImported} /></div>
           <div hidden={importMethod !== 'manual'}>
         <form className="complaints__import" onSubmit={handleSubmit}>
           <div className="complaints__import-meta">

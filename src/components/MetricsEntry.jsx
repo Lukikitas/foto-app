@@ -36,12 +36,12 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy, onDi
   const draftBases = useRef({});
   const [drafts, setDrafts] = useState({});
   const [pasteDirty, setPasteDirty] = useState(false);
-  const [mode, setMode] = useState(entryRequest ? 'day' : 'excel');
+  const [mode, setMode] = useState(entryRequest?.mode || (entryRequest ? 'day' : 'excel'));
   const [validation, setValidation] = useState('');
   const [copyNotice, setCopyNotice] = useState('');
   useEffect(() => {
     if (!entryRequest) return;
-    const timer = window.setTimeout(() => { setDay(entryRequest.day); setMode('day'); setValidation(''); }, 0);
+    const timer = window.setTimeout(() => { setDay(entryRequest.day); setMode(entryRequest.mode || 'day'); setValidation(''); }, 0);
     return () => window.clearTimeout(timer);
   }, [entryRequest]);
   useEffect(()=> {onDirty?.(Object.keys(drafts).length>0 || pasteDirty);},[drafts,pasteDirty,onDirty]);

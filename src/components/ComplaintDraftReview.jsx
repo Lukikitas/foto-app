@@ -122,7 +122,9 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
     return act(async () => {
       const pickedPhotoIds = { ...draft.data.pickedPhotoIds };
       const complaints = draft.data.complaints.map((before, index) => {
-        const after = transform(before, index);
+        const changed = transform(before, index);
+        const after = { ...changed, detailEdited: Boolean(before.detailEdited ||
+          ['orderCode', 'aggregator', 'day', 'reason', 'comment', 'combo', 'amount', 'timeOfDay', 'orderAtIso'].some(key => before[key] !== changed[key])) };
         if (
           before.orderCode !== after.orderCode ||
           before.aggregator !== after.aggregator ||

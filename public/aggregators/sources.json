@@ -1,0 +1,26 @@
+{
+  "retrieved": "2026-10-11",
+  "sources": [
+    {
+      "brand": "pedidosya",
+      "app": "PedidosYa: Comida a Domicilio",
+      "developer": "Pedidos Ya S.A.",
+      "page": "https://apps.apple.com/ar/app/pedidosya-comida-a-domicilio/id490099807?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/24/d0/a8/24d0a82e-b2e9-6b46-67d7-4555dc7aae6d/AppIconRelease-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+    },
+    {
+      "brand": "rappi",
+      "app": "Rappi: Food, delivery y más",
+      "developer": "Grability Inc.",
+      "page": "https://apps.apple.com/ar/app/rappi-food-delivery-y-m%C3%A1s/id984044296?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/f0/2d/f5/f02df525-d294-98df-a750-639b6afc43ca/AppIcon-0-0-1x_U007emarketing-0-11-0-0-sRGB-GLES2_U002c0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "brand": "mercadopago",
+      "app": "Mercado Pago: cuenta digital",
+      "developer": "MercadoLibre S.A.",
+      "page": "https://apps.apple.com/ar/app/mercado-pago-cuenta-digital/id925436649?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/19/11/ef/1911ef14-319f-bbf2-ac9b-22e7b9769615/App_Icon-0-0-1x_U007ephone-0-1-0-0-sRGB-85-220.png/512x512bb.jpg"
+    }
+  ]
+}

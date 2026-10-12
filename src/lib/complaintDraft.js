@@ -36,7 +36,9 @@ export function mergeDraft(history, draft, rows = []) {
   let store = parseHistory(history); let added = 0; let updated = 0;
   const affected = [];
   for (const raw of draft.complaints) {
-    const complaint = normalizeDraftComplaint(raw);
+    const complaint = normalizeDraftComplaint({ ...raw,
+      detailOrigin: ({ peya: 'excel_pedidosya', rappi: 'excel_rappi', codes: 'codes', sheet: 'sheet', manual: 'manual' })[draft.source] || raw.detailOrigin || '',
+    });
     const previous = findDraftHistory(store, complaint);
     if (previous && complaint.identityEdited && (previous.orderCode !== complaint.orderCode || previous.aggregator !== complaint.aggregator)) {
       store = editHistoryItemInStore(store, previous.id, { orderCode: complaint.orderCode, aggregator: complaint.aggregator });

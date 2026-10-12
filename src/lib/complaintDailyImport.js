@@ -46,7 +46,7 @@ export async function cruzarSheetUrl(url) {
   }
   const photos = await fetchPhotosForComplaints(parsed.complaints);
   const matched = matchComplaintsToPhotos(parsed.complaints, photos);
-  const result = await importComplaintsToHistory(parsed.complaints, matched);
+  const result = await importComplaintsToHistory(parsed.complaints.map(item => ({ ...item, detailOrigin: 'sheet' })), matched);
   return {
     ...result,
     complaints: parsed.complaints,

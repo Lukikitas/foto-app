@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AGGREGATOR_OPTIONS, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators.js';
 import {
   applyCodeListDefaults,
@@ -11,7 +11,7 @@ import { prepareComplaintDraft } from '../lib/complaintDraftStore.js';
 import { fetchPhotosForComplaints } from '../lib/complaints.js';
 import { toArgentinaDate } from '../lib/metrics.js';
 
-export default function ComplaintCodeListImport({ disabled = false, onBusy, onImported }) {
+export default function ComplaintCodeListImport({ disabled = false, onBusy, onImported, defaults = null }) {
   const [text, setText] = useState('');
   const [items, setItems] = useState([]);
   const [invalid, setInvalid] = useState([]);
@@ -23,6 +23,11 @@ export default function ComplaintCodeListImport({ disabled = false, onBusy, onIm
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const unresolved = useMemo(() => items.filter((item) => !item.photo), [items]);
+  useEffect(() => {
+    if (!defaults) return;
+    const timer = window.setTimeout(() => { setBulkDay(defaults.day || ''); setBulkAggregator(defaults.aggregator || ''); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [defaults]);
 
   function working(value) {
     setBusy(value);
@@ -113,6 +118,7 @@ export default function ComplaintCodeListImport({ disabled = false, onBusy, onIm
     <section className="code-list-import" aria-label="Cargar lista de códigos con reclamo">
       <h3>Lista de códigos con reclamo</h3>
       <p>Pegá una columna o lista. La fecha y el agregador se toman de la foto; si no existe, completalos abajo.</p>
+      {defaults && <p className="complaints__hint">Pendientes de {defaults.day} · {getAggregatorLabel(defaults.aggregator)}. La fecha y el agregador están preparados para aplicar a los códigos seleccionados; revisá los datos antes de confirmar.</p>}
       <form onSubmit={analyze}>
         <label>Códigos
           <textarea rows={4} value={text} onChange={(event) => setText(event.target.value)}

@@ -48,9 +48,11 @@ export default function App() {
   const [metricsDirty,setMetricsDirty] = useState(false);
   const [focusedCase,setFocusedCase] = useState(null);
   const [metricsRequest, setMetricsRequest] = useState(null);
+  const [complaintLoadRequest, setComplaintLoadRequest] = useState(null);
   const [desktop, setDesktop] = useState(() => !isPhoneViewport());
   const [pendingVisited, setPendingVisited] = useState(false);
   const [pendingReturn, setPendingReturn] = useState(false);
+  const [pendingDirty, setPendingDirty] = useState(false);
   const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
@@ -91,17 +93,20 @@ export default function App() {
 
   async function navigate(next, { fromPending = false } = {}) {
     if (next === TABS.pending && !desktop) return false;
-    if (next !== tab && metricsDirty && !await confirmAction('Hay cambios sin guardar en Métricas. Podés volver a Cargar para continuar el borrador.', { danger: false, title: 'Cambios pendientes', confirmLabel: 'Cambiar de sección' })) return false;
+    if (next !== tab && (metricsDirty || pendingDirty) && !await confirmAction(pendingDirty ? 'Hay una carga sin guardar en Pendientes. Podés volver para continuar el borrador.' : 'Hay cambios sin guardar en Métricas. Podés volver a Cargar para continuar el borrador.', { danger: false, title: 'Cambios pendientes', confirmLabel: 'Cambiar de sección' })) return false;
     if (next === TABS.pending) setPendingVisited(true);
     setPendingReturn(fromPending);
     setTab(next);
     return true;
   }
-  async function openPendingDay(day, aggregator) {
-    if (await navigate(TABS.metrics, { fromPending: true })) setMetricsRequest({ day, aggregator, id: crypto.randomUUID() });
+  async function openPendingDay(day, aggregator, mode = 'day') {
+    if (await navigate(TABS.metrics, { fromPending: true })) setMetricsRequest({ day, aggregator, mode, id: crypto.randomUUID() });
   }
   async function openPendingCase(item) {
     if (await navigate(TABS.history, { fromPending: true })) setFocusedCase({ ...item, requestId: crypto.randomUUID() });
+  }
+  async function openPendingComplaints(day, aggregator) {
+    if (await navigate(TABS.complaints, { fromPending: true })) setComplaintLoadRequest({ day, aggregator, id: crypto.randomUUID() });
   }
   function handleThemeChange(nextTheme) {
     saveTheme(nextTheme);
@@ -168,9 +173,9 @@ export default function App() {
 
         <main className={`app__main${tab === TABS.capture ? ' app__main--capture' : ''}`}>
           <UploadQueueStatus />
-          {desktop && pendingReturn && (tab === TABS.metrics || tab === TABS.history) && <button className="btn btn--ghost pending-return" onClick={() => navigate(TABS.pending)}>← Volver a pendientes</button>}
-          {desktop && pendingVisited && <div hidden={tab !== TABS.pending}><Suspense fallback={<p className="gallery__state">Cargando pendientes…</p>}>
-            <DailyPendingPage active={tab === TABS.pending} onLoadDay={openPendingDay} onCase={openPendingCase} />
+          {desktop && pendingReturn && (tab === TABS.metrics || complaintsOpen) && <button className="btn btn--ghost pending-return" onClick={() => navigate(TABS.pending)}>← Volver a pendientes</button>}
+          {pendingVisited && <div hidden={!desktop || tab !== TABS.pending}><Suspense fallback={<p className="gallery__state">Cargando pendientes…</p>}>
+            <DailyPendingPage active={desktop && tab === TABS.pending} onLoadDay={openPendingDay} onLoadComplaints={openPendingComplaints} onCase={openPendingCase} onDirtyChange={setPendingDirty} />
           </Suspense></div>}
           {tab === TABS.capture && (
             <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
@@ -189,6 +194,7 @@ export default function App() {
           )}
           <div hidden={!complaintsOpen} className="app__panel">
             <ComplaintsInbox
+              loadRequest={complaintLoadRequest}
               focusedCase={focusedCase}
               view={tab === TABS.history ? 'historial' : 'cruzar'}
               refreshKey={metricsRefreshKey}
