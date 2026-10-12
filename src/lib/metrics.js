@@ -218,6 +218,22 @@ export function resolvePeriod(preset, today = argentinaToday(), customFrom = '',
   return { from: today, to: today };
 }
 
+export function resolveAvailablePeriod(preset, store, today = argentinaToday(), customFrom = '', customTo = '') {
+  if (!['week', 'month', 'days7'].includes(preset)) {
+    return resolvePeriod(preset, today, customFrom, customTo);
+  }
+  const lastLoadedDay = Object.keys(store?.days || {})
+    .filter(day => isIsoDate(day) && day <= today && METRIC_AGGREGATORS.some(id => {
+      const stats = store.days[day]?.[id];
+      return stats && ['orders', 'complaints', ...(id === AWT_AGGREGATOR ? ['awt'] : [])]
+        .some(key => stats[key] != null && stats.reported?.[key] !== false);
+    }))
+    .sort().at(-1);
+  // Anchor automatic periods to the latest saved day. This also keeps a
+  // Monday with no loads from producing an empty or reversed weekly range.
+  return resolvePeriod(preset, lastLoadedDay || today, customFrom, customTo);
+}
+
 export function previousPeriod(from, to, preset = '') {
   if (preset === 'week') return { from: addDays(from, -7), to: addDays(to, -7) };
   if (preset === 'month') {

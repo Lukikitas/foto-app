@@ -11,7 +11,7 @@ import {
 import MetricsQualityPanel from './MetricsQualityPanel';
 import { metricsReadStatus } from '../lib/metricsStore';
 import { confirmAction } from '../lib/confirmAction';
-import { argentinaToday, emptyStore, METRIC_PAGE_TABS, resolvePeriod } from '../lib/metrics';
+import { argentinaToday, emptyStore, METRIC_PAGE_TABS, resolveAvailablePeriod } from '../lib/metrics';
 import {
   getMetricsView,
   getSavedPeriod,
@@ -26,22 +26,22 @@ import MetricsEntry from './MetricsEntry';
 import MetricsReport from './MetricsReport';
 import MetricsStaff from './MetricsStaff';
 
-function useMetricsPeriod() {
+function useMetricsPeriod(store) {
   const savedPeriod = getSavedPeriod();
   const [preset, setPreset] = useState(savedPeriod.preset || 'week');
   const [customFrom, setCustomFrom] = useState(savedPeriod.customFrom || '');
   const [customTo, setCustomTo] = useState(savedPeriod.customTo || '');
   const today = argentinaToday();
   const period = useMemo(
-    () => resolvePeriod(preset, today, customFrom, customTo),
-    [preset, today, customFrom, customTo],
+    () => resolveAvailablePeriod(preset, store, today, customFrom, customTo),
+    [preset, store, today, customFrom, customTo],
   );
 
   function applyPreset(id) {
     setPreset(id);
     savePeriod({ preset: id, customFrom, customTo });
     if (id === 'custom') {
-      const next = resolvePeriod(preset === 'custom' ? 'week' : preset, today, customFrom, customTo);
+      const next = resolveAvailablePeriod(preset === 'custom' ? 'week' : preset, store, today, customFrom, customTo);
       setCustomFrom(customFrom || next.from);
       setCustomTo(customTo || next.to);
     }
@@ -62,6 +62,7 @@ function useMetricsPeriod() {
     customFrom,
     customTo,
     period,
+    endsAtLastLoadedDay: ['week', 'month', 'days7'].includes(preset) && period.to < today,
     applyPreset,
     changeCustomFrom,
     changeCustomTo,
@@ -81,7 +82,7 @@ export default function MetricsPage({ onManage, onDirtyChange, refreshKey = 0, e
   const [dirty, setDirty] = useState(false);
   const [readStatus, setReadStatus] = useState({});
   const [aggregator, setAggregator] = useState('all');
-  const periodState = useMetricsPeriod();
+  const periodState = useMetricsPeriod(store);
   const range = focusDay ? { from: focusDay, to: focusDay } : periodState.period;
   const hasData = useMemo(() => Object.keys(store.days || {}).length > 0, [store]);
 
@@ -237,6 +238,7 @@ export default function MetricsPage({ onManage, onDirtyChange, refreshKey = 0, e
               customFrom={periodState.customFrom}
               customTo={periodState.customTo}
               period={periodState.period}
+              endsAtLastLoadedDay={periodState.endsAtLastLoadedDay}
               focusDay={focusDay}
               aggregator={aggregator}
               onPreset={(id) => {

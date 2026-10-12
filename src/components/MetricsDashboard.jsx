@@ -42,6 +42,7 @@ export function MetricsPeriodBar({
   customFrom,
   customTo,
   period,
+  endsAtLastLoadedDay = false,
   focusDay,
   aggregator,
   onPreset,
@@ -115,6 +116,7 @@ export function MetricsPeriodBar({
           <>
             {formatDayLabel(period.from)}
             {period.from !== period.to ? ` → ${formatDayLabel(period.to)}` : ''}
+            {endsAtLastLoadedDay && ' · Hasta el último día con datos'}
           </>
         )}
       </p>
