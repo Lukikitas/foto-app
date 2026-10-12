@@ -41,7 +41,9 @@ test('report includes days with no history, explicit zero complaints and unavail
   delete metrics.days[to].rappi;
   const missing = buildComplaintReport(emptyHistory(), { metrics, from, to, aggregator: 'rappi' });
   assert.equal(missing.rates.daily[1].complaintPct, null);
-  assert.equal(missing.rates.aggregators[0].adjustedComplaintPct, null);
+  assert.equal(missing.rates.aggregators[0].adjustedComplaintPct, 0);
+  assert.equal(missing.rates.aggregators[0].partial, true);
+  assert.equal(missing.rates.aggregators[0].loadedDays, 1);
   metrics.days[to].rappi = { orders: 50, complaints: 0, reported: { orders: true, complaints: false } };
   assert.equal(buildComplaintReport(emptyHistory(), { metrics, from, to, aggregator: 'rappi' }).rates.aggregators[0].complaintPct, null);
 });
@@ -59,4 +61,25 @@ test('printed report includes range and daily rates with section switches and ag
   const rappi = generateReportHtml(buildComplaintReport(history, { metrics, from, to, aggregator: 'rappi' }));
   assert.doesNotMatch(rappi, /<th[^>]*>AWT Peya/);
   assert.match(rappi, /0,00%/);
+});
+
+test('missing last day does not erase loaded monthly rates or subtract accepted cases outside the loaded days', () => {
+  const { metrics, history, from } = fixture();
+  const nextHistory = upsertHistoryItems(history, [
+    { orderCode: 'PEYA-3', orderAtIso: '2026-10-03T17:00:00-03:00', amount: 100 },
+  ]).store;
+  const id = Object.values(nextHistory.items).find(item => item.orderCode === 'PEYA-3').id;
+  const accepted = patchHistoryItem(nextHistory, id, { status: 'refutado_aceptado' });
+  const report = buildComplaintReport(accepted, { metrics, from, to: '2026-10-03', aggregator: 'pedidosya' });
+  const total = report.rates.aggregators[0];
+  assert.equal(total.complaintPct, 4);
+  assert.ok(Math.abs(total.adjustedComplaintPct - 3.5) < 1e-10);
+  assert.equal(total.awtPct, 8);
+  assert.equal(total.accepted, 2);
+  assert.equal(total.loadedDays, 2);
+  assert.equal(total.totalDays, 3);
+  assert.equal(report.rates.daily[2].complaintPct, null);
+  assert.match(generateReportHtml(report), /Parcial · 2\/3 días cargados/);
+  const empty = buildComplaintReport(accepted, { metrics, from: '2026-10-03', to: '2026-10-03', aggregator: 'pedidosya' });
+  assert.equal(empty.rates.aggregators[0].complaintPct, null);
 });

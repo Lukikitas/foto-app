@@ -18,12 +18,12 @@ function escapeHtml(str) {
 function ratesTableHtml(rows, daily = false) {
   if (!rows?.length) return '';
   const showAwt = rows.some(row => row.id === 'pedidosya');
-  const count = value => value == null ? '—' : formatNumber(value);
+  const count = value => value == null ? 'Sin cargar' : formatNumber(value);
   return `<section class="report-section">
     <h2 class="report-section-title">${daily ? 'Porcentajes diarios por agregador' : 'Porcentajes del rango por agregador'}</h2>
     <div class="table-container"><table class="report-table">
       <thead><tr>${daily ? '<th>Día</th>' : ''}<th>Agregador</th><th class="col-right">Pedidos</th><th class="col-right">Quejas</th><th class="col-right">% quejas</th><th class="col-right">Refutadas aceptadas</th><th class="col-right">% sin refutadas aceptadas</th>${showAwt ? '<th class="col-right">AWT Peya (%)</th>' : ''}</tr></thead>
-      <tbody>${rows.map(row => `<tr>${daily ? `<td>${escapeHtml(formatDayLabel(row.day))}</td>` : ''}<td>${escapeHtml(row.label)}</td><td class="col-right">${count(row.orders)}</td><td class="col-right">${count(row.complaints)}</td><td class="col-right">${formatPct(row.complaintPct)}</td><td class="col-right">${count(row.accepted)}</td><td class="col-right">${formatPct(row.adjustedComplaintPct)}</td>${showAwt ? `<td class="col-right">${row.id === 'pedidosya' ? formatPct(row.awtPct) : 'No aplica'}</td>` : ''}</tr>`).join('')}</tbody>
+      <tbody>${rows.map(row => `<tr>${daily ? `<td>${escapeHtml(formatDayLabel(row.day))}</td>` : ''}<td>${escapeHtml(row.label)}${!daily ? `<br><small>${row.partial ? 'Parcial · ' : ''}${row.loadedDays}/${row.totalDays} días cargados</small>` : ''}</td><td class="col-right">${count(row.orders)}</td><td class="col-right">${count(row.complaints)}</td><td class="col-right">${formatPct(row.complaintPct)}</td><td class="col-right">${count(row.accepted)}</td><td class="col-right">${formatPct(row.adjustedComplaintPct)}</td>${showAwt ? `<td class="col-right">${row.id === 'pedidosya' ? formatPct(row.awtPct) : 'No aplica'}</td>` : ''}</tr>`).join('')}</tbody>
     </table></div><p class="report-sources">${escapeHtml(REPORT_RATES_NOTE)}</p>
   </section>`;
 }
