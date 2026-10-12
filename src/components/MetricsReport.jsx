@@ -16,6 +16,8 @@ import { openReportInNewTab } from '../lib/pdfReportGenerator';
 import MetricsReasonTop from './MetricsReasonTop';
 import ReportPdfModal from './ReportPdfModal';
 import TrendCard from './TrendCard';
+import ReportRatesTable from './ReportRatesTable';
+import { REPORT_RATES_NOTE } from '../lib/reportRates';
 
 function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
   if (!rows.length) return null;
@@ -67,6 +69,7 @@ export default function MetricsReport({ history, range, aggregator, store, prese
     [store, history, range, aggregator, preset],
   );
   const totals = report.totals;
+  const hasReportData = totals.count > 0 || report.rates.daily.some(row => row.orders != null || row.complaints != null || row.awt != null);
   const extras = useMemo(() => extraFieldKeys(report.items).slice(0, 6), [report.items]);
 
   return (
@@ -128,7 +131,7 @@ export default function MetricsReport({ history, range, aggregator, store, prese
             type="button"
             className="btn btn--ghost btn--small report-btn-pdf"
             onClick={() => setShowPdfModal(true)}
-            disabled={!totals.count}
+            disabled={!hasReportData}
             title="Generar y previsualizar informe ejecutivo en PDF listo para imprimir o compartir"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -144,7 +147,7 @@ export default function MetricsReport({ history, range, aggregator, store, prese
               type="button"
               className="btn btn--ghost btn--small"
               onClick={() => setShowMoreMenu((prev) => !prev)}
-              disabled={!totals.count}
+              disabled={!hasReportData}
               aria-expanded={showMoreMenu}
             >
               Más opciones ▾
@@ -210,9 +213,13 @@ export default function MetricsReport({ history, range, aggregator, store, prese
         <TrendCard store={store} history={history} range={range} aggregator={aggregator} series={trend} allowExport={false} showSummary={false} preset={preset} />
       )}
 
+      <ReportRatesTable rows={report.rates.aggregators} />
+      <ReportRatesTable rows={report.rates.daily} daily />
+      {report.rates.daily.length > 0 && <p className="metrics-comparison">{REPORT_RATES_NOTE}</p>}
+
       {!totals.count ? (
         <div className="gallery__state gallery__state--empty">
-          <p>No hay quejas en este período para armar el informe.</p>
+          <p>No hay quejas registradas en el historial para este período.</p>
         </div>
       ) : (
         <>

@@ -1,69 +1,20 @@
 const ICONS = {
-  pending: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <rect x="4" y="3.5" width="12" height="14" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M7 2v3m6-3v3M7 9l1.5 1.5L11 8M7 14h6" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  metrics: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <rect x="3.5" y="9" width="3.2" height="7.5" />
-      <rect x="8.4" y="4.5" width="3.2" height="12" />
-      <rect x="13.3" y="7" width="3.2" height="9.5" />
-    </svg>
-  ),
-  capture: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M2.6 6.4h3.1l1.1-1.7h6.4l1.1 1.7h3.1c.7 0 1.2.5 1.2 1.2v8.1c0 .7-.5 1.2-1.2 1.2H2.6c-.7 0-1.2-.5-1.2-1.2V7.6c0-.7.5-1.2 1.2-1.2z" />
-    </svg>
-  ),
-  gallery: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <rect x="3" y="3" width="6.2" height="6.2" />
-      <rect x="10.8" y="3" width="6.2" height="6.2" />
-      <rect x="3" y="10.8" width="6.2" height="6.2" />
-      <rect x="10.8" y="10.8" width="6.2" height="6.2" />
-    </svg>
-  ),
-  complaints: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 3.2h12v10.6H8.4L4 16.8V3.2z" />
-    </svg>
-  ),
-  history: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <circle cx="10" cy="10.2" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M10 6.6v4l2.6 1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
-    </svg>
-  ),
-  files: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M5 3.2h6.4L15.2 7v9.6H5V3.2z" />
-    </svg>
-  ),
-  settings: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <circle cx="10" cy="10" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10 2.5v2m0 11v2M2.5 10h2m11 0h2M4.7 4.7l1.4 1.4m7.8 7.8 1.4 1.4m0-10.6-1.4 1.4m-7.8 7.8-1.4 1.4"
-        fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  collapse: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M12.4 4.4 6.8 10l5.6 5.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  ),
-  expand: (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M7.6 4.4 13.2 10l-5.6 5.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  ),
+  pending: <><rect x="5" y="4" width="14" height="17" rx="3" /><path d="M9 4V3h6v1M9 10l1.5 1.5L14 8M9 16h6" /></>,
+  metrics: <><path d="M4 4v16h16M8 16v-4m5 4V8m5 8V5" /><path d="m7 8 5-4 4 1 4-3" /></>,
+  capture: <><path d="M8 5.5 9.5 3h5L16 5.5h3A2 2 0 0 1 21 7.5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /><path d="M17.5 9h.01" /></>,
+  gallery: <><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m3 17 5-5 4 4 4-6 5 7" /></>,
+  complaints: <><path d="M8 19 4 22v-5a3 3 0 0 1-1-2V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H9Z" /><path d="M12 7v5m0 3h.01" /></>,
+  history: <><path d="M3 10a9 9 0 1 1 2.5 8M3 4v6h6M12 7v5l3 2" /></>,
+  files: <><path d="M3 8V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M3 11h18" /></>,
+  settings: <><path d="M4 7h7m4 0h5M4 17h3m4 0h9" /><circle cx="13" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>,
+  collapse: <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16m7-12-3 4 3 4" /></>,
+  expand: <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16m4-12 3 4-3 4" /></>,
 };
 
 export default function NavIcon({ name }) {
-  return (
-    <span className="app-nav__icon" aria-hidden="true">
+  return <span className="app-nav__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       {ICONS[name]}
-    </span>
-  );
+    </svg>
+  </span>;
 }

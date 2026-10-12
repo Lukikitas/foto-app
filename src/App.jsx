@@ -4,7 +4,6 @@ import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { startDailyImportScheduler } from './lib/complaintDailyImport';
 import { restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, saveTheme } from './lib/theme';
-import { getNavCollapsed, saveNavCollapsed } from './lib/storage';
 import { isPhoneViewport, PHONE_MEDIA_QUERY } from './lib/viewport';
 import { APP_VERSION } from './lib/version';
 import { purgeExpiredUnresolvedTickets } from './lib/unresolvedTicketStore';
@@ -58,7 +57,7 @@ export default function App() {
   const [theme, setTheme] = useState(getTheme);
   const [sessionAuthor, setSessionAuthor] = useState('');
   const [metricsRefreshKey, setMetricsRefreshKey] = useState(0);
-  const [navCollapsed, setNavCollapsed] = useState(getNavCollapsed);
+  const [navCollapsed, setNavCollapsed] = useState(true);
 
   useEffect(() => {
     const media = window.matchMedia(PHONE_MEDIA_QUERY);
@@ -114,9 +113,7 @@ export default function App() {
   }
 
   function handleNavCollapse() {
-    const next = !navCollapsed;
-    setNavCollapsed(next);
-    saveNavCollapsed(next);
+    setNavCollapsed(current => !current);
   }
 
   const complaintsOpen = tab === TABS.complaints || tab === TABS.history;
@@ -133,9 +130,9 @@ export default function App() {
             type="button"
             className="app-nav__collapse"
             onClick={handleNavCollapse}
-            aria-pressed={navCollapsed}
-            aria-label={navCollapsed ? 'Mostrar menú' : 'Replegar menú'}
-            title={navCollapsed ? 'Mostrar menú' : 'Replegar menú'}
+            aria-pressed={!navCollapsed}
+            aria-label={navCollapsed ? 'Fijar menú abierto' : 'Activar menú automático'}
+            title={navCollapsed ? 'Fijar menú abierto' : 'Activar menú automático'}
           >
             <NavIcon name={navCollapsed ? 'expand' : 'collapse'} />
           </button>
@@ -151,7 +148,7 @@ export default function App() {
                 className={`app-nav__btn app-nav__btn--${item.id}${active ? ' app-nav__btn--active' : ''}`}
                 onClick={() => navigate(item.id)}
                 aria-current={active ? 'page' : undefined}
-                title={navCollapsed ? item.label : undefined}
+                aria-label={item.label}
               >
                 <NavIcon name={item.icon} />
                 <span className="app-nav__btn-label app-nav__btn-label--full">{item.label}</span>

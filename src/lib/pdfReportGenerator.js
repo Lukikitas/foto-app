@@ -3,6 +3,7 @@ import { COMPLAINT_STATUSES, COMPLAINT_STATUS_LABELS } from './complaintHistory.
 import { extraFieldKeys } from './complaintReport.js';
 import { formatDayLabel, formatKnownMoney, formatMoney, formatNumber, formatPct } from './metrics.js';
 import { buildTrendChartSvg } from './trendChart.js';
+import { REPORT_RATES_NOTE } from './reportRates.js';
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -12,6 +13,19 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function ratesTableHtml(rows, daily = false) {
+  if (!rows?.length) return '';
+  const showAwt = rows.some(row => row.id === 'pedidosya');
+  const count = value => value == null ? '—' : formatNumber(value);
+  return `<section class="report-section">
+    <h2 class="report-section-title">${daily ? 'Porcentajes diarios por agregador' : 'Porcentajes del rango por agregador'}</h2>
+    <div class="table-container"><table class="report-table">
+      <thead><tr>${daily ? '<th>Día</th>' : ''}<th>Agregador</th><th class="col-right">Pedidos</th><th class="col-right">Quejas</th><th class="col-right">% quejas</th><th class="col-right">Refutadas aceptadas</th><th class="col-right">% sin refutadas aceptadas</th>${showAwt ? '<th class="col-right">AWT Peya (%)</th>' : ''}</tr></thead>
+      <tbody>${rows.map(row => `<tr>${daily ? `<td>${escapeHtml(formatDayLabel(row.day))}</td>` : ''}<td>${escapeHtml(row.label)}</td><td class="col-right">${count(row.orders)}</td><td class="col-right">${count(row.complaints)}</td><td class="col-right">${formatPct(row.complaintPct)}</td><td class="col-right">${count(row.accepted)}</td><td class="col-right">${formatPct(row.adjustedComplaintPct)}</td>${showAwt ? `<td class="col-right">${row.id === 'pedidosya' ? formatPct(row.awtPct) : 'No aplica'}</td>` : ''}</tr>`).join('')}</tbody>
+    </table></div><p class="report-sources">${escapeHtml(REPORT_RATES_NOTE)}</p>
+  </section>`;
 }
 
 export const DEFAULT_REPORT_TITLE = 'Informe Gerencial de Quejas y Recuperos';
@@ -904,6 +918,7 @@ export function generateReportHtml(report, options = {}) {
     ` : ''}
 
     <!-- Table 1: Por Agregador -->
+    ${sections.aggregators ? ratesTableHtml(report.rates?.aggregators) : ''}
     ${sections.aggregators && report.aggregators?.length > 0 ? `
     <section class="report-section">
       <h2 class="report-section-title">Desglose por Agregador</h2>
@@ -1037,6 +1052,7 @@ export function generateReportHtml(report, options = {}) {
     ` : ''}
 
     <!-- Table 4: Por Día -->
+    ${sections.days ? ratesTableHtml(report.rates?.daily, true) : ''}
     ${sections.days && report.days?.length > 0 ? `
     <section class="report-section">
       <h2 class="report-section-title">Evolución Cronológica Diaria</h2>

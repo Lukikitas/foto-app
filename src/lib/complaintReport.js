@@ -13,6 +13,7 @@ import {
   REFUTATION_REJECTED_REASONS,
 } from './complaintHistory.js';
 import { formatPct, ratioPct } from './metrics.js';
+import { buildReportRates } from './reportRates.js';
 
 function knownAmount(row, key) {return !Number(row[key]) && row.missingMoney?.[key] ? 'Sin monto' : row[key] || 0;}
 
@@ -121,6 +122,7 @@ export function buildComplaintReport(store, { from = '', to = '', aggregator = '
     aggregator,
     items,
     totals,
+    rates: buildReportRates(metrics, store, { from, to, aggregator }),
     aggregators,
     combos: comboRanking(items, options),
     generatedAt: new Date().toISOString(),

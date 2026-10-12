@@ -1,3 +1,25 @@
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .app--nav-collapsed .app-nav:hover {
+    width: 13.75rem;
+    box-shadow: 12px 0 28px rgb(0 0 0 / 12%);
+  }
+
+  .app--nav-collapsed .app-nav:hover :is(.app-nav__brand, .app-nav__btn-label--full, .app__version) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app--nav-collapsed .app-nav:hover .app-nav__btn {
+    width: 12.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app, .app-nav, .app-nav__brand, .app-nav__btn, .app-nav__btn-label--full {
+    transition: none !important;
+  }
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -102,7 +124,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  fill: currentColor;
+  fill: none;
 }
 
 .app-nav__icon svg [fill='none'] {
@@ -4766,6 +4788,7 @@ button.metrics-agg:focus-visible {
     display: grid;
     grid-template-columns: var(--app-sidebar, 13.75rem) minmax(0, 1fr);
     min-height: 100svh;
+    transition: grid-template-columns 220ms ease;
   }
 
   .app--nav-collapsed {
@@ -4788,14 +4811,18 @@ button.metrics-agg:focus-visible {
     padding: 1rem 0.7rem 0.85rem;
     border-top: none;
     border-right: 1px solid var(--border);
-    overflow: hidden;
+    overflow: clip;
+    width: var(--app-sidebar, 13.75rem);
+    transition: width 220ms ease, box-shadow 220ms ease;
   }
 
   .app-nav__top {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.35rem;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.65rem;
+    width: 12.35rem;
+    min-height: 3rem;
   }
 
   .app-nav__brand {
@@ -4803,11 +4830,12 @@ button.metrics-agg:focus-visible {
     flex-direction: column;
     gap: 0.05rem;
     margin: 0;
-    padding: 0.15rem 0.3rem 0;
+    padding: 0;
     color: var(--text-h);
-    font-size: 1.02rem;
+    font-size: 0.9rem;
     font-weight: 700;
     line-height: 1.15;
+    transition: opacity 160ms ease;
   }
 
   .app-nav__brand span {
@@ -4828,6 +4856,8 @@ button.metrics-agg:focus-visible {
     color: var(--text-h);
     cursor: pointer;
     flex-shrink: 0;
+    order: -1;
+    margin-left: 0.25rem;
   }
 
   .app-nav__collapse .app-nav__icon {
@@ -4862,25 +4892,44 @@ button.metrics-agg:focus-visible {
   .app-nav__buttons {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    width: 100%;
+    gap: 0.3rem;
+    width: 12.35rem;
     max-width: none;
     margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 0;
   }
 
   .app-nav__btn {
     flex-direction: row;
     justify-content: flex-start;
     gap: 0.65rem;
-    min-height: 2.5rem;
+    min-height: 2.85rem;
+    flex-shrink: 0;
     padding: 0.45rem 0.7rem;
     border-bottom: 0;
     border-left: 3px solid transparent;
-    border-radius: var(--radius);
+    border-radius: 12px;
     font-size: 0.92rem;
     order: 0;
     transform: none;
     box-shadow: none;
+    white-space: nowrap;
+    overflow: hidden;
+    width: 12.35rem;
+    transition: width 220ms ease, background 160ms ease, color 160ms ease;
+  }
+
+  .app-nav__btn:hover {
+    background: var(--accent-bg);
+    color: var(--text-h);
+  }
+
+  .app-nav__btn .app-nav__icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    flex-shrink: 0;
   }
 
   .app-nav__btn--capture {
@@ -4889,8 +4938,8 @@ button.metrics-agg:focus-visible {
   }
 
   .app-nav__btn--capture .app-nav__icon {
-    width: 1.15rem;
-    height: 1.15rem;
+    width: 1.35rem;
+    height: 1.35rem;
   }
 
   .app-nav__btn--capture.app-nav__btn--active {
@@ -4904,6 +4953,7 @@ button.metrics-agg:focus-visible {
 
   .app-nav__btn-label--full {
     display: inline;
+    transition: opacity 160ms ease;
   }
 
   .app-nav__btn--active {
@@ -4914,19 +4964,20 @@ button.metrics-agg:focus-visible {
   }
 
   .app--nav-collapsed .app-nav {
-    padding-left: 0.45rem;
-    padding-right: 0.45rem;
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
   }
 
   .app--nav-collapsed .app-nav__brand,
-  .app--nav-collapsed .app-nav__btn-label,
+  .app--nav-collapsed .app-nav__btn-label--full,
   .app--nav-collapsed .app-nav__theme-label,
   .app--nav-collapsed .app__version {
-    display: none;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .app--nav-collapsed .app-nav__top {
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   .app--nav-collapsed .app-nav__icon {
@@ -4934,9 +4985,9 @@ button.metrics-agg:focus-visible {
   }
 
   .app--nav-collapsed .app-nav__btn {
-    justify-content: center;
-    padding: 0.5rem 0;
-    border-left-width: 0;
+    justify-content: flex-start;
+    padding: 0.45rem 0.7rem;
+    width: calc(var(--app-sidebar-collapsed) - 1.4rem);
   }
 
   .app--nav-collapsed .app-nav__theme {
@@ -4950,6 +5001,20 @@ button.metrics-agg:focus-visible {
     content: 'Tema';
     font-size: 0.72rem;
     font-weight: 700;
+  }
+
+  .app--nav-collapsed .app-nav:has(:focus-visible) {
+    width: 13.75rem;
+    box-shadow: 12px 0 28px rgb(0 0 0 / 12%);
+  }
+
+  .app--nav-collapsed .app-nav:has(:focus-visible) :is(.app-nav__brand, .app-nav__btn-label--full, .app__version) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app--nav-collapsed .app-nav:has(:focus-visible) .app-nav__btn {
+    width: 12.35rem;
   }
 
   .app__shell {
