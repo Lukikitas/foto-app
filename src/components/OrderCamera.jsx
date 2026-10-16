@@ -202,7 +202,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
 
   useEffect(() => {
     const unsubscribe = subscribe((items) => setPendingTasks(items.filter(item =>
-      item.status === 'pending' || item.status === 'analyzing' || item.status === 'uploading').length));
+      item.status === 'pending' || item.status === 'analyzing' || item.status === 'preparing' || item.status === 'uploading').length));
     return () => {
       unsubscribe();
       flushPendingPair(false);

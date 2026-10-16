@@ -1,4 +1,5 @@
 import { canvasToBlob, createDrawCanvas } from './drawCanvas.js';
+import { readImage } from './readImage.js';
 
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.8;
@@ -46,12 +47,7 @@ export async function compressImage(file, options = {}) {
   }
 
   const { maxDimension = MAX_DIMENSION, jpegQuality = JPEG_QUALITY, sharpen = false } = options;
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  } catch {
-    bitmap = await createImageBitmap(file);
-  }
+  const bitmap = await readImage(file);
   const { width, height } = bitmap;
 
   let targetWidth = width;
@@ -76,7 +72,7 @@ export async function compressImage(file, options = {}) {
 
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = 'high';
-    context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+    context.drawImage(bitmap.image, 0, 0, targetWidth, targetHeight);
     if (sharpen) {
       try {
         const pixels = context.getImageData(0, 0, targetWidth, targetHeight);
@@ -87,7 +83,7 @@ export async function compressImage(file, options = {}) {
       }
     }
     const blob = await canvasToBlob(canvas, 'image/jpeg', jpegQuality);
-    const baseName = file.name.replace(/\.[^.]+$/, '') || 'foto';
+    const baseName = (file.name || 'foto').replace(/\.[^.]+$/, '') || 'foto';
     if (typeof File === 'function') {
       return new File([blob], `${baseName}.jpg`, {
         type: 'image/jpeg',

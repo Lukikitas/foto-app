@@ -10,7 +10,7 @@ let testStore = null;
 let dbPromise = null;
 
 export function isInterruptedQueueStatus(status) {
-  return status === 'analyzing' || status === 'uploading';
+  return status === 'analyzing' || status === 'preparing' || status === 'uploading';
 }
 
 export function isRetryableBackgroundOcrError(record) {

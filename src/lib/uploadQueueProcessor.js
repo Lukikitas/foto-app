@@ -102,6 +102,11 @@ export async function processQueueItem(item, options = {}) {
 
     if (yielded()) return yieldNow();
 
+    item.status = 'preparing';
+    if (!item.orderDigits && item.kind === 'order') item.label = 'Preparando foto…';
+    notify();
+    await persist(item);
+
     const preparedFile = item.file?.type?.startsWith('image/')
       ? await compressImage(item.file, item.kind === 'order' ? EVIDENCE_IMAGE_OPTIONS : undefined)
       : item.file;
@@ -110,7 +115,7 @@ export async function processQueueItem(item, options = {}) {
 
     item.storagePath = buildStoragePath(item, preparedFile);
     item.status = 'uploading';
-    if (item.orderDigits && item.label === 'Leyendo el código…') {
+    if (item.orderDigits) {
       item.label = `Pedido #${item.orderDigits}`;
     } else if (!item.orderDigits && item.kind !== 'file') {
       item.label = 'Código no encontrado';

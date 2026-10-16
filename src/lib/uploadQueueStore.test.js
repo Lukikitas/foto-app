@@ -144,3 +144,17 @@ test('fileFromStoredBlob rebuilds a File from a saved blob', () => {
   assert.equal(file.name, 'ticket.jpg');
   assert.equal(file.type, 'image/jpeg');
 });
+
+ test('the exact failed capture survives an app update and remains available to retry', async () => {
+  const store=createMemoryQueueStore();useQueueStoreForTests(store);
+  const original=sampleItem({status:'error',error:'An error occurred reading the Blob argument to createImageBitmap',storagePath:'orders/no_code/existing.jpg'});
+  await putQueueRecord(serializeQueueRecord(original));
+  const restored=hydrateQueueRecord((await listQueueRecords())[0]);
+  assert.equal(restored.status,'error');assert.equal(restored.id,original.id);assert.equal(restored.createdAt,original.createdAt);assert.equal(restored.storagePath,original.storagePath);
+  assert.deepEqual(new Uint8Array(await restored.file.arrayBuffer()),new Uint8Array(await original.file.arrayBuffer()));
+  assert.deepEqual(new Uint8Array(await restored.ticketFile.arrayBuffer()),new Uint8Array(await original.ticketFile.arrayBuffer()));
+});
+test('preparing captures resume after an interrupted update', () => {
+  const restored=hydrateQueueRecord(serializeQueueRecord(sampleItem({status:'preparing'})));
+  assert.equal(restored.status,'pending');assert.ok(restored.file);assert.ok(restored.ticketFile);
+});

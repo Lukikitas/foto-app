@@ -30,7 +30,7 @@ export function isDocumentHidden() {
 }
 
 export function isActiveQueueStatus(status) {
-  return status === 'pending' || status === 'analyzing' || status === 'uploading';
+  return status === 'pending' || status === 'analyzing' || status === 'preparing' || status === 'uploading';
 }
 
 export function isForeignLeaseActive(record, owner, now = Date.now()) {

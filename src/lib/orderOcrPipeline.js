@@ -1,3 +1,4 @@
+import { readImage } from './readImage.js';
 import {
   chooseOrderFromOcrTexts,
   inspectOrderFromOcrTexts,
@@ -639,13 +640,6 @@ async function readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline) 
   return { strong: null, weak };
 }
 
-async function readBitmap(file) {
-  try {
-    return await createImageBitmap(file, { imageOrientation: 'from-image' });
-  } catch {
-    return createImageBitmap(file);
-  }
-}
 
 export function isCompleteEvidenceCode(inspection) {
   return Boolean(inspection?.labeled && isCompleteOrderCode(inspection.order));
@@ -655,20 +649,20 @@ async function readOrderFromFile(file, { thorough = true, evidence = false, requ
   throwIfAborted(signal);
   let bitmap;
   try {
-    bitmap = await readBitmap(file);
+    bitmap = await readImage(file);
   } catch (error) {
     fail(error);
   }
 
   try {
     if (!evidence) {
-      const fast = await readFastCode(bitmap, recognizeOcrData, signal, deadline);
+      const fast = await readFastCode(bitmap.image, recognizeOcrData, signal, deadline);
       if (fast) return fast;
       if (Date.now() >= deadline) return null;
     }
 
     const texts = [];
-    const views = prepareTicketViews(bitmap, { evidence });
+    const views = prepareTicketViews(bitmap.image, { evidence });
     const edge = evidence
       ? await readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline)
       : null;

@@ -410,3 +410,13 @@ test('the worker does not run OCR even if a reader is provided', async () => {
   assert.equal(ocrCalls, 0);
   assert.notEqual(item.status, 'error');
 });
+
+test('image preparation failure preserves the existing capture and successful retry uses the same path', async () => {
+  const item=sampleItem({orderDigits:'PEYA12345',storagePath:'orders/pedidosya/existing.jpg'});
+  const original=item.file;const ticket=item.ticketFile;let saved;
+  await assert.rejects(processQueueItem(item,mockDeps({compressImage:async()=>{assert.equal(item.status,'preparing');throw Error('No se pudo abrir la foto');},persist:async entry=>{saved=serializeQueueRecord(entry);}})),/No se pudo abrir/);
+  assert.equal(item.status,'error');assert.equal(item.file,original);assert.equal(item.ticketFile,ticket);assert.equal(saved.file,original);
+  item.status='pending';item.error=null;
+  const deps=mockDeps();await processQueueItem(item,deps);
+  assert.equal(item.status,'done');assert.equal(deps.uploaded[0].filePath,'orders/pedidosya/existing.jpg');assert.equal(deps.uploaded.length,1);
+});

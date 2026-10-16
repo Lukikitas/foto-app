@@ -206,6 +206,12 @@ export function retryUpload(id) {
     });
 }
 
+export function retryAllFailedUploads() {
+  const ids = queue.filter(item => item.status === 'error').map(item => item.id);
+  ids.forEach(retryUpload);
+  return ids.length;
+}
+
 export function dismissUpload(id) {
   const index = queue.findIndex((entry) => entry.id === id);
   if (index === -1) return;
