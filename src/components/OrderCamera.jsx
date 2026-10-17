@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { captureWorkPolicy } from '../lib/capturePolicy';
+import { withTimeout } from '../lib/taskTimeout';
 import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
 import { getCameraFlash, getTakenByHistory, saveCameraFlash, saveLastTakenBy } from '../lib/storage';
 import { subscribe } from '../lib/uploadQueue';
@@ -14,7 +16,6 @@ const STEPS = {
 
 // Anti-blur burst: a single frozen frame often lands while the phone is still
 // moving after the shutter press, so we grab a few and keep the sharpest one.
-const BURST_FRAMES = 3;
 const BURST_INTERVAL_MS = 75;
 // A pair waits this long before being queued so the strip can offer "Repetir".
 const PENDING_PAIR_MS = 5000;
@@ -71,7 +72,7 @@ function canvasToFile(canvas, name, type, quality) {
   });
 }
 
-async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = false, ticket = false) {
+async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = false, ticket = false, work = captureWorkPolicy()) {
   if (!video?.videoWidth || !video?.videoHeight) {
     throw new Error('La cámara todavía no está lista.');
   }
@@ -79,7 +80,7 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
   // Take a tiny burst of frozen frames and keep the sharpest candidate; supported
   // phones can still supply a full still with their own autofocus on top of it.
   let best = null;
-  for (let i = 0; i < BURST_FRAMES; i += 1) {
+  for (let i = 0; i < work.burstFrames; i += 1) {
     const canvas = document.createElement('canvas');
     drawFrame(video, canvas, 2560, softwareZoom ? zoom : 1);
     const candidate = { canvas, quality: inspectCaptureCanvas(canvas, { ticket }) };
@@ -92,7 +93,7 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
       loser.canvas.height = 0;
       best = winner;
     }
-    if (i < BURST_FRAMES - 1) {
+    if (i < work.burstFrames - 1) {
       await wait(BURST_INTERVAL_MS);
       if (!video.videoWidth || !video.videoHeight) break;
     }
@@ -100,16 +101,16 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
   const fallback = best.canvas;
   const quality = best.quality;
   let upgrade = Promise.resolve(null);
-  if (!softwareZoom && typeof ImageCapture === 'function' && track?.readyState === 'live') {
-    upgrade = (async () => {
+  if (work.useNativeStill && !softwareZoom && typeof ImageCapture === 'function' && track?.readyState === 'live') {
+    let cancelled=false;
+    const operation = (async () => {
       try {
       const capture = new ImageCapture(track);
-      const blob = await Promise.race([
-        capture.takePhoto(),
-        new Promise((_, reject) =>
-          window.setTimeout(() => reject(new Error('Timeout de foto')), TAKE_PHOTO_TIMEOUT_MS)
-        ),
-      ]);
+      const capabilities = typeof capture.getPhotoCapabilities==='function' ? await capture.getPhotoCapabilities() : null;
+      if(cancelled)return null;
+      const requestedWidth=capabilities?.imageWidth?.max ? Math.min(capabilities.imageWidth.max,3840) : null;
+      const blob = await capture.takePhoto(requestedWidth ? {imageWidth:requestedWidth} : undefined);
+      if(cancelled)return null;
       if (blob?.size && blob.type?.startsWith('image/')) {
         const extension = blob.type === 'image/png' ? 'png' : 'jpg';
         const still = new File([blob], name.replace(/\.jpg$/, `.${extension}`), {
@@ -118,6 +119,7 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
         });
         const bitmap = await createImageBitmap(still);
         try {
+          if(cancelled)return null;
           // El still solo reemplaza al frame que el empleado ya vio si cubre
           // el mismo encuadre; si el teléfono lo devuelve recortado, se
           // conserva el frame visto (lo que ves es lo que sube).
@@ -133,18 +135,24 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
       } catch { /* The frozen frame remains available on unsupported devices. */ }
       return null;
     })();
+    upgrade=withTimeout(operation,TAKE_PHOTO_TIMEOUT_MS,()=>{cancelled=true;}).catch(()=>null);
   }
 
-  const file = await canvasToFile(fallback, name, 'image/jpeg', 0.95);
-  return { file, quality, upgrade };
+  try {
+    const file = await canvasToFile(fallback, name, 'image/jpeg', 0.95);
+    return { file, quality, upgrade };
+  } finally {
+    const release=()=>{fallback.width=0;fallback.height=0;};
+    void upgrade.then(release,release);
+  }
 }
 
-function makeTicketPhoto(video, track, name, zoom, softwareZoom) {
-  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, true);
+function makeTicketPhoto(video, track, name, zoom, softwareZoom,work) {
+  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, true,work);
 }
 
-function makeEvidencePhoto(video, track, name, zoom, softwareZoom) {
-  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, false);
+function makeEvidencePhoto(video, track, name, zoom, softwareZoom,work) {
+  return captureFrameOrPhoto(video, track, name, zoom, softwareZoom, false,work);
 }
 
 function getLiveTrack(stream) {
@@ -368,6 +376,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           `ticket-${Date.now()}.jpg`,
           zoom,
           !hardwareZoom && zoom > 1,
+          captureWorkPolicy({pendingTasks,deviceMemory:navigator.deviceMemory}),
         );
         ticketFileRef.current = shot.file;
         ticketUpgradeRef.current = shot.upgrade;
@@ -388,6 +397,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         `evidencia-${Date.now()}.jpg`,
         zoom,
         !hardwareZoom && zoom > 1,
+        captureWorkPolicy({pendingTasks,deviceMemory:navigator.deviceMemory}),
       );
       const ticketFile = ticketFileRef.current;
       const ticketUpgrade = ticketUpgradeRef.current;

@@ -222,7 +222,7 @@ export default function PhotoListRow({
           {!hasFile ? (
             <span className="photo-row__removed">Sin foto</span>
           ) : isImage ? (
-            <img src={photo.public_url} alt="" loading="lazy" />
+            <img src={photo.public_url} alt="" loading="lazy" decoding="async" />
           ) : (
             <span>{extension}</span>
           )}

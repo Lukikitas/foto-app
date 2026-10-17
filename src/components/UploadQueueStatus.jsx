@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { dismissUpload, retryUpload, retryAllFailedUploads } from '../lib/uploadQueue';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { confirmAction } from '../lib/confirmAction';
@@ -14,6 +15,7 @@ const STATUS_LABEL = {
 
 export default function UploadQueueStatus() {
   const items = useUploadQueue();
+  const [page,setPage]=useState(0);
 
   if (items.length === 0) return null;
 
@@ -22,6 +24,9 @@ export default function UploadQueueStatus() {
   ).length;
 
   const failedCount = items.filter(item => item.status === 'error').length;
+  const pageCount=Math.max(1,Math.ceil(items.length/20));
+  const currentPage=Math.min(page,pageCount-1);
+  const visibleItems=items.slice(currentPage*20,currentPage*20+20);
 
   return (
     <section className="upload-queue" aria-live="polite">
@@ -36,8 +41,10 @@ export default function UploadQueueStatus() {
       )}
 
       {failedCount > 0 && <div className="upload-queue__hint"><p>{failedCount} foto{failedCount === 1 ? '' : 's'} con error. Reintentá con la app abierta; los pendientes se conservan hasta confirmar la subida.</p><button type="button" className="btn btn--small btn--ghost" onClick={retryAllFailedUploads}>Reintentar todas ({failedCount})</button></div>}
+      {activeCount>=8 && <p className="upload-queue__hint">Hay {activeCount} tareas pendientes. Las capturas guardadas esperan su turno; el procesamiento se adapta para mantener ágil la cámara.</p>}
+      {pageCount>1 && <div className="upload-queue__header"><button className="btn btn--small btn--ghost" disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>Anteriores</button><span>Página {currentPage+1} de {pageCount} · {items.length} tareas</span><button className="btn btn--small btn--ghost" disabled={currentPage===pageCount-1} onClick={()=>setPage(currentPage+1)}>Siguientes</button></div>}
       <ul className="upload-queue__list">
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <li
             key={item.id}
             className={`upload-queue__item upload-queue__item--${item.status}`}

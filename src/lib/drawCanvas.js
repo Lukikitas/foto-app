@@ -1,3 +1,7 @@
+export function releaseCanvas(canvas) {
+  if(canvas && typeof canvas.getContext==='function'){canvas.width=0;canvas.height=0;}
+}
+
 export function createDrawCanvas(width, height) {
   if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
     const canvas = document.createElement('canvas');

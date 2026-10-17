@@ -1,4 +1,4 @@
-import { compressImage } from './compressImage.js';
+import { compressImageInWorker as compressImage } from './compressImageInWorker.js';
 import { detectAggregator } from './aggregators.js';
 
 export const cloudRecoveryEnabled = import.meta.env?.VITE_CLOUD_OCR_ENABLED === 'true';

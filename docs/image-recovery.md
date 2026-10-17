@@ -7,3 +7,9 @@ La lectura de evidencia y OCR utiliza primero createImageBitmap. Si falla, inten
 Para utilizarlo en el celular: publicar la corrección, aplicar Actualizar en el mismo navegador/perfil donde están las fotos, abrir la cola y pulsar Reintentar todas manteniendo la app visible. Los elementos marcados Error no bloquean la actualización; los que siguen en lectura, preparación o subida se esperan. No desinstalar, borrar almacenamiento del sitio ni descartar pendientes para actualizar.
 
 Validación: pruebas de lectura alternativa tras fallos del decodificador, copia de archivos restaurados, conservación exacta de evidencia/ticket al recargar, reanudación de preparación y reintento con la misma ruta sin duplicar. No se accedió a las fotos pendientes del celular del usuario y no se afirma haberlas recuperado todavía.
+
+## Actualización segura con la cola bloqueada
+
+La interfaz deja de esperar que toda la cola termine de procesarse. Guardar cola y actualizar pausa el procesamiento, espera el final de la tarea en curso y escribe todos los pendientes (incluidos los errores), después verifica los bytes de cada foto y ticket, la hora y la ruta. Si falta espacio, hay datos ilegibles o cambia la cola, no activa el service worker ni recarga. Los errores de guardado mantienen las referencias en memoria, no se sustituyen por copias anteriores ni se interpretan como subidas terminadas.
+
+Una pestaña que todavía ejecuta v1.13 no puede incorporar esta corrección sin recargarse. Publicar este cambio no rescata por sí solo capturas de aquella pestaña que no llegaron a guardarse. No se debe indicar una recarga forzada ni asegurar que todos sus archivos estén respaldados.

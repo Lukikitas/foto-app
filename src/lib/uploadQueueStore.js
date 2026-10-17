@@ -1,3 +1,4 @@
+import { queueRecordSummary } from './queueMemory.js';
 import { OCR_ENGINE_ERROR } from './tesseractAssets.js';
 import { itemNeedsOcr } from './uploadQueueProtocol.js';
 
@@ -20,7 +21,7 @@ export function isRetryableBackgroundOcrError(record) {
 }
 
 export function shouldRestoreQueueRecord(record) {
-  return Boolean(record?.id && record.file && record.status !== 'done');
+  return Boolean(record?.id && (record.file || record.hasFile) && record.status !== 'done');
 }
 
 export function serializeQueueRecord(item) {
@@ -36,11 +37,11 @@ export function serializeQueueRecord(item) {
     aggregator: item.aggregator || '',
     meta: item.meta && typeof item.meta === 'object' ? { ...item.meta } : {},
     file: item.file || null,
-    fileName: item.file?.name || 'evidencia.jpg',
-    fileType: item.file?.type || 'image/jpeg',
+    fileName: item.file?.name || item.fileName || 'evidencia.jpg',
+    fileType: item.file?.type || item.fileType || 'image/jpeg',
     ticket: item.ticketFile || null,
-    ticketName: item.ticketFile?.name || '',
-    ticketType: item.ticketFile?.type || '',
+    ticketName: item.ticketFile?.name || item.ticketName || '',
+    ticketType: item.ticketFile?.type || item.ticketType || '',
     storagePath: item.storagePath || '',
     leaseOwner: item.leaseOwner || null,
     leaseUntil: item.leaseUntil || 0,
@@ -62,17 +63,21 @@ export function fileFromStoredBlob(blob, name, type) {
   return blob;
 }
 
-export function hydrateQueueRecord(record) {
+export function hydrateQueueRecord(record, {includeFiles=true} = {}) {
   if (!shouldRestoreQueueRecord(record)) return null;
 
-  const file = fileFromStoredBlob(record.file, record.fileName, record.fileType);
-  if (!file) return null;
+  const file = includeFiles ? fileFromStoredBlob(record.file, record.fileName, record.fileType) : null;
+  if (includeFiles && !file) return null;
 
   const resume = isInterruptedQueueStatus(record.status) || isRetryableBackgroundOcrError(record);
   return {
     id: record.id,
     file,
-    ticketFile: fileFromStoredBlob(record.ticket, record.ticketName, record.ticketType),
+    ticketFile: includeFiles ? fileFromStoredBlob(record.ticket, record.ticketName, record.ticketType) : null,
+    persisted: true, filesUnloaded: !includeFiles,
+    fileName: record.fileName, fileType: record.fileType, ticketName: record.ticketName, ticketType: record.ticketType,
+    hasFile: Boolean(record.file || record.hasFile), hasTicket: Boolean(record.ticket || record.hasTicket),
+    fileSize: record.file?.size ?? record.fileSize ?? 0, ticketSize: record.ticket?.size ?? record.ticketSize ?? 0,
     kind: record.kind || 'order',
     orderDigits: record.orderDigits || '',
     title: record.title || '',
@@ -102,6 +107,8 @@ export function createMemoryQueueStore() {
     async delete(id) {
       data.delete(id);
     },
+    async get(id) { return data.get(id) || null; },
+    async summaries() { return [...data.values()].map(queueRecordSummary); },
     async list() {
       return [...data.values()];
     },
@@ -119,6 +126,8 @@ function memoryBackend() {
     async delete(id) {
       memoryRecords.delete(id);
     },
+    async get(id) { return memoryRecords.get(id) || null; },
+    async summaries() { return [...memoryRecords.values()].map(queueRecordSummary); },
     async list() {
       return [...memoryRecords.values()];
     },
@@ -179,6 +188,20 @@ function idbBackend() {
       tx.objectStore(STORE_NAME).delete(id);
       await done;
     },
+    async get(id) {
+      const db=await openQueueDb();const tx=db.transaction(STORE_NAME,'readonly');const done=completeTransaction(tx);
+      const result=await requestResult(tx.objectStore(STORE_NAME).get(id));await done;return result || null;
+    },
+    async summaries() {
+      const db=await openQueueDb();const tx=db.transaction(STORE_NAME,'readonly');const done=completeTransaction(tx);
+      const rows=[];
+      await new Promise((resolve,reject)=>{
+        const request=tx.objectStore(STORE_NAME).openCursor();
+        request.onerror=()=>reject(request.error);
+        request.onsuccess=()=>{const cursor=request.result;if(!cursor){resolve();return;}rows.push(queueRecordSummary(cursor.value));cursor.continue();};
+      });
+      await done;return rows;
+    },
     async list() {
       const db = await openQueueDb();
       const tx = db.transaction(STORE_NAME, 'readonly');
@@ -192,7 +215,10 @@ function idbBackend() {
 
 function activeBackend() {
   if (testStore) return testStore;
-  if (typeof indexedDB === 'undefined') return memoryBackend();
+  if (typeof indexedDB === 'undefined') {
+    if(typeof window !== 'undefined')throw new Error('Este navegador no permite guardar la cola en el dispositivo. Conservá la app abierta y no descartes las capturas.');
+    return memoryBackend();
+  }
   return idbBackend();
 }
 
@@ -209,4 +235,11 @@ export async function deleteQueueRecord(id) {
 export async function listQueueRecords() {
   const records = await activeBackend().list();
   return Array.isArray(records) ? records : [];
+}
+
+export async function getQueueRecord(id) {
+  const backend=activeBackend();return backend.get ? backend.get(id) : (await backend.list()).find(row=>row.id===id) || null;
+}
+export async function listQueueSummaries() {
+  const backend=activeBackend();return backend.summaries ? backend.summaries() : (await backend.list()).map(queueRecordSummary);
 }

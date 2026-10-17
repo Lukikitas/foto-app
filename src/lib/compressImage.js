@@ -1,4 +1,4 @@
-import { canvasToBlob, createDrawCanvas } from './drawCanvas.js';
+import { canvasToBlob, createDrawCanvas, releaseCanvas } from './drawCanvas.js';
 import { readImage } from './readImage.js';
 
 const MAX_DIMENSION = 1600;
@@ -63,8 +63,9 @@ export async function compressImage(file, options = {}) {
     }
   }
 
+  let canvas;
   try {
-    const canvas = createDrawCanvas(targetWidth, targetHeight);
+    canvas = createDrawCanvas(targetWidth, targetHeight);
     const context = canvas.getContext('2d');
     if (!context) {
       throw new Error('No se pudo preparar la compresión.');
@@ -93,5 +94,6 @@ export async function compressImage(file, options = {}) {
     return blob;
   } finally {
     bitmap.close();
+    releaseCanvas(canvas);
   }
 }

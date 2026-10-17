@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { mergeGalleryPhoto } from '../lib/galleryMemory';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
 import { AGGREGATOR_OPTIONS } from '../lib/aggregators';
 import { GALLERY_PAGE_SIZE, clampPage, galleryPage, pageNumbers } from '../lib/galleryPagination';
+import { isPhoneViewport, PHONE_MEDIA_QUERY } from '../lib/viewport';
 import { fetchPhotos, getPhotoTitle, photoMatchesFilters } from '../lib/photos';
 import { supabase } from '../lib/supabase';
 import {
@@ -70,6 +72,13 @@ export default function PhotoGallery({
   const [liveNotice, setLiveNotice] = useState(null);
   const [pendingNewPhoto, setPendingNewPhoto] = useState(null);
   const [page, setPage] = useState(1);
+  const [phoneViewport,setPhoneViewport]=useState(isPhoneViewport);
+  const pageSize=phoneViewport ? 30 : GALLERY_PAGE_SIZE;
+  useEffect(()=>{
+    const media=window.matchMedia(PHONE_MEDIA_QUERY);
+    const changed=()=>{setPhoneViewport(media.matches);setPage(1);};
+    media.addEventListener('change',changed);return()=>media.removeEventListener('change',changed);
+  },[]);
   const [cleanupOpen, setCleanupOpen] = useState(false);
 
   const appliedFiltersRef = useRef(appliedFilters);
@@ -114,7 +123,7 @@ export default function PhotoGallery({
   const prependPhoto = useCallback((photo) => {
     setPhotos((prev) => {
       if (prev.some((item) => item.id === photo.id)) return prev;
-      return sortPhotosNewestFirst([photo, ...prev]);
+      return mergeGalleryPhoto(prev,photo,{limit:GALLERY_MAX_ROWS,selectedIds:selectedIdsRef.current});
     });
   }, []);
 
@@ -206,7 +215,7 @@ export default function PhotoGallery({
       }
 
       if (!exists) {
-        return sortPhotosNewestFirst([photo, ...prev]);
+        return mergeGalleryPhoto(prev,photo,{limit:GALLERY_MAX_ROWS,selectedIds:selectedIdsRef.current});
       }
 
       return sortPhotosNewestFirst(
@@ -286,10 +295,10 @@ export default function PhotoGallery({
   );
 
   // Ventana de la página actual: la grilla/lista solo renderiza estas tarjetas
-  // (de 100 en 100) aunque en memoria estén las ~1000 cargadas.
+  // (30 en celular y 100 en PC) aunque en memoria estén las ~1000 cargadas.
   const currentPage = useMemo(
-    () => galleryPage(photos, page, GALLERY_PAGE_SIZE),
-    [photos, page],
+    () => galleryPage(photos, page, pageSize),
+    [photos, page, pageSize],
   );
   const pageItems = currentPage.items;
   const pageCount = currentPage.pageCount;
@@ -435,7 +444,7 @@ export default function PhotoGallery({
   }
 
   function goToPage(nextPage) {
-    const target = clampPage(nextPage, photos.length);
+    const target = clampPage(nextPage, photos.length,pageSize);
     if (target === pageRef.current) return;
     setPage(target);
     galleryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

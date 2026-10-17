@@ -158,3 +158,9 @@ test('preparing captures resume after an interrupted update', () => {
   const restored=hydrateQueueRecord(serializeQueueRecord(sampleItem({status:'preparing'})));
   assert.equal(restored.status,'pending');assert.ok(restored.file);assert.ok(restored.ticketFile);
 });
+
+test('a browser without IndexedDB must not report a memory-only capture as saved', async()=>{
+  const previous=globalThis.window;globalThis.window={};
+  try {useQueueStoreForTests(null);await assert.rejects(putQueueRecord(serializeQueueRecord(sampleItem())),/no permite guardar la cola/);}
+  finally {if(previous===undefined)delete globalThis.window;else globalThis.window=previous;}
+});

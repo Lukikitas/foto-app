@@ -11,7 +11,7 @@ import {
   OCR_MAX_SIDE,
   TICKET_TARGET_SIDE,
 } from './ocrPlan.js';
-import { createDrawCanvas } from './drawCanvas.js';
+import { createDrawCanvas, releaseCanvas } from './drawCanvas.js';
 import { isAbortError, OCR_ENGINE_ERROR, PSM } from './tesseractAssets.js';
 
 const NEIGHBORS = [
@@ -484,6 +484,7 @@ function rotatedCanvas(source, rotation) {
 
 function prepareTicketViews(bitmap, { evidence = false } = {}) {
   const original = canvasFromSource(bitmap, evidence ? 2600 : OCR_MAX_SIDE);
+  try {
   const enhancedFull = cloneCanvas(original);
   enhanceInPlace(enhancedFull);
 
@@ -503,6 +504,7 @@ function prepareTicketViews(bitmap, { evidence = false } = {}) {
     ].filter(Boolean)
     : [];
   return { enhancedFull, regionCrops, extraBands, evidenceCrops };
+  } finally { releaseCanvas(original); }
 }
 
 function applyPassVariants(sources, variants) {
@@ -534,6 +536,7 @@ function applyPassVariants(sources, variants) {
 
 async function collectGroup({ sources, rotations, psms, variants }, texts, signal, recognizeOcrData, deadline) {
   const prepared = applyPassVariants(sources, variants || ['plain']);
+  try {
   for (const psm of psms) {
     for (const rotation of rotations) {
       for (const source of prepared) {
@@ -541,7 +544,9 @@ async function collectGroup({ sources, rotations, psms, variants }, texts, signa
         throwIfAborted(signal);
         let found;
         try {
-          found = await recognizeTexts(rotatedCanvas(source, rotation), psm, recognizeOcrData);
+          const rotated=rotatedCanvas(source,rotation);
+          try {found = await recognizeTexts(rotated, psm, recognizeOcrData);}
+          finally {if(rotated!==source)releaseCanvas(rotated);}
         } catch (error) {
           if (isAbortError(error)) throw error;
           fail(error);
@@ -551,6 +556,7 @@ async function collectGroup({ sources, rotations, psms, variants }, texts, signa
     }
   }
   return true;
+  } finally { for(const canvas of prepared)if(!sources.includes(canvas))releaseCanvas(canvas); }
 }
 
 function isInstantFastMatch(inspection) {
@@ -560,10 +566,14 @@ function isInstantFastMatch(inspection) {
 async function readFastCode(bitmap, recognizeOcrData, signal, deadline) {
   const frame = canvasFromSource(bitmap, OCR_MAX_SIDE);
   const votes = new Map();
+  try {
   for (const { rotation, top, height, left, width, scale } of fastCodeCropPlan(frame.width, frame.height)) {
     if (Date.now() >= deadline) return null;
     throwIfAborted(signal);
-    const crop = fastCodeCrop(rotatedCanvas(frame, rotation), top, height, left, width, scale);
+    const rotated=rotatedCanvas(frame,rotation);
+    const crop = fastCodeCrop(rotated, top, height, left, width, scale);
+    if(rotated!==frame)releaseCanvas(rotated);
+    try {
     let found;
     try {
       found = await recognizeTexts(crop, PSM.SINGLE_BLOCK, recognizeOcrData);
@@ -595,8 +605,10 @@ async function readFastCode(bitmap, recognizeOcrData, signal, deadline) {
     const count = (votes.get(key)?.count || 0) + 1;
     votes.set(key, { order: inspection.order, count });
     if (count >= 2 && isCompleteOrderCode(inspection.order)) return inspection.order;
+    } finally {releaseCanvas(crop);}
   }
   return null;
+  } finally {releaseCanvas(frame);}
 }
 
 async function readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline) {
@@ -610,12 +622,14 @@ async function readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline) 
   for (const source of sources) {
     for (const rotation of [90, 270]) {
       const rotated = rotatedCanvas(source.canvas, rotation);
+      try {
       for (const top of [0, 0.82]) {
         if (Date.now() >= deadline) return { strong: null, weak };
         throwIfAborted(signal);
         const columns = brightPaperColumns(rotated, top, 0.18);
         if (!columns) continue;
         const crop = fastCodeCrop(rotated, top, 0.18, columns.left, columns.width, 2.5);
+        try {
         const seenInCrop = new Set();
         for (const variant of ['plain', 'adaptive']) {
           if (Date.now() >= deadline) return { strong: null, weak };
@@ -634,7 +648,9 @@ async function readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline) 
           votes.set(key, count);
           if (count >= 2) return { strong: order, weak };
         }
+        } finally {releaseCanvas(crop);}
       }
+      } finally {if(rotated!==source.canvas)releaseCanvas(rotated);}
     }
   }
   return { strong: null, weak };
@@ -648,6 +664,7 @@ export function isCompleteEvidenceCode(inspection) {
 async function readOrderFromFile(file, { thorough = true, evidence = false, requireStrong = false, signal, recognizeOcrData, deadline } = {}) {
   throwIfAborted(signal);
   let bitmap;
+  let views;
   try {
     bitmap = await readImage(file);
   } catch (error) {
@@ -662,7 +679,7 @@ async function readOrderFromFile(file, { thorough = true, evidence = false, requ
     }
 
     const texts = [];
-    const views = prepareTicketViews(bitmap.image, { evidence });
+    views = prepareTicketViews(bitmap.image, { evidence });
     const edge = evidence
       ? await readEvidenceEdgeCodes(views, recognizeOcrData, signal, deadline)
       : null;
@@ -683,6 +700,7 @@ async function readOrderFromFile(file, { thorough = true, evidence = false, requ
     return requireStrong ? null : chooseOrderFromOcrTexts(texts) || edge?.weak;
   } finally {
     bitmap.close();
+    if(views)for(const canvas of new Set([views.enhancedFull,...views.regionCrops,...views.extraBands,...views.evidenceCrops]))releaseCanvas(canvas);
   }
 }
 

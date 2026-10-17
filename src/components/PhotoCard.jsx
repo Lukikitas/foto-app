@@ -241,7 +241,7 @@ export default function PhotoCard({
                 src={photo.public_url}
                 alt={title}
                 className="photo-card__image"
-                loading="lazy"
+                loading="lazy" decoding="async"
               />
             ) : (
               <span className="photo-card__file-preview">

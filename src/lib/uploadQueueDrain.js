@@ -12,7 +12,7 @@ import {
 import {
   deleteQueueRecord,
   hydrateQueueRecord,
-  listQueueRecords,
+  listQueueSummaries, getQueueRecord,
   putQueueRecord,
   serializeQueueRecord,
 } from './uploadQueueStore.js';
@@ -38,7 +38,7 @@ export async function processStoredUploadQueue(overrides = {}) {
       while (true) {
         let records = [];
         try {
-          records = await listQueueRecords();
+          records = await listQueueSummaries();
         } catch (error) {
           console.error(error);
           return;
@@ -63,7 +63,8 @@ export async function processStoredUploadQueue(overrides = {}) {
           return;
         }
         seen.add(record.id);
-        const item = hydrateQueueRecord(record);
+        const stored = await getQueueRecord(record.id);
+        const item = stored ? hydrateQueueRecord(stored) : null;
         if (!item) {
           await deleteQueueRecord(record.id);
           continue;

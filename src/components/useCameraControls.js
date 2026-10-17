@@ -29,7 +29,7 @@ export default function useCameraControls(videoRef, flashOnRef) {
   const [imageRatio, setImageRatio] = useState(4 / 3);
 
   async function attach(stream) {
-    if (!mounted.current) { stream.getTracks().forEach(t => t.stop()); return; }
+    if (!mounted.current || document.visibilityState === 'hidden') { stream.getTracks().forEach(t => t.stop()); return; }
     streamRef.current = stream;
     const video = videoRef.current;
     video.srcObject = stream;
@@ -73,7 +73,7 @@ export default function useCameraControls(videoRef, flashOnRef) {
   async function open(id) {
     return navigator.mediaDevices.getUserMedia({ audio: false, video: {
       ...(id ? { deviceId: { exact: id } } : { facingMode: { ideal: 'environment' } }),
-      width: { ideal: 2560 }, height: { ideal: 1920 },
+      width: { ideal: 2560 }, height: { ideal: 1920 }, frameRate: { ideal: 24, max: 30 },
     } });
   }
   async function switchCamera(id, remember = false) {
@@ -142,16 +142,33 @@ export default function useCameraControls(videoRef, flashOnRef) {
     mounted.current = true;
     try { preferredId.current = localStorage.getItem(PREFERENCE) || ''; } catch { /* Optional preference. */ }
     const overflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    open().then(async stream => {
-      if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
-      await attach(stream);
-      if (active && normalId.current && normalId.current !== stream.getVideoTracks()[0]?.getSettings().deviceId) await switchCamera(normalId.current);
-    }).catch(e => { if (active) { setError(e.message); setStatus('error'); } });
+    let reopening=false,lastId='';
+    const resume=async()=>{
+      if(reopening || document.visibilityState==='hidden' || !active)return;
+      reopening=true;setStatus('starting');
+      try {
+        const stream=await open(lastId);
+        if(!active || document.visibilityState==='hidden'){stream.getTracks().forEach(t=>t.stop());return;}
+        await attach(stream);
+        if(active && normalId.current && !lastId && normalId.current!==stream.getVideoTracks()[0]?.getSettings().deviceId)await switchCamera(normalId.current);
+      } catch(e){if(active && document.visibilityState!=='hidden'){setError(e.message);setStatus('error');}}
+      finally {reopening=false;}
+    };
+    const visibility=()=>{
+      if(document.visibilityState==='hidden'){
+        lastId=streamRef.current?.getVideoTracks()[0]?.getSettings().deviceId || lastId;
+        streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;
+        if(active)setStatus('paused');
+      }else if(!streamRef.current?.getVideoTracks().some(t=>t.readyState==='live'))void resume();
+    };
+    document.addEventListener('visibilitychange',visibility);
+    void resume();
     const video = videoRef.current;
     const resize = () => { if (video.videoWidth) setImageRatio(video.videoWidth / video.videoHeight); };
     video.addEventListener('resize', resize);
     return () => {
       active = false; mounted.current = false; queue.current = null;
+      document.removeEventListener('visibilitychange',visibility);
       streamRef.current?.getTracks().forEach(t => t.stop());
       video.removeEventListener('resize', resize); document.body.style.overflow = overflow;
     };

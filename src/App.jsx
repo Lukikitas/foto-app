@@ -1,5 +1,5 @@
 import { confirmAction } from './lib/confirmAction';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { startDailyImportScheduler } from './lib/complaintDailyImport';
 import { restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
@@ -7,9 +7,7 @@ import { getTheme, saveTheme } from './lib/theme';
 import { isPhoneViewport, PHONE_MEDIA_QUERY } from './lib/viewport';
 import { APP_VERSION } from './lib/version';
 import { purgeExpiredUnresolvedTickets } from './lib/unresolvedTicketStore';
-import ComplaintsInbox from './components/ComplaintsInbox';
 import InstallPrompt from './components/InstallPrompt';
-import MetricsPage from './components/MetricsPage';
 import ConfirmationHost from './components/ConfirmationHost';
 import NavIcon from './components/NavIcon';
 import UpdatePrompt from './components/UpdatePrompt';
@@ -18,8 +16,13 @@ import PhotoUploader from './components/PhotoUploader';
 import UploadQueueStatus from './components/UploadQueueStatus';
 import './App.css';
 
+const MetricsPage=lazy(()=>import('./components/MetricsPage'));
+const ComplaintsInbox=lazy(()=>import('./components/ComplaintsInbox'));
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
 const DailyPendingPage = lazy(() => import('./components/DailyPendingPage'));
+
+const StableMetricsPage=memo(MetricsPage);
+const StableComplaintsInbox=memo(ComplaintsInbox);
 
 const TABS = {
   capture: 'capture',
@@ -49,6 +52,8 @@ export default function App() {
   const [metricsRequest, setMetricsRequest] = useState(null);
   const [complaintLoadRequest, setComplaintLoadRequest] = useState(null);
   const [desktop, setDesktop] = useState(() => !isPhoneViewport());
+  const [metricsVisited,setMetricsVisited]=useState(()=>!isPhoneViewport());
+  const [complaintsVisited,setComplaintsVisited]=useState(false);
   const [pendingVisited, setPendingVisited] = useState(false);
   const [pendingReturn, setPendingReturn] = useState(false);
   const [pendingDirty, setPendingDirty] = useState(false);
@@ -90,14 +95,19 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', purge);
   }, []);
 
-  async function navigate(next, { fromPending = false } = {}) {
+  const navigate=useCallback(async (next, { fromPending = false } = {}) => {
     if (next === TABS.pending && !desktop) return false;
     if (next !== tab && (metricsDirty || pendingDirty) && !await confirmAction(pendingDirty ? 'Hay una carga sin guardar en Pendientes. Podés volver para continuar el borrador.' : 'Hay cambios sin guardar en Métricas. Podés volver a Cargar para continuar el borrador.', { danger: false, title: 'Cambios pendientes', confirmLabel: 'Cambiar de sección' })) return false;
+    if(next===TABS.metrics)setMetricsVisited(true);
+    if(next===TABS.complaints||next===TABS.history)setComplaintsVisited(true);
     if (next === TABS.pending) setPendingVisited(true);
     setPendingReturn(fromPending);
     setTab(next);
     return true;
-  }
+  },[desktop,metricsDirty,pendingDirty,tab]);
+  const manageMetricCase=useCallback(item=>{setFocusedCase(item?.id ? item : null);void navigate(item?.id ? TABS.history : TABS.complaints);},[navigate]);
+  const requestCruzar=useCallback(()=>setTab(TABS.complaints),[]);
+  const requestHistory=useCallback(()=>setTab(TABS.history),[]);
   async function openPendingDay(day, aggregator, mode = 'day') {
     if (await navigate(TABS.metrics, { fromPending: true })) setMetricsRequest({ day, aggregator, mode, id: crypto.randomUUID() });
   }
@@ -189,19 +199,23 @@ export default function App() {
               searchPlaceholder="PEYA12345 o 4696"
             />
           )}
-          <div hidden={!complaintsOpen} className="app__panel">
-            <ComplaintsInbox
+          {complaintsVisited && <div hidden={!complaintsOpen} className="app__panel">
+            <Suspense fallback={<p className="gallery__state">Cargando reclamos…</p>}>
+            <StableComplaintsInbox
               loadRequest={complaintLoadRequest}
               focusedCase={focusedCase}
               view={tab === TABS.history ? 'historial' : 'cruzar'}
               refreshKey={metricsRefreshKey}
-              onRequestCruzar={() => setTab(TABS.complaints)}
-              onRequestHistory={() => setTab(TABS.history)}
+              onRequestCruzar={requestCruzar}
+              onRequestHistory={requestHistory}
             />
-          </div>
-          <div hidden={tab !== TABS.metrics}>
-            <MetricsPage entryRequest={metricsRequest} refreshKey={metricsRefreshKey} onDirtyChange={setMetricsDirty} onManage={item=>{setFocusedCase(item?.id ? item : null);navigate(item?.id ? TABS.history : TABS.complaints);}} />
-          </div>
+            </Suspense>
+          </div>}
+          {metricsVisited && <div hidden={tab !== TABS.metrics}>
+            <Suspense fallback={<p className="gallery__state">Cargando métricas…</p>}>
+            <StableMetricsPage entryRequest={metricsRequest} refreshKey={metricsRefreshKey} onDirtyChange={setMetricsDirty} onManage={manageMetricCase} />
+            </Suspense>
+          </div>}
           {tab === TABS.settings && (
             <Suspense fallback={<p className="gallery__state">Cargando ajustes…</p>}>
               <SettingsPage theme={theme} onThemeChange={handleThemeChange}

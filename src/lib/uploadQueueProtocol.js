@@ -22,7 +22,7 @@ export function getQueueOwner() {
 }
 
 export function itemNeedsOcr(item) {
-  return item?.kind === 'order' && !item.orderDigits && Boolean(item.ticketFile || item.ticket);
+  return item?.kind === 'order' && !item.orderDigits && Boolean(item.ticketFile || item.ticket || item.hasTicket);
 }
 
 export function isDocumentHidden() {

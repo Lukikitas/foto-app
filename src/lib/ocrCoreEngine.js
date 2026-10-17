@@ -24,13 +24,14 @@ async function gunzip(bytes) {
 
 async function loadClassicScript(url) {
   if (typeof globalThis.importScripts === 'function') {
-    globalThis.importScripts(url);
-    return;
+    try { globalThis.importScripts(url); return; }
+    catch (error) { if (!(error instanceof TypeError)) throw error; } // Module workers expose importScripts but forbid calling it.
   }
 
   const source = await (await fetch(url)).text();
-  const run = new Function(source);
-  run();
+  const run = new Function(source + '\n;return typeof TesseractCore === "function" ? TesseractCore : null;');
+  const factory=run();
+  if(factory)globalThis.TesseractCore=factory;
 }
 
 function coreFactory() {
