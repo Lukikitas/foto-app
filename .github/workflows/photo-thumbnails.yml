@@ -1,0 +1,34 @@
+name: Process photo thumbnails
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: photo-thumbnails
+  cancel-in-progress: false
+jobs:
+  thumbnails:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Process bounded, resumable batches
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          PHOTO_THUMBNAIL_SECRET: ${{ secrets.PHOTO_THUMBNAIL_SECRET }}
+        run: |
+          node --input-type=module <<'JS'
+          if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY || !process.env.PHOTO_THUMBNAIL_SECRET) throw new Error('Configure thumbnail secrets before enabling the schedule.');
+          for(let n=0;n<40;n++) {
+            const response=await fetch(process.env.SUPABASE_URL+'/functions/v1/photo-thumbnails',{method:'POST',headers:{Authorization:'Bearer '+process.env.SUPABASE_ANON_KEY,'x-thumbnail-secret':process.env.PHOTO_THUMBNAIL_SECRET},signal:AbortSignal.timeout(45000)});
+            if(!response.ok) throw new Error('Thumbnail processing failed: '+response.status);
+            const result=await response.json();
+            if(result.idle)break;
+            console.log('Processed batch '+(n+1));
+          }
+          JS

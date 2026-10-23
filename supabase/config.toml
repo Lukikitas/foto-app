@@ -1,0 +1,8 @@
+project_id = "foto-app"
+
+[functions.performance-data]
+verify_jwt = true
+
+[functions.photo-thumbnails]
+verify_jwt = true
+static_files = ["./functions/photo-thumbnails/assets/*"]

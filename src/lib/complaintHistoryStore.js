@@ -23,7 +23,7 @@ let loadPromise = null;
 const listeners = new Set();
 function remember(store) {
   memoryStore = store;
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(store)); } catch { /* Cache is optional. */ }
+  // The server is authoritative. Avoid serializing the entire history on the UI thread.
   listeners.forEach(listener => listener(store));
   return store;
 }

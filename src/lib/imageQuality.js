@@ -43,7 +43,8 @@ export function inspectCaptureCanvas(source, { ticket = false } = {}) {
   const context = sample.getContext('2d', { willReadFrequently: true });
   if (!context) return { issue: null, sharpness: 0 };
   context.drawImage(source, 0, 0, sample.width, sample.height);
-  return scoreImageQuality(context.getImageData(0, 0, sample.width, sample.height), { ticket });
+  try { return scoreImageQuality(context.getImageData(0, 0, sample.width, sample.height), { ticket }); }
+  finally { sample.width = 0; sample.height = 0; }
 }
 
 // Pick the best burst candidate: frames without any warning win first, then the
@@ -184,6 +185,8 @@ function sceneGrid(source, aspect) {
   for (let pixel = 0, index = 0; pixel < data.length; pixel += 4, index += 1) {
     gray[index] = data[pixel] * 0.299 + data[pixel + 1] * 0.587 + data[pixel + 2] * 0.114;
   }
+  canvas.width = 0;
+  canvas.height = 0;
   return gray;
 }
 

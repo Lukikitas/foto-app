@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useListPage } from '../hooks/useListPage';
+import DataPager from './DataPager';
 import { getAggregatorLabel } from '../lib/aggregators';
 import { COMPLAINT_STATUS_LABELS } from '../lib/complaintHistory';
 import {
@@ -56,19 +58,20 @@ function MoneyTable({ title, rows, nameKey, pctLabel = '% rec.' }) {
   );
 }
 
-export default function MetricsReport({ history, range, aggregator, store, preset = '' }) {
+export default function MetricsReport({ history, range, aggregator, store, preset = '', remoteReport, remoteTrend }) {
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const report = useMemo(
-    () => buildComplaintReport(history, { from: range.from, to: range.to, aggregator, metrics: store }),
-    [history, range, aggregator, store],
+    () => remoteReport || buildComplaintReport(history, { from: range.from, to: range.to, aggregator, metrics: store }),
+    [remoteReport, history, range, aggregator, store],
   );
   const trend = useMemo(
-    () => (store ? buildTrendSeries(store, history, { from: range.from, to: range.to, aggregator, preset }) : null),
-    [store, history, range, aggregator, preset],
+    () => remoteTrend || (store ? buildTrendSeries(store, history, { from: range.from, to: range.to, aggregator, preset }) : null),
+    [remoteTrend, store, history, range, aggregator, preset],
   );
   const totals = report.totals;
+  const paged=useListPage(report.items,`${range.from}|${range.to}|${aggregator}`);
   const hasReportData = totals.count > 0 || report.rates.daily.some(row => row.orders != null || row.complaints != null || row.awt != null);
   const extras = useMemo(() => extraFieldKeys(report.items).slice(0, 6), [report.items]);
 
@@ -267,7 +270,7 @@ export default function MetricsReport({ history, range, aggregator, store, prese
                   </tr>
                 </thead>
                 <tbody>
-                  {report.items.map((item) => (
+                  {paged.items.map((item) => (
                     <tr key={item.id}>
                       <td>
                         <strong>{item.orderCode}</strong>
@@ -287,6 +290,7 @@ export default function MetricsReport({ history, range, aggregator, store, prese
                 </tbody>
               </table>
             </div>
+            <DataPager {...paged} />
           </section>
         </>
       )}

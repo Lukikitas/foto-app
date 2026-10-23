@@ -14,6 +14,8 @@ import { buildRegistryCsv, downloadRegistryXlsx } from '../lib/complaintReport';
 import { downloadTextFile, uploadComplaintPhotoFile } from '../lib/complaints';
 import { formatDayLabel, formatMoney } from '../lib/metrics';
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
+import { useListPage } from '../hooks/useListPage';
+import DataPager from './DataPager';
 
 const STATUS_FILTERS = [
   { id: 'all', label: 'Todas' },
@@ -52,6 +54,7 @@ export default function MetricsComplaintsList({
     [history, range, aggregator, search, status, sort, store?.refutadoDays],
   );
   const total = Object.keys(history.items || {}).length;
+  const paged=useListPage(items,`${range.from}|${range.to}|${aggregator}|${search}|${status}|${sort}`);
 
   async function handlePhoto(item, file) {
     try {
@@ -149,7 +152,7 @@ export default function MetricsComplaintsList({
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {paged.items.map((item) => (
                 <tr key={item.id}>
                   <td>
                     <button className="btn btn--ghost btn--small" onClick={()=>setSelected(item)}>{item.orderCode}</button>
@@ -203,6 +206,7 @@ export default function MetricsComplaintsList({
           </table>
         </div>
       )}
+      <DataPager {...paged} />
     {selected && <ComplaintDetailDialog key={selected.id} item={selected} refutadoDays={store?.refutadoDays} onClose={()=>setSelected(null)} onManage={onManage}/>}
     {lightboxPhoto && <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />}
     </div>

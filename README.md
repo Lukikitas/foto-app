@@ -1,5 +1,9 @@
 # React + Vite
 
+## Versión 1.14
+
+Páginas consultadas en el servidor, resúmenes de métricas, prioridad de cámara y miniaturas en segundo plano. Requiere activar el backend antes de publicar el frontend: [implementación, despliegue y validación](docs/performance-1.14.md).
+
 ## Versión 1.10
 
 ### Liberación automática y manual de fotos

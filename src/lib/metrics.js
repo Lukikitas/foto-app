@@ -1,5 +1,6 @@
 import { AGGREGATORS, getAggregatorLabel, getPhotoAggregator } from './aggregators.js';
 import { emptyRefutadoDays, normalizeRefutadoDays } from './refutadoDeadline.js';
+import { METRICS_BASELINE } from './metricsBaseline.js';
 
 export const DEFAULT_COMPLAINT_TARGET_PCT = 2.4;
 export const DEFAULT_AWT_TARGET_PCT = 11;
@@ -56,6 +57,7 @@ export function emptyStore() {
 export function parseStore(raw) {
   const store = emptyStore();
   if (!raw || typeof raw !== 'object') return store;
+  if (raw[METRICS_BASELINE]) store[METRICS_BASELINE] = raw[METRICS_BASELINE];
 
   const target = Number(raw.targetComplaintPct);
   if (Number.isFinite(target) && target >= 0 && target <= 100) {
@@ -218,17 +220,20 @@ export function resolvePeriod(preset, today = argentinaToday(), customFrom = '',
   return { from: today, to: today };
 }
 
-export function resolveAvailablePeriod(preset, store, today = argentinaToday(), customFrom = '', customTo = '') {
-  if (!['week', 'month', 'days7'].includes(preset)) {
-    return resolvePeriod(preset, today, customFrom, customTo);
-  }
-  const lastLoadedDay = Object.keys(store?.days || {})
+export function lastLoadedMetricsDay(store, today = argentinaToday()) {
+  return (store?.availableLastDay && store.availableLastDay <= today ? store.availableLastDay : null) || Object.keys(store?.days || {})
     .filter(day => isIsoDate(day) && day <= today && METRIC_AGGREGATORS.some(id => {
       const stats = store.days[day]?.[id];
       return stats && ['orders', 'complaints', ...(id === AWT_AGGREGATOR ? ['awt'] : [])]
         .some(key => stats[key] != null && stats.reported?.[key] !== false);
     }))
     .sort().at(-1);
+}
+export function resolveAvailablePeriod(preset, store, today = argentinaToday(), customFrom = '', customTo = '') {
+  if (!['week', 'month', 'days7'].includes(preset)) {
+    return resolvePeriod(preset, today, customFrom, customTo);
+  }
+  const lastLoadedDay = lastLoadedMetricsDay(store,today);
   // Anchor automatic periods to the latest saved day. This also keeps a
   // Monday with no loads from producing an empty or reversed weekly range.
   return resolvePeriod(preset, lastLoadedDay || today, customFrom, customTo);

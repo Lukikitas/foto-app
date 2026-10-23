@@ -1,4 +1,5 @@
 import { fetchComplaintSheetText, parseComplaintSheet } from './complaintSheet.js';
+import { activity } from './activity.js';
 import {
   argentinaDateTimeParts,
   dailyImportDecision,
@@ -6,7 +7,7 @@ import {
 } from './complaintSync.js';
 import { loadComplaintSync, mutateComplaintSync } from './complaintSyncStore.js';
 import { fetchPhotosForComplaints, matchComplaintsToPhotos } from './complaints.js';
-import { importComplaintsToHistory, loadComplaintHistory } from './complaintHistoryStore.js';
+import { importComplaintsToHistory } from './complaintHistoryStore.js';
 
 const listeners = new Set();
 let dailyImportPromise = null;
@@ -70,9 +71,6 @@ export async function maybeRunDailyImport(now = new Date()) {
     try {
       const status = dailyImportDecision(sync, now);
       if (status !== 'run') {
-        if (status === 'already_done') {
-          await loadComplaintHistory({ force: true });
-        }
         return emitDailyImport({ status, sync });
       }
 
@@ -109,15 +107,20 @@ export async function maybeRunDailyImport(now = new Date()) {
 export function startDailyImportScheduler() {
   let cancelled = false;
   let timer;
+  let running = false;
+  const abort = new AbortController();
 
   async function run() {
-    if (cancelled) return;
+    if (cancelled || running || document.visibilityState === 'hidden') return;
+    running = true;
     window.clearTimeout(timer);
     try {
+      await activity.wait(abort.signal);
+      if (cancelled || document.visibilityState === 'hidden') return;
       await maybeRunDailyImport();
     } catch {
       // se reintenta al volver a la app o cuando llegue el horario
-    }
+    } finally { running = false; }
     if (cancelled) return;
     const wait = msUntilDailyImportCutoff();
     if (wait > 0) {
@@ -135,6 +138,7 @@ export function startDailyImportScheduler() {
 
   return () => {
     cancelled = true;
+    abort.abort();
     window.clearTimeout(timer);
     document.removeEventListener('visibilitychange', onVisible);
     window.removeEventListener('online', run);

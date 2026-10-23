@@ -6,6 +6,7 @@ import { downloadPhoto } from './photoDownload.js';
 import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
 import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
 import { compressImageInWorker } from './compressImageInWorker.js';
+import { withRequestTimeout } from './requestTimeout.js';
 
 export {
   cachedPhotoBlob,
@@ -26,7 +27,7 @@ const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 export const UNIDENTIFIED_ORDER_NAME = 'Código no encontrado';
 
 export const PHOTO_COLUMNS =
-  'id,name,file_path,public_url,created_at,notes,has_complaint,is_refutado,taken_by,aggregator';
+  'id,name,file_path,public_url,thumbnail_path,created_at,notes,has_complaint,is_refutado,taken_by,aggregator';
 
 export const PHOTO_GALLERY_KINDS = {
   orders: 'orders',
@@ -89,14 +90,16 @@ export function normalizePhotoName(value, fallback = 'Archivo') {
   return value?.trim() || fallback;
 }
 
-export async function fetchPhotosByIds(ids = []) {
+export async function fetchPhotosByIds(ids = [], { signal } = {}) {
   const clean = [...new Set((ids || []).filter(Boolean))];
   if (clean.length === 0) return [];
 
   const photos = [];
   for (let index = 0; index < clean.length; index += 50) {
     const chunk = clean.slice(index, index + 50);
-    const { data, error } = await supabase.from('photos').select(PHOTO_COLUMNS).in('id', chunk);
+    if (signal?.aborted) throw new DOMException('Interrumpido', 'AbortError');
+    let query = supabase.from('photos').select(PHOTO_COLUMNS).in('id', chunk);
+    const { data, error } = await withRequestTimeout(requestSignal=>query.abortSignal(requestSignal),{signal});
     if (error) throw error;
     photos.push(...(data ?? []));
   }

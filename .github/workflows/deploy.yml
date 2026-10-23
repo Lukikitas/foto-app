@@ -4,6 +4,17 @@ on:
   push:
     branches: [restore-e44b86f]
   workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: Desplegar las funciones de rendimiento antes de publicar
+        type: boolean
+        default: false
+        required: true
+      publish_frontend:
+        description: Publicar el frontend después de las verificaciones
+        type: boolean
+        default: true
+        required: true
 
 permissions:
   contents: read
@@ -15,7 +26,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  backend:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prepare:thumbnails
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+      - name: Deploy performance functions with bundled WASM
+        run: supabase functions deploy performance-data photo-thumbnails --project-ref jngwzemzllyohrywzxew
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Verify current production reads before publishing
+        run: node scripts/verify-performance.mjs
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
   build:
+    needs: backend
+    if: always() && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (github.event_name != 'workflow_dispatch' || inputs.publish_frontend)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

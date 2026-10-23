@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PhotoThumbnail from './PhotoThumbnail';
 import { formatDateTime } from '../lib/date';
 import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
@@ -237,11 +238,10 @@ export default function PhotoCard({
                 <small>Pedido conservado</small>
               </span>
             ) : isImage ? (
-              <img
-                src={photo.public_url}
+              <PhotoThumbnail
+                photo={photo}
                 alt={title}
                 className="photo-card__image"
-                loading="lazy" decoding="async"
               />
             ) : (
               <span className="photo-card__file-preview">

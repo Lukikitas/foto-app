@@ -17,6 +17,7 @@ import {
 } from '../lib/metrics';
 import { validateMetricFields } from '../lib/metricsQuality';
 import MetricsListPaste from './MetricsListPaste';
+import { cloneMetricsForEdit } from '../lib/metricsBaseline';
 
 function toField(value) {
   return value == null ? '' : String(value);
@@ -57,7 +58,7 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy, onDi
   );
 
   function updateField(aggregator, key, value) {
-    draftBases.current[day] ||= structuredClone(store);
+    draftBases.current[day] ||= cloneMetricsForEdit(store);
     setDrafts((current) => {
       const row = current[day] || Object.fromEntries(
         METRIC_AGGREGATORS.map((id) => [id, fieldsFromStats(store.days?.[day]?.[id])]),
@@ -101,7 +102,7 @@ export default function MetricsEntry({ store, saving, onSave, onImportBusy, onDi
   function handleCopyYesterday() {
     const source = addDays(day, -1);
     if (!store.days?.[source]) return;
-    draftBases.current[day] ||= structuredClone(store);
+    draftBases.current[day] ||= cloneMetricsForEdit(store);
     const copy=copyDayStats(store,source,day);
     setDrafts(current=>({...current,[day]:Object.fromEntries(METRIC_AGGREGATORS.map(id=>[id,fieldsFromStats(copy.days[day]?.[id])]))}));
     setCopyNotice('Valores de '+formatDayLabel(source)+' copiados al formulario. Revisá los cambios y guardá el día.');

@@ -14,38 +14,35 @@ import {
   hydrateQueueRecord,
   listQueueSummaries, getQueueRecord,
   putQueueRecord,
+  patchQueueRecord,
   serializeQueueRecord,
 } from './uploadQueueStore.js';
 
 let storedDrain = null;
+let drainAgain = false;
 
 function persistStoredItem(item, owner, { holdLease = true } = {}) {
   if (item.status === 'done') return deleteQueueRecord(item.id);
   const record = holdLease
     ? applyLease(serializeQueueRecord(item), owner)
     : clearLease(serializeQueueRecord(item));
-  return putQueueRecord(record);
+  return item.persisted ? patchQueueRecord(record) : putQueueRecord(record);
 }
 
 export async function processStoredUploadQueue(overrides = {}) {
   const { owner = QUEUE_OWNER.sw, ...itemOverrides } = overrides;
-  if (storedDrain) return storedDrain;
+  if (storedDrain) { drainAgain = true; return storedDrain; }
 
   storedDrain = (async () => {
     try {
       const seen = new Set();
       let waitedForPageLease = false;
+      let records = await listQueueSummaries();
+      let rescanned = false;
       while (true) {
-        let records = [];
-        try {
-          records = await listQueueSummaries();
-        } catch (error) {
-          console.error(error);
-          return;
-        }
-
         const record = pickStoredQueueRecord(records, owner, Date.now(), { skipIds: seen });
         if (!record) {
+          if (!rescanned) { records = await listQueueSummaries(); rescanned = true; continue; }
           if (owner === QUEUE_OWNER.sw && !waitedForPageLease) {
             const now = Date.now();
             const leased = records.filter((entry) =>
@@ -57,6 +54,7 @@ export async function processStoredUploadQueue(overrides = {}) {
               const soonest = Math.min(...leased.map((entry) => entry.leaseUntil));
               const delay = Math.min(QUEUE_LEASE_MS + 50, Math.max(25, soonest - now + 25));
               await new Promise((resolve) => setTimeout(resolve, delay));
+              records = await listQueueSummaries();
               continue;
             }
           }
@@ -75,10 +73,10 @@ export async function processStoredUploadQueue(overrides = {}) {
           const result = await processQueueItem(item, {
             persist: (entry, options) => persistStoredItem(entry, owner, options),
             notify: () => {
-              void notifyQueueProcessed();
+              void notifyQueueProcessed(globalThis, item.id);
             },
             onComplete: () => {
-              void notifyQueueProcessed();
+              void notifyQueueProcessed(globalThis, item.id);
             },
             ...itemOverrides,
           });
@@ -88,8 +86,11 @@ export async function processStoredUploadQueue(overrides = {}) {
         }
       }
     } finally {
+      const repeat = drainAgain;
+      drainAgain = false;
       storedDrain = null;
       await notifyQueueProcessed();
+      if (repeat) await processStoredUploadQueue(overrides);
     }
   })();
 
@@ -98,4 +99,5 @@ export async function processStoredUploadQueue(overrides = {}) {
 
 export function resetStoredUploadQueueForTests() {
   storedDrain = null;
+  drainAgain = false;
 }

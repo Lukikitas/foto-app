@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { mergeGalleryPhoto } from '../lib/galleryMemory';
+import { readPage } from '../lib/pagedReads';
 import { todayDateInput, yesterdayDateInput } from '../lib/date';
 import { AGGREGATOR_OPTIONS } from '../lib/aggregators';
-import { GALLERY_PAGE_SIZE, clampPage, galleryPage, pageNumbers } from '../lib/galleryPagination';
+import { GALLERY_PAGE_SIZE, clampPage, pageNumbers } from '../lib/galleryPagination';
 import { isPhoneViewport, PHONE_MEDIA_QUERY } from '../lib/viewport';
-import { fetchPhotos, getPhotoTitle, photoMatchesFilters } from '../lib/photos';
+import { getPhotoTitle, photoMatchesFilters } from '../lib/photos';
 import { supabase } from '../lib/supabase';
 import {
   getFiltersOpen,
@@ -34,13 +34,7 @@ const EMPTY_FILTERS = {
   notes: '',
 };
 
-// La galería pinta todas las filas que recibe, así que mantiene el tope que
-// antes imponía el servidor (1000) para no tumbar el render con tablas grandes.
-// Los rangos sin tope (métricas, cruce) usan fetchPhotos sin maxRows.
-const GALLERY_MAX_ROWS = 1000;
-// Bloque inicial de la carga progresiva: con ~300 filas alcanza para pintar la
-// primera página de 100 de inmediato; el resto va llegando en segundo plano.
-const GALLERY_BLOCK_SIZE = 300;
+// Only the requested server page and selected rows are retained locally.
 const SEARCH_DEBOUNCE_MS = 400;
 
 function sortPhotosNewestFirst(items) {
@@ -60,6 +54,8 @@ export default function PhotoGallery({
 }) {
   const baseFilters = useMemo(() => ({ ...EMPTY_FILTERS, kind }), [kind]);
   const [photos, setPhotos] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [cachedPhotos, setCachedPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState(baseFilters);
@@ -90,6 +86,9 @@ export default function PhotoGallery({
   // Cada carga invalida a la anterior: una respuesta vieja (p. ej. la de una
   // búsqueda que ya no interesa) no pinta encima de la nueva.
   const loadIdRef = useRef(0);
+  const requestRef = useRef(null);
+  const asOfRef = useRef(null);
+  const selectedCache = useRef(new Map());
 
   useEffect(() => {
     appliedFiltersRef.current = appliedFilters;
@@ -120,17 +119,16 @@ export default function PhotoGallery({
     [clearLiveNoticeTimer],
   );
 
-  const prependPhoto = useCallback((photo) => {
-    setPhotos((prev) => {
-      if (prev.some((item) => item.id === photo.id)) return prev;
-      return mergeGalleryPhoto(prev,photo,{limit:GALLERY_MAX_ROWS,selectedIds:selectedIdsRef.current});
-    });
-  }, []);
-
   const loadPhotos = useCallback(
-    async (nextFilters, { silent = false, keepSelection = false } = {}) => {
+    async (nextFilters, { silent = false, keepSelection = true, targetPage, resetSnapshot = true } = {}) => {
       const filtersToLoad = nextFilters ?? appliedFiltersRef.current;
       const requestId = ++loadIdRef.current;
+      requestRef.current?.abort();
+      const controller = new AbortController();
+      requestRef.current = controller;
+      const changedFilters = JSON.stringify(filtersToLoad) !== JSON.stringify(appliedFiltersRef.current);
+      const requestedPage = targetPage ?? (changedFilters ? 1 : pageRef.current);
+      if (resetSnapshot || changedFilters) asOfRef.current = null;
 
       // Aplicar filtros distintos siempre vuelve a la página 1; un refresco
       // (visibilidad, ↻, subida) pasa los filtros ya aplicados y conserva la
@@ -142,27 +140,25 @@ export default function PhotoGallery({
       }
       setError(null);
       try {
-        const receiveBlock = (rows) => {
-          if (loadIdRef.current !== requestId) return;
-          setPhotos(rows);
-        };
-        const data = await fetchPhotos({
-          ...filtersToLoad,
-          kind,
-          maxRows: GALLERY_MAX_ROWS,
-          // Bloques chicos + pintado incremental: la primera página se ve sin
-          // esperar a que lleguen las ~1000 filas del tope.
-          pageSize: GALLERY_BLOCK_SIZE,
-          onPage: receiveBlock,
+        const data = await readPage('foto_gallery_page', { ...filtersToLoad, kind }, {
+          page: requestedPage, pageSize, asOf: asOfRef.current, signal: controller.signal,
         });
         if (loadIdRef.current !== requestId) return;
-        setPhotos(data);
+        setPhotos(data.items);
+        setTotal(data.total);
+        asOfRef.current = data.asOf;
+        setPage(data.page);
+        pageRef.current = data.page;
+        const retained = changedFilters || !keepSelection ? new Map() : new Map([...selectedCache.current].filter(([id]) => selectedIdsRef.current.has(id)));
+        data.items.forEach(photo => retained.set(photo.id, photo));
+        selectedCache.current = retained;
+        setCachedPhotos([...retained.values()]);
         setAppliedFilters(filtersToLoad);
-        if (!keepSelection) {
+        if (!keepSelection || changedFilters) {
           setSelectedIds(new Set());
         }
       } catch (err) {
-        if (loadIdRef.current !== requestId) return;
+        if (loadIdRef.current !== requestId || controller.signal.aborted) return;
         setError(err.message || 'No se pudieron cargar las fotos.');
       } finally {
         // El spinner lo apaga quien quedó vigente; si una carga más nueva ya
@@ -172,7 +168,7 @@ export default function PhotoGallery({
         }
       }
     },
-    [kind],
+    [kind, pageSize],
   );
 
   // Búsqueda con debounce: se reconsulta ~400 ms después de la última tecla.
@@ -193,18 +189,16 @@ export default function PhotoGallery({
       // Con selección activa o mirando otra página no se mete la foto nueva
       // (movería las tarjetas de la página que se está viendo): se ofrece con
       // «Ver», que lleva a la página 1 y la agrega.
-      if (selectedIdsRef.current.size > 0 || pageRef.current > 1) {
-        setPendingNewPhoto(photo);
-        return;
-      }
-
-      prependPhoto(photo);
-      showLiveNotice(`Nuevo ${itemLabel} - ${getPhotoTitle(photo)}`);
+      setPendingNewPhoto(photo);
     },
-    [itemLabel, kind, prependPhoto, showLiveNotice],
+    [kind],
   );
 
   const handleRealtimeUpdate = useCallback((photo) => {
+    if (selectedCache.current.has(photo.id)) {
+      selectedCache.current.set(photo.id,photo);
+      setCachedPhotos([...selectedCache.current.values()]);
+    }
     const matches = photoMatchesFilters(photo, { ...appliedFiltersRef.current, kind });
 
     setPhotos((prev) => {
@@ -215,7 +209,7 @@ export default function PhotoGallery({
       }
 
       if (!exists) {
-        return mergeGalleryPhoto(prev,photo,{limit:GALLERY_MAX_ROWS,selectedIds:selectedIdsRef.current});
+        return prev;
       }
 
       return sortPhotosNewestFirst(
@@ -225,6 +219,8 @@ export default function PhotoGallery({
   }, [kind]);
 
   const handleRealtimeDelete = useCallback((id) => {
+    selectedCache.current.delete(id);
+    setCachedPhotos([...selectedCache.current.values()]);
     setPhotos((prev) => prev.filter((photo) => photo.id !== id));
     setSelectedIds((prev) => {
       if (!prev.has(id)) return prev;
@@ -287,18 +283,17 @@ export default function PhotoGallery({
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [loadPhotos]);
 
-  useEffect(() => () => clearLiveNoticeTimer(), [clearLiveNoticeTimer]);
+  useEffect(() => () => { clearLiveNoticeTimer(); requestRef.current?.abort(); }, [clearLiveNoticeTimer]);
 
   const selectedPhotos = useMemo(
-    () => photos.filter((photo) => selectedIds.has(photo.id)),
-    [photos, selectedIds],
+    () => cachedPhotos.filter((photo) => selectedIds.has(photo.id)),
+    [cachedPhotos, selectedIds],
   );
 
-  // Ventana de la página actual: la grilla/lista solo renderiza estas tarjetas
-  // (30 en celular y 100 en PC) aunque en memoria estén las ~1000 cargadas.
+  // Server page: 30 rows on phones and 100 on desktop.
   const currentPage = useMemo(
-    () => galleryPage(photos, page, pageSize),
-    [photos, page, pageSize],
+    () => ({ items: photos, page, pageCount: Math.max(1, Math.ceil(total / pageSize)), start: (page - 1) * pageSize }),
+    [photos, page, pageSize, total],
   );
   const pageItems = currentPage.items;
   const pageCount = currentPage.pageCount;
@@ -366,6 +361,8 @@ export default function PhotoGallery({
       photoMatchesFilters(photo, { ...appliedFiltersRef.current, kind });
 
     if (Array.isArray(updated)) {
+      updated.forEach(photo => selectedCache.current.set(photo.id, photo));
+      setCachedPhotos([...selectedCache.current.values()]);
       setPhotos((prev) => {
         const map = new Map(updated.map((photo) => [photo.id, photo]));
         return prev
@@ -374,6 +371,8 @@ export default function PhotoGallery({
       });
       return;
     }
+    selectedCache.current.set(updated.id, updated);
+    setCachedPhotos([...selectedCache.current.values()]);
 
     setPhotos((prev) => {
       const next = prev.map((photo) => (photo.id === updated.id ? updated : photo));
@@ -386,6 +385,9 @@ export default function PhotoGallery({
 
   function handleDeleted(ids) {
     const idSet = new Set(Array.isArray(ids) ? ids : [ids]);
+    idSet.forEach(id => selectedCache.current.delete(id));
+    setCachedPhotos([...selectedCache.current.values()]);
+    setTotal(value => Math.max(0, value - idSet.size));
     setPhotos((prev) => prev.filter((photo) => !idSet.has(photo.id)));
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -433,20 +435,21 @@ export default function PhotoGallery({
 
   function clearSelection() {
     setSelectedIds(new Set());
+    selectedCache.current = new Map(photos.map(photo=>[photo.id,photo]));
+    setCachedPhotos(photos);
   }
 
   function acceptPendingPhoto() {
     if (!pendingNewPhoto) return;
-    prependPhoto(pendingNewPhoto);
-    setPage(1);
+    void loadPhotos(appliedFiltersRef.current, { targetPage: 1 });
     showLiveNotice(`Nuevo ${itemLabel} - ${getPhotoTitle(pendingNewPhoto)}`);
     setPendingNewPhoto(null);
   }
 
   function goToPage(nextPage) {
-    const target = clampPage(nextPage, photos.length,pageSize);
+    const target = clampPage(nextPage, total,pageSize);
     if (target === pageRef.current) return;
-    setPage(target);
+    void loadPhotos(appliedFiltersRef.current, { targetPage: target, resetSnapshot: false });
     galleryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -482,7 +485,7 @@ export default function PhotoGallery({
         <div className="gallery__toolbar-left">
           {!loading && (
             <p className="gallery__count">
-              {photos.length} {itemLabel}{photos.length !== 1 ? 's' : ''}
+              {total} {itemLabel}{total !== 1 ? 's' : ''}
               {hasActiveFilters ? ' · filtradas' : ''}
               {hasSelection ? ` · ${selectedIds.size} sel.` : ''}
             </p>
@@ -849,7 +852,7 @@ export default function PhotoGallery({
           </button>
           <p className="gallery__pager-range">
             Mostrando {currentPage.start + 1}–{currentPage.start + pageItems.length} de{' '}
-            {photos.length.toLocaleString('es-AR')}
+            {total.toLocaleString('es-AR')}
             {hasActiveFilters ? ' filtrados' : ''}
           </p>
         </nav>

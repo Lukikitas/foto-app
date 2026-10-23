@@ -137,9 +137,15 @@ export async function purgeExpiredUnresolvedTickets(now = Date.now()) {
   const tx = db.transaction(STORE_NAME, 'readwrite');
   const done = completeTransaction(tx);
   const store = tx.objectStore(STORE_NAME);
-  const records = await requestResult(store.getAll());
-  for (const record of records) {
-    if (isExpired(record, now)) store.delete(record.id);
-  }
+  await new Promise((resolve, reject) => {
+    const request = store.openCursor();
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) { resolve(); return; }
+      if (isExpired(cursor.value, now)) cursor.delete();
+      cursor.continue();
+    };
+  });
   await done;
 }

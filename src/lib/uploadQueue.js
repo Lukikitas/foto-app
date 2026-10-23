@@ -1,4 +1,6 @@
 import { releaseQueueFiles, mergeQueueStateWithStoredFiles } from './queueMemory.js';
+import { activity } from './activity.js';
+import { measurePerformance } from './performanceMetrics.js';
 import { checkpointUploadQueue, canRetireMissingItem } from './uploadQueueSafety.js';
 import { detectOrderFromPhoto } from './orderOcr.js';
 import { compressImageInWorker as compressImage } from './compressImageInWorker.js';
@@ -12,6 +14,7 @@ import { keepTicketForRecovery, recoverOrderCodeInCloud } from './cloudOrderReco
 import {
   requestBackgroundQueueProcessing,
   subscribeBackgroundQueueUpdates,
+  announceForegroundQueue,
 } from './uploadQueueBackground.js';
 import {
   applyLease,
@@ -25,6 +28,7 @@ import {
   hydrateQueueRecord,
   listQueueRecords, getQueueRecord, listQueueSummaries,
   putQueueRecord,
+  patchQueueRecord,
   serializeQueueRecord,
   shouldRestoreQueueRecord,
 } from './uploadQueueStore';
@@ -45,8 +49,14 @@ let leaseRetryTimer = null;
 let processingFinished = Promise.resolve();
 let updateCheckpoint = null;
 let syncPromise = null;
+let syncIsFull = false;
 let syncTimer = null;
 let retryChain = Promise.resolve();
+let waitingForActivity = false;
+let notifyTimer = null;
+activity.subscribe(blocked => {
+  if (blocked && queue.find(item => item.id === processingId)?.status === 'analyzing') pageAbort?.abort();
+});
 
 function snapshot() {
   return queue.map((item) => ({
@@ -59,8 +69,12 @@ function snapshot() {
 }
 
 function notify() {
-  const data = snapshot();
-  listeners.forEach((fn) => fn(data));
+  if (notifyTimer !== null) return;
+  notifyTimer = setTimeout(() => {
+    notifyTimer = null;
+    const data = snapshot();
+    listeners.forEach((fn) => fn(data));
+  }, 50);
 }
 
 function persistItem(item, { holdLease = true, reportError = false } = {}) {
@@ -72,8 +86,9 @@ function persistItem(item, { holdLease = true, reportError = false } = {}) {
       const record = holdLease
         ? applyLease(serializeQueueRecord(item), getQueueOwner())
         : clearLease(serializeQueueRecord(item));
-      const complete = mergeQueueStateWithStoredFiles(item,item.filesUnloaded ? await getQueueRecord(item.id) : null,record);
-      return putQueueRecord(complete).then(() => { item.localSaveFailed = false; item.persisted = true; }, error => { item.localSaveFailed = true; throw error; });
+      const write = item.persisted && !item.localSaveFailed ? patchQueueRecord(record)
+        : putQueueRecord(mergeQueueStateWithStoredFiles(item,item.filesUnloaded ? await getQueueRecord(item.id) : null,record));
+      return write.then(() => { item.localSaveFailed = false; item.persisted = true; }, error => { item.localSaveFailed = true; throw error; });
     });
   const loggedJob = job.catch((error) => {
     console.error(error);
@@ -85,6 +100,7 @@ function persistItem(item, { holdLease = true, reportError = false } = {}) {
 async function pausePageQueueAndHandoff() {
   if (handoffPromise) return handoffPromise;
   pagePaused = true;
+  announceForegroundQueue(false);
   pageAbort?.abort();
   handoffPromise = (async () => {
     await Promise.all(queue
@@ -100,6 +116,7 @@ async function pausePageQueueAndHandoff() {
 }
 
 async function resumePageQueue() {
+  announceForegroundQueue(true);
   if (handoffPromise) await handoffPromise;
   pagePaused = false;
   await syncQueueFromStore();
@@ -122,9 +139,19 @@ function bindPersistListeners() {
   window.addEventListener('pagehide', () => { void pausePageQueueAndHandoff(); });
   window.addEventListener('beforeunload', () => { void pausePageQueueAndHandoff(); });
   document.addEventListener('visibilitychange', handleQueueVisibilityChange);
-  subscribeBackgroundQueueUpdates(() => {
+  window.addEventListener('online', () => { if (!pagePaused) void syncQueueFromStore().then(() => processQueue()); });
+  globalThis.navigator?.serviceWorker?.addEventListener?.('controllerchange', () => announceForegroundQueue(document.visibilityState !== 'hidden'));
+  const changedIds = new Set();
+  let fullSync = false;
+  subscribeBackgroundQueueUpdates(update => {
+    if (update?.id) changedIds.add(update.id); else fullSync = true;
     if (syncTimer) return;
-    syncTimer=setTimeout(()=>{syncTimer=null;void syncQueueFromStore().then(()=>{if(!pagePaused)processQueue();});},200);
+    syncTimer=setTimeout(()=>{
+      syncTimer=null;
+      const ids = fullSync ? null : [...changedIds];
+      changedIds.clear(); fullSync=false;
+      void syncQueueFromStore(ids).then(()=>{if(!pagePaused)processQueue();});
+    },200);
   });
 }
 
@@ -170,7 +197,7 @@ export async function enqueue({
   notify();
   bindPersistListeners();
   try {
-    await persistItem(item, { reportError: true });
+    await measurePerformance('queue.persistCapture', () => persistItem(item, { reportError: true }));
     item.initialPersistPending = false;
     releaseQueueFiles(item);
   } catch {
@@ -249,7 +276,14 @@ function markItemDone(item, photo) {
 }
 
 async function processQueue() {
-  if (processing || pagePaused) return;
+  if (processing || pagePaused || globalThis.navigator?.onLine === false) return;
+  if (activity.busy()) {
+    if (!waitingForActivity) {
+      waitingForActivity = true;
+      void activity.wait().then(() => { waitingForActivity = false; return processQueue(); });
+    }
+    return;
+  }
 
   const now = Date.now();
   const next = queue.find((entry) => entry.status === 'pending'
@@ -296,7 +330,7 @@ async function processQueue() {
         ? Promise.resolve()
         : persistItem(entry, { ...options, reportError: true }),
       notify,
-      shouldYield: () => pagePaused,
+      shouldYield: () => pagePaused || activity.busy() || globalThis.navigator?.onLine === false,
       signal: pageAbort?.signal,
       onComplete: (photo) => markItemDone(next, photo),
     });
@@ -324,14 +358,15 @@ async function processQueue() {
   }
 }
 
-export function syncQueueFromStore() {
-  if(syncPromise)return syncPromise;
-  syncPromise=syncQueueImpl().finally(()=>{syncPromise=null;});return syncPromise;
+export function syncQueueFromStore(ids = null) {
+  if(syncPromise)return !ids && syncIsFull ? syncPromise : syncPromise.then(() => syncQueueFromStore(ids));
+  syncIsFull = !ids;
+  syncPromise=syncQueueImpl(ids).finally(()=>{syncPromise=null;syncIsFull=false;});return syncPromise;
 }
-async function syncQueueImpl() {
+async function syncQueueImpl(ids) {
   let records;
   try {
-    records = await listQueueSummaries();
+    records = ids ? (await Promise.all(ids.map(id => getQueueRecord(id)))).filter(Boolean) : await listQueueSummaries();
   } catch (error) {
     console.error(error);
     return snapshot();
@@ -365,6 +400,7 @@ async function syncQueueImpl() {
   }
 
   for (const item of queue) {
+    if (ids && !ids.includes(item.id)) continue;
     if (!canRetireMissingItem(item)) continue;
     if (storedIds.has(item.id) || item.status === 'done' || item.status === 'error') continue;
     if (processingId === item.id && storedIds.has(item.id)) continue;
@@ -410,6 +446,7 @@ export function restorePersistedQueue() {
     bindPersistListeners();
     await syncQueueFromStore();
     if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+      announceForegroundQueue(true);
       processQueue();
     } else {
       void requestBackgroundQueueProcessing();
@@ -435,6 +472,7 @@ export function resetUploadQueueForTests({processor=processQueueItem}={}) {
   processingFinished = Promise.resolve();
   updateCheckpoint = null;syncPromise=null;retryChain=Promise.resolve();
   if(syncTimer)clearTimeout(syncTimer);syncTimer=null;
+  if(notifyTimer !== null)clearTimeout(notifyTimer);notifyTimer=null;
   if (leaseRetryTimer) clearTimeout(leaseRetryTimer);
   leaseRetryTimer = null;
   notify();

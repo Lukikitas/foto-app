@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { captureWorkPolicy } from '../lib/capturePolicy';
+import { activity } from '../lib/activity';
+import { measurePerformance } from '../lib/performanceMetrics';
 import { withTimeout } from '../lib/taskTimeout';
 import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
 import { getCameraFlash, getTakenByHistory, saveCameraFlash, saveLastTakenBy } from '../lib/storage';
@@ -31,8 +33,8 @@ function drawFrame(video, canvas, maxWidth = 2560, zoom = 1) {
   const width = Math.round(sourceWidth * scale);
   const height = Math.round(sourceHeight * scale);
 
-  canvas.width = width;
-  canvas.height = height;
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
   const context = canvas.getContext('2d', { alpha: false });
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
@@ -80,8 +82,14 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
   // Take a tiny burst of frozen frames and keep the sharpest candidate; supported
   // phones can still supply a full still with their own autofocus on top of it.
   let best = null;
+  let spare = null;
+  let captured = false;
+  const canvases = new Set();
+  try {
   for (let i = 0; i < work.burstFrames; i += 1) {
-    const canvas = document.createElement('canvas');
+    const canvas = spare || document.createElement('canvas');
+    spare = null;
+    canvases.add(canvas);
     drawFrame(video, canvas, 2560, softwareZoom ? zoom : 1);
     const candidate = { canvas, quality: inspectCaptureCanvas(canvas, { ticket }) };
     if (!best) {
@@ -89,14 +97,17 @@ async function captureFrameOrPhoto(video, track, name, zoom = 1, softwareZoom = 
     } else {
       const winner = pickSharpest([best, candidate]);
       const loser = winner === best ? candidate : best;
-      loser.canvas.width = 0;
-      loser.canvas.height = 0;
+      spare = loser.canvas;
       best = winner;
     }
     if (i < work.burstFrames - 1) {
       await wait(BURST_INTERVAL_MS);
       if (!video.videoWidth || !video.videoHeight) break;
     }
+  }
+  captured = Boolean(best);
+  } finally {
+    for (const canvas of canvases) if (!captured || canvas !== best.canvas) { canvas.width = 0; canvas.height = 0; }
   }
   const fallback = best.canvas;
   const quality = best.quality;
@@ -160,6 +171,10 @@ function getLiveTrack(stream) {
 }
 
 export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, onCancel }) {
+  useEffect(() => {
+    activity.setCamera(true);
+    return () => activity.setCamera(false);
+  }, []);
   const videoRef = useRef(null);
   const ticketFileRef = useRef(null);
   const ticketUpgradeRef = useRef(null);
@@ -249,6 +264,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   }
 
   async function handleFlashToggle() {
+    activity.touch();
     if (status !== 'ready') return;
 
     const track = getLiveTrack(streamRef.current);
@@ -274,6 +290,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   }
 
   function handleZoom(direction) {
+    activity.touch();
     if (status !== 'ready' || takingPhoto) return;
     void camera.requestZoom(zoom + direction * 0.25);
   }
@@ -350,6 +367,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
 
   async function handleCapture() {
     if (status !== 'ready' || takingPhoto || zoomBusy) return;
+    activity.touch();
 
     if (!takenBy?.trim()) {
       setWhoOpen(true);
@@ -370,14 +388,14 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       if (navigator.vibrate) navigator.vibrate(25);
 
       if (step === STEPS.ticket) {
-        const shot = await makeTicketPhoto(
+        const shot = await measurePerformance('capture.ticket', () => makeTicketPhoto(
           videoRef.current,
           getLiveTrack(streamRef.current),
           `ticket-${Date.now()}.jpg`,
           zoom,
           !hardwareZoom && zoom > 1,
           captureWorkPolicy({pendingTasks,deviceMemory:navigator.deviceMemory}),
-        );
+        ));
         ticketFileRef.current = shot.file;
         ticketUpgradeRef.current = shot.upgrade;
         adoptStrip({ ticketUrl: URL.createObjectURL(shot.file) });
@@ -391,14 +409,14 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         return;
       }
 
-      const shot = await makeEvidencePhoto(
+      const shot = await measurePerformance('capture.evidence', () => makeEvidencePhoto(
         videoRef.current,
         getLiveTrack(streamRef.current),
         `evidencia-${Date.now()}.jpg`,
         zoom,
         !hardwareZoom && zoom > 1,
         captureWorkPolicy({pendingTasks,deviceMemory:navigator.deviceMemory}),
-      );
+      ));
       const ticketFile = ticketFileRef.current;
       const ticketUpgrade = ticketUpgradeRef.current;
       ticketFileRef.current = null;

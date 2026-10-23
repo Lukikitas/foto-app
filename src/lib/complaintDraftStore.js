@@ -16,10 +16,8 @@ const CACHE_KEY = 'foto-app-review-draft-v1';
 export function cachedDraft() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; }
 }
-function cache(draft) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(draft)); } catch { /* Cache is optional. */ }
-  return draft;
-}
+let memoryDraft;
+function cache(draft) { memoryDraft = draft; return draft; }
 export function subscribeDrafts(listener) { listeners.add(listener); return () => listeners.delete(listener); }
 function emit(draft) { cache(draft); listeners.forEach(listener => listener(draft)); return draft; }
 function online() { if (navigator.onLine === false) throw new Error('Necesitás conexión para modificar la lista compartida.'); }
@@ -29,7 +27,18 @@ async function action(name, args = {}) {
   if (error) throw sharedError(error);
   return data;
 }
-export async function loadDraft() { return cache(await action('read')); }
+let draftRead;
+export async function loadDraft() {
+  if (!draftRead) draftRead = (async () => {
+    const { data, error } = await supabase.rpc('foto_draft_read_if_changed', {
+      known_id: memoryDraft?.id || null, known_revision: memoryDraft?.revision ?? null,
+    });
+    if (error && !['PGRST202', '42883'].includes(error.code)) throw sharedError(error);
+    if (error) return cache(await action('read'));
+    return data?.unchanged ? memoryDraft : cache(data);
+  })().finally(() => { draftRead = null; });
+  return draftRead;
+}
 export async function prepareComplaintDraft(complaints, { source = 'manual', report = null, sheetUrl = '', pickedPhotoIds = {} } = {}) {
   online();
   if (await loadDraft()) throw new Error('Ya hay una lista pendiente. Guardala o descartala primero en Gestionar.');

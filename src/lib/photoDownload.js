@@ -16,20 +16,15 @@ const MIME_TO_EXT = {
   'application/zip': 'zip',
 };
 
-const photoBlobCache = new Map();
+import { createByteCache } from './byteCache.js';
+const photoBlobCache = createByteCache();
+const pendingBlobs = new Map();
 
 // Caché acotada (LRU por orden de inserción): guardar todos los BLOBs del
 // período agotaba la memoria del navegador. Si se evicta uno, la descarga
 // vuelve a pedirlo a la red sin perder funcionalidad.
-const MAX_CACHED_BLOBS = 32;
-
 function rememberBlob(url, blob) {
-  photoBlobCache.delete(url);
   photoBlobCache.set(url, blob);
-  while (photoBlobCache.size > MAX_CACHED_BLOBS) {
-    const oldest = photoBlobCache.keys().next().value;
-    photoBlobCache.delete(oldest);
-  }
   return blob;
 }
 
@@ -119,12 +114,9 @@ export async function fetchPhotoBlob(url) {
 export async function prefetchPhotoBlob(url) {
   if (!url) return null;
   if (photoBlobCache.has(url)) return photoBlobCache.get(url);
-  try {
-    const blob = await fetchPhotoBlob(url);
-    return rememberBlob(url, blob);
-  } catch {
-    return null;
-  }
+  if (!pendingBlobs.has(url)) pendingBlobs.set(url, fetchPhotoBlob(url)
+    .then(blob => rememberBlob(url, blob)).catch(() => null).finally(() => pendingBlobs.delete(url)));
+  return pendingBlobs.get(url);
 }
 
 export function triggerBlobDownload(blob, filename) {

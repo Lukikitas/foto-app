@@ -687,6 +687,9 @@ export function addMoneyToFlags(flags, item, { refutadoDays, today } = {}) {
 }
 
 export function groupHistoryFlags(store, from, to, options = {}) {
+  if (store?.summaryFlags && from >= store.summaryFrom && to <= store.summaryTo) {
+    return Object.fromEntries(Object.entries(store.summaryFlags).filter(([day]) => (!from || day >= from) && (!to || day <= to)));
+  }
   const map = {};
   Object.values(parseHistory(store).items).forEach((item) => {
     if (!item.day || (from && item.day < from) || (to && item.day > to)) return;

@@ -1,7 +1,7 @@
 import { confirmAction } from './lib/confirmAction';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
-import { startDailyImportScheduler } from './lib/complaintDailyImport';
+import { activity } from './lib/activity';
 import { restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
 import { getTheme, saveTheme } from './lib/theme';
 import { isPhoneViewport, PHONE_MEDIA_QUERY } from './lib/viewport';
@@ -11,7 +11,7 @@ import InstallPrompt from './components/InstallPrompt';
 import ConfirmationHost from './components/ConfirmationHost';
 import NavIcon from './components/NavIcon';
 import UpdatePrompt from './components/UpdatePrompt';
-import PhotoGallery from './components/PhotoGallery';
+const PhotoGallery = lazy(() => import('./components/PhotoGallery'));
 import PhotoUploader from './components/PhotoUploader';
 import UploadQueueStatus from './components/UploadQueueStatus';
 import './App.css';
@@ -81,14 +81,23 @@ export default function App() {
     restorePersistedQueue();
   }, []);
 
-  useEffect(() => startDailyImportScheduler(), []);
+  useEffect(() => {
+    let stop;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      void activity.wait(abort.signal).then(() => import('./lib/complaintDailyImport'))
+        .then(module => { if (!abort.signal.aborted) stop = module.startDailyImportScheduler(); })
+        .catch(error => { if (error.name !== 'AbortError') console.warn(error); });
+    }, 1000);
+    return () => { clearTimeout(timer); abort.abort(); stop?.(); };
+  }, []);
 
   useEffect(() => {
     let lastPurge = 0;
     const purge = () => {
       if (document.visibilityState === 'hidden' || Date.now() - lastPurge < 60 * 60 * 1000) return;
       lastPurge = Date.now();
-      void purgeExpiredUnresolvedTickets().catch(console.warn);
+      void activity.wait().then(() => purgeExpiredUnresolvedTickets()).catch(console.warn);
     };
     purge();
     document.addEventListener('visibilitychange', purge);
@@ -188,7 +197,7 @@ export default function App() {
             <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
           )}
           {tab === TABS.orders && (
-            <PhotoGallery
+            <Suspense fallback={<p className="gallery__state">Cargando galería…</p>}><PhotoGallery
               key="orders-gallery"
               refreshKey={refreshKey}
               kind={PHOTO_GALLERY_KINDS.orders}
@@ -197,11 +206,12 @@ export default function App() {
               emptyMessage="Todavia no hay fotos de pedidos registradas. Subi la primera."
               searchLabel="Pedido"
               searchPlaceholder="PEYA12345 o 4696"
-            />
+            /></Suspense>
           )}
           {complaintsVisited && <div hidden={!complaintsOpen} className="app__panel">
             <Suspense fallback={<p className="gallery__state">Cargando reclamos…</p>}>
             <StableComplaintsInbox
+              active={complaintsOpen}
               loadRequest={complaintLoadRequest}
               focusedCase={focusedCase}
               view={tab === TABS.history ? 'historial' : 'cruzar'}
@@ -213,7 +223,7 @@ export default function App() {
           </div>}
           {metricsVisited && <div hidden={tab !== TABS.metrics}>
             <Suspense fallback={<p className="gallery__state">Cargando métricas…</p>}>
-            <StableMetricsPage entryRequest={metricsRequest} refreshKey={metricsRefreshKey} onDirtyChange={setMetricsDirty} onManage={manageMetricCase} />
+            <StableMetricsPage active={tab === TABS.metrics} entryRequest={metricsRequest} refreshKey={metricsRefreshKey} onDirtyChange={setMetricsDirty} onManage={manageMetricCase} />
             </Suspense>
           </div>}
           {tab === TABS.settings && (
@@ -223,7 +233,7 @@ export default function App() {
             </Suspense>
           )}
           {tab === TABS.files && (
-            <PhotoGallery
+            <Suspense fallback={<p className="gallery__state">Cargando archivos…</p>}><PhotoGallery
               key="files-gallery"
               refreshKey={refreshKey}
               kind={PHOTO_GALLERY_KINDS.files}
@@ -232,7 +242,7 @@ export default function App() {
               emptyMessage="Todavia no hay archivos generales registrados. Subi el primero."
               searchLabel="Archivo"
               searchPlaceholder="remito, factura..."
-            />
+            /></Suspense>
           )}
         </main>
       </div>

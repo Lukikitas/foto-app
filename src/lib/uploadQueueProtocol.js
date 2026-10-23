@@ -2,6 +2,7 @@ export const UPLOAD_QUEUE_MESSAGE = {
   process: 'PROCESS_UPLOAD_QUEUE',
   updated: 'UPLOAD_QUEUE_UPDATED',
   skipWaiting: 'SKIP_WAITING',
+  foreground: 'UPLOAD_QUEUE_FOREGROUND',
 };
 
 export const UPLOAD_QUEUE_SYNC_TAG = 'upload-queue';

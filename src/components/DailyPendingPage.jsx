@@ -7,8 +7,10 @@ import { buildDailyPending, buildPendingManualLoad } from '../lib/dailyPending';
 import { translatedReason } from '../lib/metricsQuality';
 import AggregatorIdentity from './AggregatorIdentity';
 import './DailyPendingPage.css';
+import { loadPerformanceData } from '../lib/performanceData';
+import { rememberMetricsView } from '../lib/metricsStore';
 
-const DATA_SOURCE = { loadMetricsStore, saveMetricsStore, loadComplaintHistory, complaintHistoryReadStatus, subscribeComplaintHistory };
+const DATA_SOURCE = { loadMetricsStore, saveMetricsStore, loadComplaintHistory, complaintHistoryReadStatus, subscribeComplaintHistory, loadPerformanceData };
 const LOAD_LABELS = { missing: 'Sin cargar', complete: 'Datos guardados', not_applicable: 'Sin plataforma asignada' };
 const money = value => value == null ? 'Sin monto' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
 
@@ -91,6 +93,7 @@ export default function DailyPendingPage({ active = true, onLoadDay, onLoadCompl
   const readSequence = useRef(0);
   const alive = useRef(true);
   const scrollPosition = useRef(0);
+  const requestController = useRef(null);
 
   useEffect(() => { onDirtyChange?.(Object.keys(drafts).length > 0); return () => onDirtyChange?.(false); }, [drafts, onDirtyChange]);
   useEffect(() => {
@@ -116,38 +119,50 @@ export default function DailyPendingPage({ active = true, onLoadDay, onLoadCompl
       const saved = await dataSource.saveMetricsStore(next);
       if (alive.current) {
         readSequence.current += 1;
-        setSnapshot(current => ({ ...current, metrics: saved }));
+        setSnapshot(current => ({ ...current, metrics: saved, report: null }));
         setDrafts(current => { const copy = { ...current }; delete copy[key]; return copy; });
         setSaveNotice(`Carga guardada · ${AGGREGATOR_OPTIONS.find(option => option.id === id)?.label} · ${formatDayLabel(day)}.`);
       }
     } catch (err) { if (alive.current) setFormErrors(current => ({ ...current, [key]: err.message || 'No se pudo guardar. Se conserva la carga para reintentar.' })); }
-    finally { saving.current = false; if (alive.current) setSavingKey(''); }
+    finally { saving.current = false; if (alive.current) { setSavingKey(''); if (dataSource.loadPerformanceData) void refresh(); } }
   }
 
   const refresh = useCallback(async () => {
-    if (busy.current || saving.current) return;
+    if (saving.current || !active) return;
+    const key = `${from}|${to}|${aggregator}`;
+    if (busy.current === key) return;
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     const sequence = ++readSequence.current;
-    busy.current = true;
+    busy.current = key;
     setLoading(true);
     try {
+      if (dataSource.loadPerformanceData) {
+        const result = await dataSource.loadPerformanceData({ view: 'pending', from, to, aggregator }, { signal: controller.signal });
+        if (alive.current && sequence === readSequence.current) { setSnapshot({ ...result, metrics: rememberMetricsView(result.metrics), key }); setError(''); setReadAt(new Date()); }
+        return;
+      }
       const [metrics, history] = await Promise.all([
         dataSource.loadMetricsStore({ strict: true }), dataSource.loadComplaintHistory({ force: true, strict: true }),
       ]);
       if (dataSource.complaintHistoryReadStatus?.().cached) throw new Error('No se pudo verificar el historial en el servidor.');
       if (alive.current && sequence === readSequence.current) { setSnapshot({ metrics, history }); setError(''); setReadAt(new Date()); }
     } catch (err) {
-      if (alive.current && sequence === readSequence.current) setError(err.message || 'No se pudieron verificar los pendientes.');
+      if (!controller.signal.aborted && alive.current && sequence === readSequence.current) setError(err.message || 'No se pudieron verificar los pendientes.');
     } finally {
-      busy.current = false;
-      if (alive.current) setLoading(false);
+      if (sequence === readSequence.current) { busy.current = false; if (alive.current) setLoading(false); }
     }
-  }, [dataSource]);
+  }, [dataSource, from, to, aggregator, active]);
 
   useEffect(() => {
     alive.current = true;
-    const off = dataSource.subscribeComplaintHistory?.(history => setSnapshot(current => current ? { ...current, history } : current));
-    return () => { alive.current = false; off?.(); };
-  }, [dataSource]);
+    const off = active ? dataSource.subscribeComplaintHistory?.(history => {
+      if (dataSource.loadPerformanceData) { void refresh(); return; }
+      setSnapshot(current => current ? { ...current, history } : current);
+    }) : undefined;
+    return () => { alive.current = false; requestController.current?.abort(); off?.(); };
+  }, [dataSource, active, refresh]);
 
   useEffect(() => {
     if (!active) return;
@@ -174,7 +189,7 @@ export default function DailyPendingPage({ active = true, onLoadDay, onLoadCompl
     };
   }, [active, refresh, now, today]);
 
-  const report = useMemo(() => snapshot ? buildDailyPending({ ...snapshot, from, to, aggregator, today }) : null,
+  const report = useMemo(() => snapshot?.report && snapshot.key === `${from}|${to}|${aggregator}` ? snapshot.report : snapshot?.history ? buildDailyPending({ ...snapshot, from, to, aggregator, today }) : null,
     [snapshot, from, to, aggregator, today]);
   const days = report?.days.filter(day => !onlyPending || day.hasPending || day.inProgress) || [];
 

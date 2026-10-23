@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { METRICS_BASELINE, cloneMetricsForEdit } from './metricsBaseline.js';
+import { withRequestTimeout } from './requestTimeout.js';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import * as history from './complaintHistory.js';
@@ -95,10 +97,30 @@ test('a real commit failure does not announce a saved import', async () => {
 test('committed metrics become an editable baseline without requiring a reload', async () => {
   let current = { ...metrics.emptyStore(), updatedAt: '2026-10-10T12:00:00Z' };
   const api = moduleWith('./metricsStore.js', {
-    ...metrics, ...changes, localStorage: { setItem() {} },
+    ...metrics, ...changes, BASELINE: METRICS_BASELINE, localStorage: { setItem() {} },
     async mutateDocument(key, empty, parse, mutate) { current = mutate(current); return current; },
   }, ['acceptCommittedMetrics', 'saveMetricsStore']);
   const accepted = api.acceptCommittedMetrics({ data: current });
   const saved = await api.saveMetricsStore({ ...accepted, targetComplaintPct: 3 });
   assert.equal(saved.targetComplaintPct, 3);
+});
+
+test('small metrics headers cannot replace full reads or erase other days when an older editor saves', async () => {
+  let current={...metrics.emptyStore(),updatedAt:'original',days:{'2026-10-01':{pedidosya:{orders:50,complaints:1,awt:2}}}};
+  const document={key:'metrics',revision:1,data:current};
+  let nextHeader=0;
+  const api=moduleWith('./metricsStore.js',{
+    ...metrics,...changes,BASELINE:METRICS_BASELINE,localStorage:{setItem(){}},
+    readDocument:async()=>document,
+    withRequestTimeout,
+    supabase:{rpc:()=>({abortSignal:async()=>({data:{data:{...current,days:{},updatedAt:'header-'+nextHeader++},availableLastDay:'2026-10-01'}})})},
+    mutateDocument:async(key,empty,parse,mutate)=>{current=mutate(parse(current));return current;},
+  },['acceptCommittedMetrics','loadMetricsStore','loadMetricsHeader','saveMetricsStore']);
+  const editor=metrics.upsertDayStats(cloneMetricsForEdit(api.acceptCommittedMetrics(document)),'2026-10-02','pedidosya',{orders:25,complaints:0,awt:0});
+  for(let n=0;n<12;n++)await api.loadMetricsHeader();
+  const full=await api.loadMetricsStore({strict:true});
+  assert.equal(full.days['2026-10-01'].pedidosya.orders,50);
+  const saved=await api.saveMetricsStore(editor);
+  assert.equal(saved.days['2026-10-01'].pedidosya.orders,50);
+  assert.equal(saved.days['2026-10-02'].pedidosya.orders,25);
 });

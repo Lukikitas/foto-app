@@ -1,0 +1,26 @@
+.storage-panel--compact .storage-panel__header p { margin: .3rem 0 0; font-size: .84rem; color: var(--text-muted); }
+.storage-panel--compact h3 { font-size: 1rem; }
+.storage-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1.5rem; padding: 1.25rem 0 1rem; }
+.storage-summary > div { min-width: 0; }
+.storage-summary span { display: block; font-size: .78rem; color: var(--text-muted); }
+.storage-summary strong { display: block; font-size: 1.65rem; line-height: 1.3; letter-spacing: -.04em; color: var(--text-h); margin: .35rem 0 .2rem; overflow-wrap: anywhere; }
+.storage-summary small { display: block; font-size: .73rem; color: var(--text-muted); }
+.storage-panel--compact .storage-breakdown { height: .4rem; margin: 0 0 .8rem; }
+.storage-partial { color: var(--danger, #dc3545); font-size: .8rem; }
+.storage-details { font-size: .8rem; color: var(--text-muted); }
+.storage-details > summary { cursor: pointer; color: var(--text-h); padding: .4rem 0; font-weight: 550; }
+.storage-category-list { display: grid; gap: .5rem; padding: .8rem 0; }
+.storage-category-list > div { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 0; border-bottom: 1px solid var(--border); }
+.storage-category-list strong { color: var(--text-h); text-align: right; }
+.storage-category-list small { display: block; font-size: .72rem; margin: .2rem 0 0 .95rem; }
+.storage-dot { display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; margin-right: .5rem; background: var(--text-muted); }
+.storage-dot--orders { background: var(--accent); }.storage-dot--files { background: var(--success); }.storage-dot--tickets { background: #d49b38; }
+@media (max-width: 640px) {
+  .storage-summary { grid-template-columns: minmax(0,1fr); padding-top: .75rem; gap: 0; }
+  .storage-summary > div { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items: center; gap: .2rem .5rem; padding: .75rem 0; border-bottom: 1px solid var(--border); }
+  .storage-summary > div:last-child { border: 0; }
+  .storage-summary strong { font-size: 1.35rem; text-align: right; margin: 0; }
+  .storage-summary small { grid-column: 1 / -1; }
+  .storage-category-list > div { gap: .5rem; }
+  .storage-details > summary { padding-block: .75rem; }
+}

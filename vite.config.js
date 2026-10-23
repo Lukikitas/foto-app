@@ -52,6 +52,14 @@ function tesseractAssets() {
 export default defineConfig({
   // Dominio propio de GitHub Pages: https://delivery.star-app.com.ar/
   base: '/',
+  build: {
+    rolldownOptions: {
+      output: { codeSplitting: { groups: [
+        { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+        { name: 'vendor-supabase', test: /node_modules[\\/](@supabase|@opentelemetry)[\\/]/ },
+      ] } },
+    },
+  },
   plugins: [
     react(),
     tesseractAssets(),
@@ -64,7 +72,9 @@ export default defineConfig({
       includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff2,wasm,gz}'],
-        globIgnores: ['**/node_modules/**', '**/presentacion/**', '**/manual/**'],
+        globIgnores: ['**/node_modules/**', '**/presentacion/**', '**/manual/**', '**/tesseract/**',
+          '**/Metrics*.js', '**/Complaints*.js', '**/Complaint*.js', '**/Settings*.js', '**/DailyPending*.js',
+          '**/*Workbook*.js', '**/*Refunds*.js', '**/*Ocr*.js', '**/ocr*.js'],
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         rollupFormat: 'iife',
       },

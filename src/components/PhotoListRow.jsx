@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PhotoThumbnail from './PhotoThumbnail';
 import { formatDateTime } from '../lib/date';
 import { aggregatorBadgeClass, getAggregatorLabel, getPhotoAggregator } from '../lib/aggregators';
 import { useLongPress } from '../hooks/useLongPress';
@@ -222,7 +223,7 @@ export default function PhotoListRow({
           {!hasFile ? (
             <span className="photo-row__removed">Sin foto</span>
           ) : isImage ? (
-            <img src={photo.public_url} alt="" loading="lazy" decoding="async" />
+            <PhotoThumbnail photo={photo} />
           ) : (
             <span>{extension}</span>
           )}

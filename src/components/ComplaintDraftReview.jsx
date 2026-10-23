@@ -27,6 +27,7 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
   const requestId = useRef(0);
   const matchedRevision = useRef('');
   const blocked = useRef(false);
+  const refreshing = useRef(false);
 
   useEffect(() => {
     blocked.current = busy || Boolean(editing);
@@ -45,8 +46,9 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
 
   const refresh = useCallback(async (nextDraft, forceMatch = false) => {
     const sequence = ++requestId.current;
-    const incoming = nextDraft === undefined ? await loadDraft() : nextDraft;
-    const store = await loadComplaintHistory({ force: true, strict: true });
+    const [incoming, store] = await Promise.all([
+      nextDraft === undefined ? loadDraft() : Promise.resolve(nextDraft), loadComplaintHistory({ force: true, strict: true }),
+    ]);
     const revision = incoming ? incoming.id + ':' + incoming.revision : '';
     const matched = incoming && (forceMatch || revision !== matchedRevision.current) ? await matchDraft(incoming, store) : null;
     if (sequence !== requestId.current) return;
@@ -70,14 +72,16 @@ export default function ComplaintDraftReview({ active, onOpenHistory, onResolved
   useEffect(() => {
     const requests = requestId;
     function reload() {
-      if (!active || document.visibilityState === 'hidden' || blocked.current || navigator.onLine === false) return;
-      refresh().catch(e => setError(e.message));
+      if (!active || document.visibilityState === 'hidden' || blocked.current || refreshing.current || navigator.onLine === false) return;
+      refreshing.current = true;
+      refresh().catch(e => setError(e.message)).finally(() => { refreshing.current = false; });
     }
     function connectivity() {
       setConnected(navigator.onLine !== false);
       reload();
     }
     const off = subscribeDrafts(value => {
+      if (!active) return;
       setEditing(null);
       setSelected(new Set());
       refresh(value).catch(e => setError(e.message));

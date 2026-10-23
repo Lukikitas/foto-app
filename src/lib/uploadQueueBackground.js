@@ -3,6 +3,9 @@ import {
   UPLOAD_QUEUE_MESSAGE,
   UPLOAD_QUEUE_SYNC_TAG,
 } from './uploadQueueProtocol.js';
+export function announceForegroundQueue(active, deps = globalThis) {
+  deps.navigator?.serviceWorker?.controller?.postMessage({ type: UPLOAD_QUEUE_MESSAGE.foreground, active });
+}
 
 export async function requestBackgroundQueueProcessing(deps = globalThis) {
   const serviceWorker = deps.navigator?.serviceWorker;
@@ -25,7 +28,7 @@ export async function requestBackgroundQueueProcessing(deps = globalThis) {
 export function subscribeBackgroundQueueUpdates(onUpdate, deps = globalThis) {
   const serviceWorker = deps.navigator?.serviceWorker;
   const handleMessage = (event) => {
-    if (event.data?.type === UPLOAD_QUEUE_MESSAGE.updated) onUpdate();
+    if (event.data?.type === UPLOAD_QUEUE_MESSAGE.updated) onUpdate(event.data);
   };
 
   serviceWorker?.addEventListener?.('message', handleMessage);
@@ -44,10 +47,11 @@ export function subscribeBackgroundQueueUpdates(onUpdate, deps = globalThis) {
   };
 }
 
-export async function notifyQueueProcessed(deps = globalThis) {
+export async function notifyQueueProcessed(deps = globalThis, id = null) {
+  const message = { type: UPLOAD_QUEUE_MESSAGE.updated, ...(id ? { id } : {}) };
   try {
     const channel = new (deps.BroadcastChannel || BroadcastChannel)(UPLOAD_QUEUE_CHANNEL);
-    channel.postMessage({ type: UPLOAD_QUEUE_MESSAGE.updated });
+    channel.postMessage(message);
     channel.close();
   } catch {
     // BroadcastChannel no está en todos los runtimes
@@ -57,6 +61,6 @@ export async function notifyQueueProcessed(deps = globalThis) {
   if (!clientsApi?.matchAll) return;
   const clients = await clientsApi.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {
-    client.postMessage({ type: UPLOAD_QUEUE_MESSAGE.updated });
+    client.postMessage(message);
   }
 }

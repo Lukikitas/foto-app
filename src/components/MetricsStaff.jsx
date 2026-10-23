@@ -54,7 +54,7 @@ function SortHeader({ label, sortKey, current, dir, onSort, numeric = true }) {
  * "Desempeño de personal": who takes the photos, complaint rates per person
  * and the hourly distribution of orders (photos) vs complaints (history).
  */
-export default function MetricsStaff({ history, range, aggregator = 'all', store, onSave, onManage }) {
+export default function MetricsStaff({ history, range, aggregator = 'all', store, onSave, onManage, remoteReport, remoteVariants, serverMode = false }) {
   const [selected, setSelected] = useState(null);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [variant, setVariant] = useState('');
@@ -67,8 +67,23 @@ export default function MetricsStaff({ history, range, aggregator = 'all', store
   const [error, setError] = useState(null);
   const [sort, setSort] = useState({ key: 'photos', dir: 'desc' });
 
+  useEffect(() => {
+    if (!selectedComplaint?.photoId || selectedComplaint.photoUrl) return;
+    const controller = new AbortController();
+    const id = selectedComplaint.id;
+    fetchPhotosByIds([selectedComplaint.photoId], { signal: controller.signal }).then(rows => {
+      if (controller.signal.aborted) return;
+      const photo = rows[0];
+      if (photo?.public_url) setSelectedComplaint(current => current?.id === id
+        ? { ...current, photoUrl: photo.public_url } : current);
+    }).catch(error => {
+      if (!controller.signal.aborted) setError(error.message || 'No se pudo consultar la foto del pedido.');
+    });
+    return () => controller.abort();
+  }, [selectedComplaint?.id, selectedComplaint?.photoId, selectedComplaint?.photoUrl]);
+
   const photosKey = `${range.from}|${range.to}|${aggregator}`;
-  const loading = loadedKey !== photosKey;
+  const loading = serverMode ? !remoteReport : !remoteReport && loadedKey !== photosKey;
 
   const items = useMemo(
     () => listHistoryItems(history, { from: range.from, to: range.to, aggregator }),
@@ -79,6 +94,7 @@ export default function MetricsStaff({ history, range, aggregator = 'all', store
   // refrescos del historial que llegan desde otras pantallas no deben volver
   // a mostrar el spinner.
   useEffect(() => {
+    if (serverMode || remoteReport) return;
     let cancelled = false;
     async function load() {
       setError(null);
@@ -106,7 +122,7 @@ export default function MetricsStaff({ history, range, aggregator = 'all', store
     return () => {
       cancelled = true;
     };
-  }, [photosKey, range.from, range.to, aggregator]);
+  }, [photosKey, range.from, range.to, aggregator, remoteReport, serverMode]);
 
   // Fotos de fuera del período que sirven para atribuir quejas: ids referenciados
   // que no están en el período + nombres de foto concretos que no se encontraron.
@@ -146,6 +162,7 @@ export default function MetricsStaff({ history, range, aggregator = 'all', store
   const missingKey = `${missing.ids.join(',')}|${missing.tokens.join(',')}`;
 
   useEffect(() => {
+    if (serverMode || remoteReport) return;
     if (missingKey === '|') return undefined;
     let cancelled = false;
     const [idsPart, tokensPart] = missingKey.split('|');
@@ -167,11 +184,11 @@ export default function MetricsStaff({ history, range, aggregator = 'all', store
     return () => {
       cancelled = true;
     };
-  }, [missingKey]);
+  }, [missingKey, remoteReport, serverMode]);
 
   const report = useMemo(
-    () => buildStaffReport({ photos: photos || [], historyItems: items, extraPhotos, aliases: store?.photographerAliases }),
-    [photos, items, extraPhotos, store?.photographerAliases],
+    () => remoteReport || buildStaffReport({ photos: photos || [], historyItems: items, extraPhotos, aliases: store?.photographerAliases }),
+    [remoteReport, photos, items, extraPhotos, store?.photographerAliases],
   );
 
   const people = useMemo(() => {
@@ -408,7 +425,7 @@ export default function MetricsStaff({ history, range, aggregator = 'all', store
 
       {report.attributionWarnings.map((warning,index)=><p key={index} className="message message--error">{warning}</p>)}
       <details className="metrics-quality"><summary>Asociar variantes de nombres</summary><p>Solo cambia la presentación de este informe. Los autores originales se conservan.</p>
-      <label>Nombre original<select value={variant} onChange={event=>setVariant(event.target.value)}><option value="">Seleccionar</option>{[...new Set((photos||[]).map(photo=>photo.taken_by).filter(Boolean))].sort().map(name=><option key={name}>{name}</option>)}</select></label>
+      <label>Nombre original<select value={variant} onChange={event=>setVariant(event.target.value)}><option value="">Seleccionar</option>{(remoteVariants || [...new Set((photos||[]).map(photo=>photo.taken_by).filter(Boolean))].sort()).map(name=><option key={name}>{name}</option>)}</select></label>
       <label>Presentación común<input value={presentation} onChange={event=>setPresentation(event.target.value)} maxLength={80}/></label>
       <button className="btn btn--primary" disabled={!variant||!presentation.trim()||aliasBusy} onClick={async()=>{
         if(!await confirmAction('Se mostrará “'+variant+'” como “'+presentation.trim()+'”. No se modifican los autores originales.',{danger:false,title:'Confirmar asociación',confirmLabel:'Asociar'}))return;

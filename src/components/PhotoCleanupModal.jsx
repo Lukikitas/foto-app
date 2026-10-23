@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { argentinaToday } from '../lib/metrics.js';
 import { previewPhotoCleanup, removePhotoFiles } from '../lib/photoCleanupStore.js';
 
-export default function PhotoCleanupModal({ onClose, onCompleted }) {
+export default function PhotoCleanupModal({ onClose, onCompleted, previewCleanup = previewPhotoCleanup, removeFiles = removePhotoFiles }) {
   const titleId = useId();
   const dialogRef = useRef(null);
   const [dateTo, setDateTo] = useState('');
@@ -24,7 +24,7 @@ export default function PhotoCleanupModal({ onClose, onCompleted }) {
     busyRef.current = true;
     setBusy(true); setError(''); setResult(null);
     try {
-      setPreview(await previewPhotoCleanup({ dateTo }));
+      setPreview(await previewCleanup({ dateTo }));
     } catch (failure) {
       setError(failure.message || 'No se pudo calcular la cantidad. No se borró ninguna foto.');
     } finally { busyRef.current = false; setBusy(false); }
@@ -35,7 +35,7 @@ export default function PhotoCleanupModal({ onClose, onCompleted }) {
     busyRef.current = true;
     setBusy(true); setError('');
     try {
-      const next = await removePhotoFiles(preview, setProgress);
+      const next = await removeFiles(preview, setProgress);
       setResult(next); setPreview(null);
       onCompleted?.(next);
     } catch (failure) {

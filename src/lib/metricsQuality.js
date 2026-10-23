@@ -2,6 +2,8 @@ import { enumerateDays, METRIC_AGGREGATORS } from './metrics.js';
 import { listHistoryItems } from './complaintHistory.js';
 
 export function buildMetricsQuality(store, history, range, aggregator = 'all') {
+  const summarized = history?.quality?.[`${range.from}|${range.to}|${aggregator}`];
+  if (summarized) return summarized;
   const items = listHistoryItems(history, { ...range, from: range.from, to: range.to, aggregator });
   const rows = [];
   for (const day of enumerateDays(range.from, range.to)) {

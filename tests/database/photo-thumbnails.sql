@@ -1,0 +1,19 @@
+begin;
+insert into public.photos(id,name,file_path,public_url,created_at) values('ffffffff-ffff-4fff-8fff-ffffffffffff','PEYA12345','orders/test.jpg','original',now());
+do $$declare job jsonb; ok boolean; thumbnail_file text; begin
+ job:=public.foto_claim_thumbnail();
+ if job->>'photo_id'<>'ffffffff-ffff-4fff-8fff-ffffffffffff' then raise exception 'missing job';end if;
+ thumbnail_file:='thumbnails/'||(job->>'photo_id')||'/'||(job->>'lease_token')||'.jpg';
+ ok:=public.foto_finish_thumbnail(job->>'photo_id',(job->>'lease_token')::uuid,thumbnail_file);
+ if not ok then raise exception 'not attached';end if;
+ update public.photos set file_path='orders/replacement.jpg',public_url='new' where id='ffffffff-ffff-4fff-8fff-ffffffffffff';
+ if not exists(select 1 from public.foto_thumbnail_gc where path=thumbnail_file) then raise exception 'old thumbnail retained';end if;
+ if exists(select 1 from public.photos where id='ffffffff-ffff-4fff-8fff-ffffffffffff' and thumbnail_path is not null) then raise exception 'stale thumbnail';end if;
+ if public.foto_finish_thumbnail(job->>'photo_id',(job->>'lease_token')::uuid,thumbnail_file) then raise exception 'stale job attached';end if;
+ job:=public.foto_claim_thumbnail();
+ thumbnail_file:='thumbnails/'||(job->>'photo_id')||'/'||(job->>'lease_token')||'.jpg';
+ update public.photos set public_url=null where id='ffffffff-ffff-4fff-8fff-ffffffffffff';
+ if public.foto_finish_thumbnail(job->>'photo_id',(job->>'lease_token')::uuid,thumbnail_file) then raise exception 'deleted evidence got a thumbnail';end if;
+ if has_function_privilege('anon','public.foto_claim_thumbnail()','EXECUTE') then raise exception 'anonymous claim';end if;
+end$$;
+rollback;

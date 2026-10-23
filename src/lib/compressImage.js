@@ -1,5 +1,6 @@
 import { canvasToBlob, createDrawCanvas, releaseCanvas } from './drawCanvas.js';
 import { readImage } from './readImage.js';
+import { activity } from './activity.js';
 
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.8;
@@ -10,13 +11,10 @@ export const EVIDENCE_IMAGE_OPTIONS = Object.freeze({
 });
 
 /** A restrained edge-only sharpening pass; flat areas are left alone to avoid boosting noise. */
-export function sharpenImageData(imageData) {
+function sharpenRows(imageData, source, firstRow, lastRow) {
   const { width, height, data } = imageData;
-  if (width < 3 || height < 3) return imageData;
-  const source = new Uint8ClampedArray(data);
   const stride = width * 4;
-
-  for (let y = 1; y < height - 1; y += 1) {
+  for (let y = firstRow; y < Math.min(lastRow,height-1); y += 1) {
     for (let x = 1; x < width - 1; x += 1) {
       const index = y * stride + x * 4;
       const left = index - 4;
@@ -37,6 +35,22 @@ export function sharpenImageData(imageData) {
       data[index + 1] = Math.max(0, Math.min(255, green + 0.45 * (4 * green - neighborGreen) / 8));
       data[index + 2] = Math.max(0, Math.min(255, blue + 0.45 * (4 * blue - neighborBlue) / 8));
     }
+  }
+  return imageData;
+}
+export function sharpenImageData(imageData) {
+  if (imageData.width<3 || imageData.height<3) return imageData;
+  return sharpenRows(imageData,new Uint8ClampedArray(imageData.data),1,imageData.height-1);
+}
+export async function sharpenImageDataCooperatively(imageData, yieldWork = async () => {
+  await new Promise(resolve=>setTimeout(resolve,0));
+  await activity.wait();
+}) {
+  if (imageData.width<3 || imageData.height<3) return imageData;
+  const source=new Uint8ClampedArray(imageData.data);
+  for(let row=1;row<imageData.height-1;row+=32) {
+    await yieldWork();
+    sharpenRows(imageData,source,row,row+32);
   }
   return imageData;
 }
@@ -77,7 +91,8 @@ export async function compressImage(file, options = {}) {
     if (sharpen) {
       try {
         const pixels = context.getImageData(0, 0, targetWidth, targetHeight);
-        context.putImageData(sharpenImageData(pixels), 0, 0);
+        const sharpened = typeof document === 'undefined' ? sharpenImageData(pixels) : await sharpenImageDataCooperatively(pixels);
+        context.putImageData(sharpened, 0, 0);
       } catch (error) {
         // Keep the full-resolution image rather than failing an upload on a low-memory phone.
         console.warn('No se pudo aplicar nitidez a la evidencia.', error);

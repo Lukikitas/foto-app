@@ -64,7 +64,7 @@ export default function MetricsListPaste({ store, saving, onSave, onDirty }) {
           <textarea
             className="metrics-paste__input"
             value={text}
-            onChange={(event) => { base.current ||= structuredClone(store); setText(event.target.value); }}
+            onChange={(event) => { base.current ||= cloneMetricsForEdit(store); setText(event.target.value); }}
             rows={6}
             spellCheck={false}
             placeholder={
@@ -126,3 +126,4 @@ export default function MetricsListPaste({ store, saving, onSave, onDirty }) {
     </section>
   );
 }
+import { cloneMetricsForEdit } from '../lib/metricsBaseline';

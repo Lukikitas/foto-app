@@ -174,6 +174,19 @@ function openQueueDb() {
 
 function idbBackend() {
   return {
+    async patch(id, metadata) {
+      const db = await openQueueDb();
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const done = completeTransaction(tx);
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(id);
+      request.onsuccess = () => {
+        if (!request.result?.file) { tx.abort(); return; }
+        // Keep the existing immutable Blob handles inside the transaction.
+        store.put({ ...request.result, ...metadata });
+      };
+      await done;
+    },
     async put(record) {
       const db = await openQueueDb();
       const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -225,6 +238,16 @@ function activeBackend() {
 export async function putQueueRecord(record) {
   if (!record?.id) return;
   await activeBackend().put(record);
+}
+export async function patchQueueRecord(record) {
+  const backend = activeBackend();
+  const metadata = { ...record };
+  delete metadata.file;
+  delete metadata.ticket;
+  if (backend.patch) return backend.patch(record.id, metadata);
+  const stored = await backend.get(record.id);
+  if (!stored?.file) throw new Error('No se encontró la foto guardada. Conservá el pendiente para revisar.');
+  return backend.put({ ...stored, ...metadata });
 }
 
 export async function deleteQueueRecord(id) {

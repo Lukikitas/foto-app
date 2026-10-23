@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { activity } from '../lib/activity';
 import { cameraZoomRange, rearCameras, snapCameraZoom, wideCamera } from '../lib/cameraControls';
 import { clamp, pinchDistance } from '../lib/touchZoom';
 import { setTrackTorch, trackSupportsTorch } from '../lib/cameraFlash';
@@ -77,6 +78,7 @@ export default function useCameraControls(videoRef, flashOnRef) {
     } });
   }
   async function switchCamera(id, remember = false) {
+    activity.touch();
     if (!id || changing.current || draining.current) return;
     if (streamRef.current?.getVideoTracks()[0]?.getSettings().deviceId === id) {
       if (remember) savePreference(id);
@@ -101,6 +103,7 @@ export default function useCameraControls(videoRef, flashOnRef) {
     try { localStorage.setItem(PREFERENCE, id); } catch { /* Optional preference. */ }
   }
   async function requestZoom(value) {
+    activity.touch();
     if (changing.current || !streamRef.current) return;
     const currentRange = rangeRef.current;
     const next = currentRange ? snapCameraZoom(value, currentRange) : clamp(value, 1, 3);
@@ -124,6 +127,7 @@ export default function useCameraControls(videoRef, flashOnRef) {
     await requestZoom(rangeRef.current ? clamp(1, rangeRef.current.min, rangeRef.current.max) : 1);
   }
   function pointerDown(event) {
+    activity.touch();
     if (status !== 'ready') return;
     event.currentTarget.setPointerCapture(event.pointerId);
     points.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -159,7 +163,7 @@ export default function useCameraControls(videoRef, flashOnRef) {
         lastId=streamRef.current?.getVideoTracks()[0]?.getSettings().deviceId || lastId;
         streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;
         if(active)setStatus('paused');
-      }else if(!streamRef.current?.getVideoTracks().some(t=>t.readyState==='live'))void resume();
+      }else if(!streamRef.current?.getVideoTracks().some(t=>t.readyState==='live')){activity.touch();void resume();}
     };
     document.addEventListener('visibilitychange',visibility);
     void resume();

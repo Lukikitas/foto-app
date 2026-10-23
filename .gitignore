@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 public/tesseract
+supabase/functions/photo-thumbnails/assets/
 dist-ssr
 *.local
 

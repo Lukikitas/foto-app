@@ -1,7 +1,7 @@
 {
   "name": "foto-app",
   "private": true,
-  "version": "1.13.2",
+  "version": "1.14.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "node --test src/lib/*.test.js",
+    "test:ui": "node tests/ui/run-performance.mjs && node tests/ui/run-performance.mjs --mobile",
+    "prepare:thumbnails": "node scripts/prepare-thumbnail-assets.mjs",
     "test:database": "node tests/database/run-isolated.mjs"
   },
   "dependencies": {
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^10.0.1",
+    "@imagemagick/magick-wasm": "0.0.45",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
@@ -29,6 +32,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "jsdom": "^30.1.3",
     "vite": "^8.0.12",
     "vite-plugin-pwa": "^1.0.1",
     "workbox-core": "^7.4.1",

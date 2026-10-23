@@ -27,6 +27,8 @@ import {
   historyItemToRow,
   editHistoryItemInStore,
   listHistoryItems,
+  emptyHistory,
+  parseHistory,
 } from '../lib/complaintHistory';
 import {
   fetchComplaintSheetText,
@@ -39,7 +41,7 @@ import {
   matchComplaintsToPhotos,
 } from '../lib/complaintMatch';
 import { argentinaToday, formatMoney, PERIOD_PRESETS, resolvePeriod } from '../lib/metrics';
-import { loadMetricsStore } from '../lib/metricsStore';
+import { loadMetricsHeader as loadMetricsStore } from '../lib/metricsStore';
 import {
   normalizeRefutadoDays,
   QUEJA_VENCIDA_STATUS,
@@ -47,9 +49,7 @@ import {
   resolveDisplayStatus,
 } from '../lib/refutadoDeadline';
 import {
-  cachedComplaintHistory,
   editHistoryItemById,
-  loadComplaintHistory,
   patchHistoryItemsByIds,
   setHistoryPhoto,
   subscribeComplaintHistory,
@@ -86,7 +86,6 @@ import {
   fetchPhotosByIds,
   isImagePhoto,
   isValidOrderDigits,
-  prefetchPhotoBlob,
   startPhotoDownload,
   updatePhotoDetails,
   uploadPhoto,
@@ -94,11 +93,14 @@ import {
 import { getImportAggregator, getSavedSheetUrl, saveImportAggregator } from '../lib/storage';
 import ComplaintEvidenceUpload from './ComplaintEvidenceUpload';
 import PhotoLightbox from './PhotoLightbox';
+import PhotoThumbnail from './PhotoThumbnail';
 import ComplaintBatchEditModal from './ComplaintBatchEditModal';
 import ComplaintNoRefutableModal from './ComplaintNoRefutableModal';
 import ComplaintRejectedReasonModal from './ComplaintRejectedReasonModal';
 import ComplaintsBulkBar from './ComplaintsBulkBar';
 import ComplaintCodeListImport from './ComplaintCodeListImport.jsx';
+import { readPage, readAllHistory } from '../lib/pagedReads';
+import { isPhoneViewport } from '../lib/viewport';
 
 const FILTERS = [
   { id: 'all', label: 'Todas' },
@@ -121,7 +123,6 @@ const PORTAL_LINKS = [PARTNER_PORTALS.pedidosya, PARTNER_PORTALS.rappi];
 const HISTORY_PAGE_SIZE = 100;
 const HISTORY_PAGE_STEP = 200;
 // Prefetch acotado: solo las primeras filas visibles, no todo el período.
-const HISTORY_PREFETCH_LIMIT = 60;
 const HISTORY_AGGREGATORS = [{ id: 'all', label: 'Todos' }, ...AGGREGATOR_OPTIONS];
 const IMPORT_AGGREGATORS = [{ id: '', label: 'Por código' }, ...AGGREGATOR_OPTIONS];
 
@@ -184,7 +185,7 @@ function historyFromResult(result) {
   return result?.store || result;
 }
 
-export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRequestHistory, refreshKey = 0, focusedCase = null, loadRequest = null } = {}) {
+export default function ComplaintsInbox({ active = true, view = 'cruzar', onRequestCruzar, onRequestHistory, refreshKey = 0, focusedCase = null, loadRequest = null } = {}) {
   const [storedBatch] = useState(readStoredBatch);
   const [pasteText, setPasteText] = useState('');
   const [importOpen, setImportOpen] = useState(false);
@@ -199,7 +200,18 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   const [complaints, setComplaints] = useState(storedBatch.complaints);
   const [photos, setPhotos] = useState([]);
   const [rows, setRows] = useState([]);
-  const [historyStore, setHistoryStore] = useState(cachedComplaintHistory);
+  const [historyStore, setHistoryStoreState] = useState(emptyHistory);
+  const [historyArchive, setHistoryArchive] = useState(() => new Map());
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyMeta, setHistoryMeta] = useState(null);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const setHistoryStore = useCallback(next => {
+    setHistoryStoreState(previous => ({ ...next, items: Object.fromEntries(
+      Object.keys(previous.items || {}).filter(id => next.items?.[id]).map(id => [id, next.items[id]]),
+    ) }));
+    setHistoryArchive(previous => new Map([...previous].filter(([id]) => next.items?.[id]).map(([id]) => [id, next.items[id]])));
+    setHistoryRefresh(value => value + 1);
+  }, []);
   const [pickedPhotoIds, setPickedPhotoIds] = useState(storedBatch.pickedPhotoIds);
   const [skipped, setSkipped] = useState(0);
   const [filter, setFilter] = useState('all');
@@ -236,9 +248,10 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       setSelectedIds(new Set());
       setLastClickedIndex(null);
       setHistoryLimit(HISTORY_PAGE_SIZE);
+      setHistoryPage(1);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [inboxView, filter, historyPreset, historyAggregator, historySort]);
+  }, [inboxView, filter, historyPreset, historyAggregator, historySort, historySearch, historyCustomFrom, historyCustomTo]);
 
   const rematch = useCallback((nextComplaints, nextPicks, nextPhotos) => {
     const matched = matchComplaintsToPhotos(nextComplaints, nextPhotos, nextPicks);
@@ -255,29 +268,65 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     [rematch],
   );
 
-  useEffect(() => subscribeComplaintHistory(setHistoryStore), []);
+  useEffect(() => active ? subscribeComplaintHistory(() => setHistoryRefresh(value => value + 1)) : undefined, [active]);
 
   // Plazos de refutación (guardados con los objetivos de Métricas). Se
   // recargan cuando Ajustes los cambia (refreshKey); sin red ni cache se
   // usan los plazos por defecto.
   useEffect(() => {
-    let active = true;
-    loadMetricsStore()
+    if (!active) return;
+    let current = true;
+    loadMetricsStore({ strict: true })
       .then((store) => {
-        if (active) setRefutadoDays(store.refutadoDays);
+        if (current) setRefutadoDays(store.refutadoDays);
       })
       .catch(() => {
         // Se mantienen los valores actuales (o los defaults).
       });
     return () => {
-      active = false;
+      current = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, active]);
 
   const historyPeriod = useMemo(
     () => historyPreset === 'undated' ? { from: '', to: '' } : resolvePeriod(historyPreset, argentinaToday(), historyCustomFrom, historyCustomTo),
     [historyPreset, historyCustomFrom, historyCustomTo],
   );
+  const historyQuery = useMemo(() => ({ ...historyPeriod, aggregator: historyAggregator,
+    search: historySearch.trim(), sort: historySort, status: filter, undated: historyPreset === 'undated' }),
+  [historyPeriod, historyAggregator, historySearch, historySort, filter, historyPreset]);
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+  useEffect(() => {
+    if (!active || inboxView !== 'historial') return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setHistoryLoading(true);
+      setError(null);
+      try {
+        const result = await readPage('foto_history_page', historyQuery, { page: historyPage, pageSize: isPhoneViewport() ? 30 : 100, signal: controller.signal });
+        const store = parseHistory({ items: Object.fromEntries(result.items.map(item => [item.id,item])) });
+        const ids = [...new Set(result.items.map(item => item.photoId).filter(Boolean))];
+        const found = await fetchPhotosByIds(ids, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setHistoryStoreState(store);
+        setHistoryMeta(result);
+        setHistoryPage(result.page);
+        setHistoryArchive(previous => new Map([
+          ...[...previous].filter(([id]) => selectedIdsRef.current.has(id)), ...Object.entries(store.items),
+        ]));
+        setPhotos(previous => {
+          const retained = previous.filter(photo => [...historyArchive.values()].some(item => selectedIdsRef.current.has(item.id) && item.photoId === photo.id));
+          return [...new Map([...retained, ...found].map(photo => [photo.id,photo])).values()];
+        });
+      } catch (failure) {
+        if (!controller.signal.aborted) setError(failure.message || 'No se pudo leer el historial.');
+      } finally { if (!controller.signal.aborted) setHistoryLoading(false); }
+    }, historyQuery.search ? 400 : 0);
+    return () => { clearTimeout(timer); controller.abort(); setHistoryLoading(true); };
+    // Selection is kept independently; changing it must not reload this page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, inboxView, historyQuery, historyPage, historyRefresh]);
 
   function openCruzar() {
     onRequestCruzar?.();
@@ -288,6 +337,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   }
 
   useEffect(() => {
+    if (!active) return;
     let cancelled = false;
     loadComplaintSync()
       .then((loaded) => {
@@ -299,7 +349,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [active]);
 
   useEffect(
     () =>
@@ -323,19 +373,6 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     [loadAndMatch],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    loadComplaintHistory()
-      .catch((err) => {
-        if (!cancelled) setError(err.message || 'No se pudo leer el historial de reclamos.');
-      })
-      .finally(() => {
-        if (!cancelled) setHistoryLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!storedBatch.complaints.length) return undefined;
@@ -433,60 +470,15 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     }
   }, [historyRows, historySort]);
 
-  const requestedPhotoIdsRef = useRef(new Set());
-
-  useEffect(() => {
-    if (inboxView !== 'historial') return undefined;
-    const requested = requestedPhotoIdsRef.current;
-    const ids = [...new Set(
-      listHistoryItems(historyStore, {
-        from: historyPeriod.from,
-        to: historyPeriod.to,
-      })
-        .map((item) => item.photoId)
-        .filter((id) => id && !requested.has(id)),
-    )];
-    // Solo los ids nunca pedidos: re-pedir los mismos en cada cambio de
-    // historial (o los borrados, que nunca vuelven) disparaba bucles de consultas.
-    if (ids.length === 0) return undefined;
-
-    let cancelled = false;
-    fetchPhotosByIds(ids)
-      .then((data) => {
-        // El marcado se hace al responder (no al montar): en StrictMode el
-        // efecto se monta-duplica y marcar antes cancelaría las dos corridas.
-        if (cancelled) return;
-        ids.forEach((id) => requested.add(id));
-        if (!data.length) return;
-        setPhotos((current) => {
-          const map = new Map(current.map((photo) => [photo.id, photo]));
-          data.forEach((photo) => map.set(photo.id, photo));
-          return [...map.values()];
-        });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [inboxView, historyStore, historyPeriod.from, historyPeriod.to]);
-
-  useEffect(() => {
-    // Prefetch acotado: descargar los BLOBs de todo el período (miles de fotos)
-    // reventaba la memoria del renderer.
-    historyBaseRows.slice(0, HISTORY_PREFETCH_LIMIT).forEach((row) => {
-      if (row.photo?.public_url) prefetchPhotoBlob(row.photo.public_url);
-    });
-  }, [historyBaseRows]);
-
   const activeRows = inboxView === 'historial' ? sortedHistoryRows : visibleRows;
   // Solo se pintan las primeras filas; el resto se carga con «Mostrar más».
   const displayedRows = activeRows.length > historyLimit ? activeRows.slice(0, historyLimit) : activeRows;
 
   const selectedRows = useMemo(() => {
     if (selectedIds.size === 0) return [];
-    const source = inboxView === 'historial' ? historyBaseRows : rowsWithHistory;
+    const source = inboxView === 'historial' ? [...historyArchive.values()].map(item => historyItemToRow(item, photos)) : rowsWithHistory;
     return source.filter((r) => selectedIds.has(r.history?.id || r.complaint.id));
-  }, [selectedIds, inboxView, historyBaseRows, rowsWithHistory]);
+  }, [selectedIds, inboxView, historyArchive, photos, rowsWithHistory]);
 
   const totalSelectedAmount = useMemo(() => {
     return selectedRows.reduce(
@@ -525,14 +517,15 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     }
   }, [isAllVisibleSelected, activeRows, selectedIds]);
 
-  const selectAllPeriod = useCallback(() => {
-    const next = new Set();
-    historyBaseRows.forEach((r) => {
-      const id = r.history?.id || r.complaint.id;
-      if (id) next.add(id);
-    });
-    setSelectedIds(next);
-  }, [historyBaseRows]);
+  const selectAllPeriod = useCallback(async () => {
+    setLoading(true);
+    try {
+      const items = await readAllHistory({ ...historyQuery, status: 'all' });
+      setHistoryArchive(new Map(items.map(item => [item.id, item])));
+      setSelectedIds(new Set(items.map(item => item.id)));
+    } catch (failure) { setError(failure.message); }
+    finally { setLoading(false); }
+  }, [historyQuery]);
 
   const handleToggleSelect = useCallback(
     (row, event, index) => {
@@ -570,6 +563,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
   );
 
   const stats = useMemo(() => {
+    if (inboxView === 'historial' && historyMeta) return historyMeta.stats;
     const source = inboxView === 'historial' ? historyBaseRows : rowsWithHistory;
     const counts = {
       all: source.length,
@@ -590,7 +584,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
       if (counts[photoStatus] != null) counts[photoStatus] += 1;
     });
     return counts;
-  }, [inboxView, historyBaseRows, rowsWithHistory, displayStatusOf]);
+  }, [inboxView, historyMeta, historyBaseRows, rowsWithHistory, displayStatusOf]);
 
   const quejasAbiertas = useMemo(
     // Solo las que todavía se pueden refutar: las vencidas quedan fuera.
@@ -1026,10 +1020,15 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     }
   }
 
-  function exportSheet() {
-    const csv = buildComplaintExport(inboxView === 'historial' ? historyRows : rowsWithHistory);
+  async function exportSheet() {
+    setLoading(true);
+    try {
+    const source = inboxView === 'historial' ? (await readAllHistory(historyQuery)).map(item => historyItemToRow(item, photos)) : rowsWithHistory;
+    const csv = buildComplaintExport(source);
     downloadTextFile(inboxView === 'historial' ? 'historial-reclamos.csv' : 'reclamos-con-fotos.csv', csv);
     setNotice('CSV listo para pegar de vuelta en el Google Sheet.');
+    } catch (failure) { setError(failure.message); }
+    finally { setLoading(false); }
   }
 
   async function handleClear() {
@@ -1182,7 +1181,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
     setNotice(`Descargando Excel con ${items.length} reclamos.`);
   }
 
-  const historyCount = Object.keys(historyStore.items || {}).length;
+  const historyCount = historyMeta?.historyCount || 0;
   const showCruzarList = false;
   const showHistoryList = inboxView === 'historial';
 
@@ -1319,7 +1318,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
         </p>
       )}
 
-      <ComplaintDraftReview active={inboxView === 'cruzar'} onOpenHistory={openHistorial} onResolved={() => setNotice(null)} />
+      <ComplaintDraftReview active={active && inboxView === 'cruzar'} onOpenHistory={openHistorial} onResolved={() => setNotice(null)} />
 
       {showHistoryList && (
         <div className="complaints__history-tools">
@@ -1426,7 +1425,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             <p className="gallery__count">
               {stats.all} reclamo{stats.all !== 1 ? 's' : ''}
               {inboxView === 'cruzar' && skipped ? ` · ${skipped} sin código` : ''}
-              {` · ${formatMoney(sourceAmount(inboxView === 'historial' ? historyBaseRows : rowsWithHistory))}`}
+              {` · ${formatMoney(inboxView === 'historial' ? historyMeta?.amount || 0 : sourceAmount(rowsWithHistory))}`}
             </p>
             <div className="filter-row complaints__filters" role="group" aria-label="Filtrar reclamos">
               {FILTERS.map((item) => (
@@ -1482,7 +1481,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
             </div>
           </div>
 
-          {inboxView === 'historial' && selectedIds.size > 0 && selectedIds.size < historyBaseRows.length && (
+          {inboxView === 'historial' && selectedIds.size > 0 && selectedIds.size < (historyMeta?.stats.all || 0) && (
             <div className="complaints__period-select-banner">
               <span>
                 Seleccionaste <strong>{selectedIds.size}</strong> reclamo{selectedIds.size !== 1 ? 's' : ''} de esta vista filtrada.
@@ -1492,12 +1491,12 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
                 className="btn btn--ghost btn--small complaints__period-select-btn"
                 onClick={selectAllPeriod}
               >
-                Seleccionar todos los {historyBaseRows.length} del período
+                Seleccionar todos los {historyMeta?.stats.all || 0} del período
               </button>
             </div>
           )}
 
-          {((loading && inboxView === 'cruzar') || (historyLoading && inboxView === 'historial')) && activeRows.length === 0 && (
+          {((loading && inboxView === 'cruzar' && activeRows.length === 0) || (historyLoading && inboxView === 'historial')) && (
             <div className="gallery__state">
               <div className="spinner" aria-hidden="true" />
               <p>{inboxView === 'historial' ? 'Leyendo historial…' : 'Cruzando reclamos con las fotos…'}</p>
@@ -1515,7 +1514,7 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
           )}
 
           <div className="complaints__list">
-            {displayedRows.map((row, index) => {
+            {(!historyLoading || inboxView !== 'historial') && displayedRows.map((row, index) => {
               const rowId = row.history?.id || row.complaint.id;
               return (
                 <ComplaintCard
@@ -1544,6 +1543,11 @@ export default function ComplaintsInbox({ view = 'cruzar', onRequestCruzar, onRe
               );
             })}
           </div>
+          {inboxView === 'historial' && (historyMeta?.total || 0) > (isPhoneViewport() ? 30 : 100) && <nav className="gallery__pager" aria-label="Páginas del historial">
+            <button className="btn btn--ghost btn--small" disabled={historyLoading || historyPage <= 1} onClick={() => setHistoryPage(value => value - 1)}>‹ Anterior</button>
+            <span>Página {historyPage} de {Math.ceil(historyMeta.total / (isPhoneViewport() ? 30 : 100))} · {historyMeta.total} reclamos</span>
+            <button className="btn btn--ghost btn--small" disabled={historyLoading || historyPage >= Math.ceil(historyMeta.total / (isPhoneViewport() ? 30 : 100))} onClick={() => setHistoryPage(value => value + 1)}>Siguiente ›</button>
+          </nav>}
           {activeRows.length > displayedRows.length && (
             <button
               type="button"
@@ -1683,7 +1687,7 @@ function ComplaintCard({
             onClick={() => onOpenPhoto(photo)}
             aria-label={`Ver foto de ${row.complaint.orderCode}`}
           >
-            <img src={photo.public_url} alt="" loading="lazy" decoding="async" />
+            <PhotoThumbnail photo={photo} />
           </button>
         ) : (
           <div className="complaint-card__thumb complaint-card__thumb--empty" aria-hidden="true">
