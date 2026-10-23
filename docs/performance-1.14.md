@@ -10,6 +10,7 @@
 - Persistencia inicial de capturas inmediata al entrar en la cola; la ventana existente de Repetir se conserva. Durante el procesamiento se actualizan metadatos conservando los Blob almacenados. Las notificaciones se agrupan y las actualizaciones del service worker identifican la tarea modificada. La cola offline espera conexión y conserva las capturas.
 - Las miniaturas JPEG de hasta 480 px se generan fuera de la captura mediante trabajos persistentes. Reemplazos y liberación de fotos invalidan su miniatura y encolan su limpieza. Se conserva la evidencia original para ampliar, descargar y refutar. Mientras falta una miniatura se usa la imagen disponible.
 - Caché de descargas limitada a 16 MiB. Los recursos OCR y módulos pesados se cachean al usarlos, sin precargar todas las variantes del motor.
+- Los cruces de personal buscan por código antes de verificar fecha y agregador; los formateadores de fecha se reutilizan. La consulta de almacenamiento usa uniones por referencias y rutas para evitar escaneos repetidos.
 - Consultas de páginas con plazo máximo de 15 segundos y vistas del servidor de 45 segundos. Cambiar de pantalla o búsqueda cancela solicitudes anteriores. Los fallos muestran un error y conservan los datos y borradores; no se publican copias antiguas como datos actuales.
 
 ## Orden de activación
@@ -32,13 +33,17 @@ La implementación local requiere activar su backend **antes de publicar el fron
 5. Ejecutar manualmente **Process photo thumbnails**. Verificar una miniatura nueva y una foto anterior; comprobar que ampliar y descargar siguen utilizando la evidencia original. El trabajo programado procesa como máximo 40 imágenes cada cinco minutos y retoma la cola histórica. Los fallos conservan el original y se reintentan hasta cinco veces.
 6. Publicar el frontend mediante el workflow existente y comprobar las RPC/vistas con datos actuales. Actualizar las sesiones abiertas usando la comprobación de pendientes que ya ofrece la app.
 
+El workflow **Deploy to GitHub Pages** permite desplegar las funciones desde un runner con Docker: activar `deploy_backend` y desactivar `publish_frontend` para verificar primero el backend. Requiere `SUPABASE_ACCESS_TOKEN` como secreto de GitHub y las migraciones ya aplicadas. Verifica lecturas actuales y procesa dos trabajos de miniaturas antes de permitir la publicación. Para publicar el frontend por separado, usar `publish_frontend` o el push a la rama de publicación.
+
 El generador usa ImageMagick WASM, con licencia y avisos copiados al paquete estático. Referencias de empaquetado: [WASM en Supabase](https://supabase.com/docs/guides/functions/wasm) e [imágenes en Edge Functions](https://supabase.com/docs/guides/functions/examples/image-manipulation).
 
 ## Verificación automática
 
-Verificación local del 23/10/2026: 423 pruebas unitarias aprobadas, integración React DOM en tamaños PC y celular aprobada, SQL aislado aprobado, codec WASM real aprobado y comprobación de tipos de ambas funciones Edge aprobada. ESLint y compilación de producción aprobados. El precache generado contiene 29 entradas y ocupa 1.371,05 KiB; los motores OCR se descargan al usarlos. La compilación conserva un aviso previo de `import.meta` en el bundle IIFE del service worker (`compressImageInWorker.js`); la ruta de respaldo usa la compresión directa cuando no hay Worker.
+Verificación del 23/10/2026: 424 pruebas unitarias aprobadas, integración React DOM en tamaños PC y celular aprobada, SQL aislado aprobado, codec WASM real aprobado y comprobación de tipos de ambas funciones Edge aprobada. ESLint y compilación de producción aprobados tanto localmente como en GitHub Actions. La compilación inicial generó un precache de 29 entradas y 1.371,05 KiB; los motores OCR se descargan al usarlos. La compilación conserva un aviso previo de `import.meta` en el bundle IIFE del service worker (`compressImageInWorker.js`); la ruta de respaldo usa la compresión directa cuando no hay Worker.
 
-No se aplicaron estas migraciones ni se desplegaron las funciones o el frontend en producción durante esta implementación.
+Backend activado y verificado en producción el 23/10/2026: ambas migraciones aplicadas y registradas, índices creados, ambas funciones desplegadas, secretos configurados y lecturas verificadas sobre 7.985 fotos y 470 reclamos. [Ejecución del backend y verificaciones](https://github.com/Lukikitas/foto-app/actions/runs/39963616424). Se generaron miniaturas reales de 360 × 480 px (22–25 KiB) para una foto antigua y una reciente; los SHA-256 de ambos originales permanecieron idénticos. El cruce de personal conservó exactamente los resultados en una muestra real de 6.012 fotos y 152 reclamos. Estas comprobaciones puntuales no son mediciones p95 ni una prueba física de cámara.
+
+Respaldo previo de las tablas públicas y sus definiciones guardado localmente en `output/activation-20261023.local/production-before-1.14.json.gz`, excluido de Git. Las imágenes originales permanecen en su almacenamiento; el respaldo local contiene registros y definiciones, no los archivos de evidencia.
 
 ```sh
 npm test
@@ -56,7 +61,7 @@ deno test --node-modules-dir=none --no-lock --allow-read supabase/functions/phot
 - Paridad entre los cálculos originales y los resúmenes del servidor: estados, dinero, montos faltantes, calidad, desempeño, pendientes e informes/exportaciones completas.
 - Codec WASM real: miniatura JPEG acotada y bytes originales sin cambios. No sustituye una prueba de límites del entorno Edge con fotos reales grandes.
 
-Para revisar la interfaz manualmente: `npm run dev` y `/tests/ui/performance.html`. Utiliza datos sintéticos e intercepta las consultas de Supabase; las escrituras están deshabilitadas. El navegador de la sesión de implementación mostró vacías tanto esta prueba como la preexistente; queda pendiente la revisión visual en un navegador real.
+Para revisar la interfaz manualmente: `npm run dev` y `/tests/ui/performance.html`. Utiliza datos sintéticos e intercepta las consultas de Supabase; las escrituras están deshabilitadas.
 
 ## Medición y seguimiento
 
