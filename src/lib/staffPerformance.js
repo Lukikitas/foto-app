@@ -70,21 +70,37 @@ export function buildStaffReport({ photos = [], historyItems = [], extraPhotos =
   const periodOrders = representatives.filter(photo => periodIds.has(photo.id));
   const photoById = new Map();
   for (const photo of [...photos, ...extraPhotos]) if (photo?.id) photoById.set(photo.id, photo);
+  const byCode = new Map();
+  const byDigits = new Map();
+  const photoDays = new Map();
+  for (const photo of photoById.values()) {
+    const code = compactCode(photo.name);
+    const digits = code.replace(/\D/g, '');
+    const entry = { photo, code, prefix: codePrefix(code) };
+    if (!byCode.has(code)) byCode.set(code, []);
+    byCode.get(code).push(entry);
+    if (digits) {
+      if (!byDigits.has(digits)) byDigits.set(digits, []);
+      byDigits.get(digits).push(entry);
+    }
+  }
   const attributionWarnings = [];
   const findPhotoByCode = (code, item) => {
     if (!code) return null;
     const compact = compactCode(code);
     const digits = compact.replace(/\D/g, '');
     const prefix = codePrefix(compact);
-    const candidates = [...photoById.values()].filter(photo => {
-      if (item.day && toArgentinaDate(photo.created_at) !== item.day) return false;
+    const matches = new Set([...(byCode.get(compact) || []), ...(byDigits.get(digits) || [])]);
+    const candidates = [...matches].filter(({ photo, code: photoCode, prefix: photoPrefix }) => {
+      if (item.day) {
+        if (!photoDays.has(photo.id)) photoDays.set(photo.id, toArgentinaDate(photo.created_at));
+        if (photoDays.get(photo.id) !== item.day) return false;
+      }
       const agg = getPhotoAggregator(photo) || ({PEYA:"pedidosya",RAPPI:"rappi",RAPPITURBO:"rappi_turbo",MPD:"mercadopago"})[codePrefix(compactCode(photo.name))];
       if (item.aggregator && agg !== item.aggregator) return false;
-      const photoCode = compactCode(photo.name);
       if (photoCode === compact) return true;
-      const photoPrefix = codePrefix(photoCode);
       return digits && photoCode.replace(/\D/g, '') === digits && !(photoPrefix && prefix && photoPrefix !== prefix);
-    });
+    }).map(entry => entry.photo);
     const unique = new Map(candidates.map(photo => [representativeById.get(photo.id)?.id || photo.id, photo]));
     if (unique.size > 1) { attributionWarnings.push('Código ambiguo: '+code); return null; }
     return unique.values().next().value || null;

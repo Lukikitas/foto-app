@@ -2,6 +2,31 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { argentinaHour, buildStaffCsv, buildStaffReport, NO_PERSON } from './staffPerformance.js';
 
+test('large repeated-code sets keep day and aggregator attribution and reject ambiguous matches', () => {
+  const photos = [];
+  const historyItems = [];
+  for (let d = 1; d <= 10; d++) {
+    const day = `2026-10-${String(d).padStart(2, '0')}`;
+    for (let n = 0; n < 100; n++) {
+      for (const [aggregator, prefix] of [['pedidosya', 'PEYA'], ['rappi', 'RAPPI']]) {
+        photos.push({ id: `${d}-${n}-${aggregator}`, name: `${prefix}${100000+n}`, aggregator,
+          created_at: `${day}T15:00:00Z`, file_path: `orders/${aggregator}/${d}-${n}.jpg`, taken_by: `${aggregator}-${d}` });
+      }
+      if (n < 10) historyItems.push({ id: `${d}-${n}`, orderCode: String(100000+n), day, aggregator: 'pedidosya', status: 'queja', amount: 1 });
+    }
+  }
+  historyItems.push({ id: 'ambiguous', orderCode: '100009', day: '2026-10-01', status: 'queja', amount: 1 });
+  const report = buildStaffReport({ photos, historyItems });
+  assert.equal(report.totals.photos, 2000);
+  assert.equal(report.totals.complaints, 101);
+  assert.equal(report.totals.unassignedComplaints, 1);
+  assert.equal(report.attributionWarnings.length, 1);
+  for (let d = 1; d <= 10; d++) {
+    assert.equal(report.people.find(row => row.key === `pedidosya-${d}`).complaints, 10);
+    assert.equal(report.people.find(row => row.key === `rappi-${d}`).complaints, 0);
+  }
+});
+
 const PERIOD_PHOTOS = [
   {
     id: 'p1',

@@ -50,6 +50,22 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      - name: Verify two production thumbnail jobs
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          PHOTO_THUMBNAIL_SECRET: ${{ secrets.PHOTO_THUMBNAIL_SECRET }}
+        run: |
+          node --input-type=module <<'JS'
+          for(let n=0;n<2;n++) {
+            const response=await fetch(process.env.SUPABASE_URL+'/functions/v1/photo-thumbnails',{method:'POST',headers:{Authorization:'Bearer '+process.env.SUPABASE_ANON_KEY,apikey:process.env.SUPABASE_ANON_KEY,'x-thumbnail-secret':process.env.PHOTO_THUMBNAIL_SECRET},signal:AbortSignal.timeout(45000)});
+            if(!response.ok)throw new Error('Thumbnail verification failed: HTTP '+response.status);
+            const result=await response.json();
+            if(result.idle)break;
+            if(!result.attached)throw new Error('The generated thumbnail could not be attached.');
+            console.log('OK thumbnail '+(n+1));
+          }
+          JS
   build:
     needs: backend
     if: always() && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (github.event_name != 'workflow_dispatch' || inputs.publish_frontend)

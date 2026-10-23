@@ -6,6 +6,7 @@ export const DEFAULT_COMPLAINT_TARGET_PCT = 2.4;
 export const DEFAULT_AWT_TARGET_PCT = 11;
 export const AWT_AGGREGATOR = 'pedidosya';
 export const ARGENTINA_TZ = 'America/Argentina/Buenos_Aires';
+const argentinaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: ARGENTINA_TZ });
 
 export const METRIC_AGGREGATORS = Object.keys(AGGREGATORS);
 
@@ -182,7 +183,8 @@ export function enumerateDays(from, to) {
 
 export function toArgentinaDate(isoString, now = isoString) {
   if (!isoString) return argentinaToday(now instanceof Date ? now : new Date());
-  return new Date(isoString).toLocaleDateString('en-CA', { timeZone: ARGENTINA_TZ });
+  const date = new Date(isoString);
+  return Number.isNaN(date.getTime()) ? date.toString() : argentinaDateFormatter.format(date);
 }
 
 export function formatDayLabel(dateStr) {

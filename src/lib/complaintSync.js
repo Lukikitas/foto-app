@@ -25,8 +25,7 @@ export function parseComplaintSync(raw) {
   return sync;
 }
 
-export function argentinaDateTimeParts(now = new Date()) {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
+const argentinaDateTimeFormatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: ARGENTINA_TZ,
     year: 'numeric',
     month: '2-digit',
@@ -35,9 +34,11 @@ export function argentinaDateTimeParts(now = new Date()) {
     minute: '2-digit',
     second: '2-digit',
     hourCycle: 'h23',
-  });
+});
+
+export function argentinaDateTimeParts(now = new Date()) {
   const bag = {};
-  for (const part of formatter.formatToParts(now)) {
+  for (const part of argentinaDateTimeFormatter.formatToParts(now)) {
     if (part.type !== 'literal') bag[part.type] = part.value;
   }
   return {

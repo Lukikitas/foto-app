@@ -25,7 +25,7 @@ jobs:
           node --input-type=module <<'JS'
           if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY || !process.env.PHOTO_THUMBNAIL_SECRET) throw new Error('Configure thumbnail secrets before enabling the schedule.');
           for(let n=0;n<40;n++) {
-            const response=await fetch(process.env.SUPABASE_URL+'/functions/v1/photo-thumbnails',{method:'POST',headers:{Authorization:'Bearer '+process.env.SUPABASE_ANON_KEY,'x-thumbnail-secret':process.env.PHOTO_THUMBNAIL_SECRET},signal:AbortSignal.timeout(45000)});
+            const response=await fetch(process.env.SUPABASE_URL+'/functions/v1/photo-thumbnails',{method:'POST',headers:{Authorization:'Bearer '+process.env.SUPABASE_ANON_KEY,apikey:process.env.SUPABASE_ANON_KEY,'x-thumbnail-secret':process.env.PHOTO_THUMBNAIL_SECRET},signal:AbortSignal.timeout(45000)});
             if(!response.ok) throw new Error('Thumbnail processing failed: '+response.status);
             const result=await response.json();
             if(result.idle)break;
