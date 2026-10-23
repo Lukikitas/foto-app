@@ -58,6 +58,8 @@ jobs:
       - run: psql -v ON_ERROR_STOP=1 -f tests/database/storage-summary.sql
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261023091000_photo_thumbnails.sql
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261023091000_photo_thumbnails.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261023135000_thumbnail_job_permissions.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261023135000_thumbnail_job_permissions.sql
       - run: psql -v ON_ERROR_STOP=1 -f tests/database/photo-thumbnails.sql
   edge:
     runs-on: ubuntu-latest

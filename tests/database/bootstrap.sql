@@ -2,6 +2,8 @@
 create role anon;
 create role authenticated;
 create role service_role;
+-- Mirror hosted Supabase RPC default grants as well as PUBLIC's grant.
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
 create schema storage;
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,metadata jsonb);
 alter table storage.objects enable row level security;

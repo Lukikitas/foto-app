@@ -15,5 +15,9 @@ do $$declare job jsonb; ok boolean; thumbnail_file text; begin
  update public.photos set public_url=null where id='ffffffff-ffff-4fff-8fff-ffffffffffff';
  if public.foto_finish_thumbnail(job->>'photo_id',(job->>'lease_token')::uuid,thumbnail_file) then raise exception 'deleted evidence got a thumbnail';end if;
  if has_function_privilege('anon','public.foto_claim_thumbnail()','EXECUTE') then raise exception 'anonymous claim';end if;
+ if has_function_privilege('authenticated','public.foto_claim_thumbnail()','EXECUTE') then raise exception 'authenticated claim';end if;
+ if has_function_privilege('anon','public.foto_finish_thumbnail(text,uuid,text,text)','EXECUTE') then raise exception 'anonymous completion';end if;
+ if has_function_privilege('authenticated','public.foto_finish_thumbnail(text,uuid,text,text)','EXECUTE') then raise exception 'authenticated completion';end if;
+ if not has_function_privilege('service_role','public.foto_claim_thumbnail()','EXECUTE') then raise exception 'worker cannot claim';end if;
 end$$;
 rollback;

@@ -18,7 +18,7 @@
 La implementación local requiere activar su backend **antes de publicar el frontend 1.14**. Los clientes anteriores siguen funcionando con estas migraciones aditivas. No aplicar los SQL de `tests/database` a producción.
 
 1. Conservar un respaldo de la base y verificar que las migraciones anteriores de documentos, retención y almacenamiento ya estén aplicadas.
-2. Aplicar, en este orden, `supabase/migrations/20261023090000_performance_reads.sql` y `supabase/migrations/20261023091000_photo_thumbnails.sql`. Son repetibles. Agregan RPC de lectura, índices, `thumbnail_path`, `registered_at` y trabajos de miniaturas. No eliminan fotos ni pedidos. Las escrituras transaccionales actuales permanecen disponibles.
+2. Aplicar, en este orden, `supabase/migrations/20261023090000_performance_reads.sql`, `supabase/migrations/20261023091000_photo_thumbnails.sql` y `supabase/migrations/20261023135000_thumbnail_job_permissions.sql`. Son repetibles. Agregan RPC de lectura, índices, `thumbnail_path`, `registered_at` y trabajos de miniaturas. La última revoca los permisos directos heredados de Supabase para que solo el worker pueda reclamar y finalizar trabajos. No eliminan fotos ni pedidos. Las escrituras transaccionales actuales permanecen disponibles.
 3. Preparar el WASM fijado y desplegar las funciones desde la raíz del repositorio:
 
    ```sh
@@ -42,6 +42,8 @@ El generador usa ImageMagick WASM, con licencia y avisos copiados al paquete est
 Verificación del 23/10/2026: 424 pruebas unitarias aprobadas, integración React DOM en tamaños PC y celular aprobada, SQL aislado aprobado, codec WASM real aprobado y comprobación de tipos de ambas funciones Edge aprobada. ESLint y compilación de producción aprobados tanto localmente como en GitHub Actions. La compilación inicial generó un precache de 29 entradas y 1.371,05 KiB; los motores OCR se descargan al usarlos. La compilación conserva un aviso previo de `import.meta` en el bundle IIFE del service worker (`compressImageInWorker.js`); la ruta de respaldo usa la compresión directa cuando no hay Worker.
 
 Backend activado y verificado en producción el 23/10/2026: ambas migraciones aplicadas y registradas, índices creados, ambas funciones desplegadas, secretos configurados y lecturas verificadas sobre 7.985 fotos y 470 reclamos. [Ejecución del backend y verificaciones](https://github.com/Lukikitas/foto-app/actions/runs/39963616424). Se generaron miniaturas reales de 360 × 480 px (22–25 KiB) para una foto antigua y una reciente; los SHA-256 de ambos originales permanecieron idénticos. El cruce de personal conservó exactamente los resultados en una muestra real de 6.012 fotos y 152 reclamos. Estas comprobaciones puntuales no son mediciones p95 ni una prueba física de cámara.
+
+También se aplicó y registró la migración de permisos de trabajos: se comprobó que el rol anónimo recibe HTTP 401 al intentar reclamar un trabajo. La base de pruebas reproduce ahora los permisos predeterminados de Supabase para cubrir esa diferencia con producción.
 
 Respaldo previo de las tablas públicas y sus definiciones guardado localmente en `output/activation-20261023.local/production-before-1.14.json.gz`, excluido de Git. Las imágenes originales permanecen en su almacenamiento; el respaldo local contiene registros y definiciones, no los archivos de evidencia.
 
