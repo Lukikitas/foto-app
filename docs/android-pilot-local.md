@@ -1,49 +1,41 @@
-# Delivery Star · Fotos — piloto Android 0.2.0
+# Delivery Star · Fotos — piloto Android 0.3.0
 
-Actualización del piloto para usar en el celular del local **sin USB ni computadora**. La estabilidad durante un turno real sigue pendiente de validación.
+Actualización para el celular del local, sin USB ni computadora.
 
 ## Cambios
 
-- Cámara casi a pantalla completa y fotos grandes en Envíos. Nombre, gestión y diagnóstico pasan al menú ⋮.
-- Colores de la app web, con aspecto sistema, claro u oscuro.
-- Gran angular cuando Android expone esa lente; 1× y zoom, sin confundir la cámara macro con gran angular. Si el fabricante impide abrir la lente, vuelve a la principal.
-- El fallo de inicialización del lector de tickets ya no impide registrar ni enviar las fotos. Las respuestas incompletas del servidor se reintentan. Los errores indican la etapa y el diagnóstico incluye código HTTP, versión y modelo, sin fotos ni contenido del ticket.
-- Los errores anteriores vuelven a cola al abrir una versión nueva, conservando sus archivos, identificadores y confirmaciones.
-- Aviso de **Actualización pendiente** al detectar una versión nueva. También disponible en **⋮ → Buscar actualizaciones**.
+- Una banda fija muestra **1 · TICKET / 2 · BOLSA** y resalta en rojo el paso actual. Sin animaciones, sonidos ni avisos que tapen la cámara.
+- **Flash abajo a la derecha**, con su estado encendido/apagado; Repetir queda encima.
+- Nuevo selector **Lentes → Cámaras traseras** para elegir las lentes que la app puede abrir, incluso cuando los metadatos no permiten reconocer automáticamente el gran angular.
+- La detección revisa todas las traseras y sus cámaras físicas por separado. Corrige el uso de la focal mínima como referencia, incorpora área activa/orientación del sensor y permite seleccionar una trasera sin depender exclusivamente del zoom informado.
+- La selección física se aplica conjuntamente a vista previa y foto. Si una ruta no puede abrirse, vuelve a la principal y permite probar las demás; no descarta todas las lentes por una sola falla.
+- Se mantiene el guardado local, la recuperación de pendientes y el aviso de nuevas versiones.
 
-La captura de pantalla del error 0.1.0 no identifica su causa exacta. Se verificó que la evidencia estaba almacenada y que el contrato de registro del servidor respondía correctamente; las correcciones cubren fallos del cliente que podían interrumpir ese paso. Si el pendiente vuelve a fallar, compartir el diagnóstico para confirmar la causa del equipo real.
+## Actualizar
 
-## Actualizar desde 0.1.0
+Desde 0.2.0, usar **Actualización pendiente → Actualizar** o **⋮ → Buscar actualizaciones**. Si no aparece todavía, abrir [la guía de descarga](https://delivery.star-app.com.ar/manual/piloto-android/) y descargar `Delivery-Star-Fotos-0.3.0-pilot.apk`.
 
-1. Abrir desde el celular [la guía de instalación](https://delivery.star-app.com.ar/manual/piloto-android/), o descargar `Delivery-Star-Fotos-0.2.0-pilot.apk` adjunto a esta publicación.
-2. Abrir el APK. Si Android lo solicita, permitir la instalación desde ese navegador. Elegir **Actualizar** sobre Delivery Star · Fotos.
-3. **No desinstalar ni borrar almacenamiento**: actualizar encima conserva fotos y pendientes. Requiere Android 8 o posterior.
-4. Volver a abrir la app y comprobar **Envíos**: los errores anteriores se reintentan sin volver a fotografiar el pedido.
+Abrir el archivo y elegir **Actualizar** sobre Delivery Star · Fotos. **No desinstalar ni borrar datos**: se conservan los pendientes. Android pide confirmar la instalación. El identificador y el certificado son los mismos; versión interna 3. Desde 0.1.0, la descarga inicial sigue siendo manual.
 
-0.1.0 todavía no puede mostrar avisos de actualización: este primer paso es manual. Desde 0.2.0, se consulta el manifiesto al abrir/volver a la app, como máximo cada 15 minutos. **Actualizar** abre el APK publicado y Android pide confirmar la instalación; no se instala en silencio.
+Los pendientes de la app web y de Foto-app Cámara 1.0.3 son independientes y se comprueban allí.
 
-Se conserva el identificador `app.deliverystar.capture` y el certificado del piloto anterior. Los pendientes de la web y de Foto-app Cámara 1.0.3 pertenecen a esas aplicaciones y se comprueban por separado.
+## Comprobar en el local
 
-## Primera prueba
+1. Verificar que la banda y el botón de captura indiquen Ticket; fotografiarlo y comprobar que ambos pasan a Bolsa.
+2. Probar el flash con el botón inferior derecho. Al cambiar de lente puede variar su disponibilidad.
+3. Abrir **Lentes**. Elegir **Gran angular**, si está identificado, o probar la otra trasera disponible. Comprobar que la vista se ensancha y que la foto guardada conserva ese encuadre; volver a **1×** para la principal.
+4. Comprobar en Envíos y **⋮ → Gestión web** que los pedidos llegan correctamente. La validación durante un turno real sigue pendiente.
 
-Probar un grupo de 20 pedidos reales: ticket y después bolsa. Continuar cuando diga **Par guardado en este celular**. Usar una sola app por pedido para evitar cargas duplicadas.
+Algunos fabricantes no exponen todas las lentes a otras apps. El selector no inventa un gran angular ni convierte una macro en gran angular. Si sigue faltando la lente, compartir **Envíos → Compartir diagnóstico**, indicando marca/modelo y si el botón falta o no abre la lente.
 
-Comprobar que los pares llegan a **Enviado** en Envíos y aparecen correctamente en **⋮ → Gestión web**. Si se corta la conexión, conservar los pendientes y comprobar que se envían al recuperarla. Probar el botón de gran angular, si aparece, y revisar que el archivo guardado tenga el mismo encuadre amplio de la vista previa.
+El diagnóstico agrega un inventario acotado de ópticas y de disponibilidad en CameraManager/CameraX. No incluye IDs de cámara, fotos, autores, códigos ni texto del ticket. No se envía automáticamente y no requiere conectar el teléfono.
 
-Si funciona el primer grupo, seguir con el turno y registrar cantidad de pares, horario de cualquier falla y tipo de conexión. Las pruebas largas del roadmap siguen pendientes; el ensayo inicial no las reemplaza.
+## Verificaciones
 
-## Diagnóstico desde el local
-
-En **Envíos → Compartir diagnóstico**, compartir `diagnostico-fotos.json` con quien coordina la prueba para adjuntarlo a esta conversación. Hacerlo apenas aparezca una falla, junto con horario aproximado y Wi-Fi o datos.
-
-El archivo incluye versión, Android, fabricante/modelo y eventos técnicos recientes. No incluye fotos, nombres, códigos ni texto del ticket. No se envía automáticamente. Conservar los datos de la app para recuperar los pendientes.
-
-## Versión y verificaciones
-
-- Código: etiqueta `android-capture-pilot-v0.2.0`; versión interna 2.
+- Código: etiqueta `android-capture-pilot-v0.3.0`; versión interna 3.
 - Tamaño: 45.725.741 bytes.
-- SHA-256: `e425bcaae33523d04a66e87da421718cd0206b2b4f94d25f6b51aadc78dd6c95`.
+- SHA-256: `e0c89898daa0eeb05fc9bd4983d057ca562c8f16090fe0fb7638fefa1e7bcb93`.
 - Firma SHA-256: `28e67793dfc8e10c66379c6ee5a37032863279f4a59f9b68ea587783cdab290f`.
-- Compilación debug/release, once pruebas JVM y lint aprobados.
-- Verificaciones instrumentadas en emulador: recuperación de 500 pares, actualización de cola sin borrar originales ni confirmaciones, captura/navegación y aviso pendiente sin conexión; flujo HTTPS aislado con OCR real, lector no disponible, reintentos por etapa y originales conservados hasta confirmar ticket.
-- La disponibilidad del gran angular, el rendimiento, la legibilidad y la batería del celular real requieren la prueba en el local.
+- Compilación debug/release, catorce pruebas JVM y lint aprobados.
+- Pruebas instrumentadas en emulador: etapas Ticket/Bolsa, ubicación del flash, selector de lentes sin modificar capturas, recuperación/actualización de cola, persistencia de 500 pares, navegación, aviso sin conexión y flujo HTTPS aislado con fallos de OCR/subida.
+- El emulador no demuestra que el gran angular físico del celular del local esté disponible: esa comprobación requiere usar el APK allí.
