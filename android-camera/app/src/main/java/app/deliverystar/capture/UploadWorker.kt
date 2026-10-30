@@ -2,6 +2,7 @@ package app.deliverystar.capture
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.mlkit.vision.common.InputImage
@@ -22,22 +23,25 @@ class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
     companion object { private val processing = Mutex() }
     override suspend fun doWork(): Result = processing.withLock {
         val app = applicationContext as CaptureApplication
-        val repository = app.repository
+        processCapture(app.repository, CaptureApi(), inputData.getString("captureId"))
+    }
+    // Keep the same durable pipeline usable with an isolated repository and
+    // HTTPS server for instrumented recovery tests, without replacing app config.
+    internal suspend fun processCapture(repository: CaptureRepository, api: CaptureApi, captureId: String?): Result {
         val dao = repository.dao
-        val id = inputData.getString("captureId") ?: return@withLock Result.failure()
-        var row = dao.get(id) ?: return@withLock Result.success()
-        if (row.state in listOf("DRAFT", "SENT", "ERROR")) return@withLock Result.success()
+        val id = captureId ?: return Result.failure()
+        var row = dao.get(id) ?: return Result.success()
+        if (row.state in listOf("DRAFT", "SENT", "ERROR")) return Result.success()
         if (row.state == "REVIEW") {
-            if (row.reviewUntil > System.currentTimeMillis()) return@withLock Result.retry()
+            if (row.reviewUntil > System.currentTimeMillis()) return Result.retry()
         }
         // Claim and Repetir race through a single SQL state transition. If the
         // user wins, no worker may upload the replaced draft's stale file.
-        if (dao.claim(id, System.currentTimeMillis()) != 1) return@withLock Result.success()
+        if (dao.claim(id, System.currentTimeMillis()) != 1) return Result.success()
         row = dao.get(id)!!
-        val api = CaptureApi()
         val evidence = File(applicationContext.cacheDir, "evidence-$id.jpg")
         val ticket = File(applicationContext.cacheDir, "ticket-$id.jpg")
-        try {
+        return try {
             dao.attempt(id)
             // Yield CPU-heavy work to a shutter press. Network transfer itself
             // can continue while the next photos are captured.
@@ -52,6 +56,7 @@ class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
                 ImageFiles.prepare(File(row.ticketPath), ticket, 1600, 86)
                 val reader = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                 val texts = JSONArray()
+                val started = SystemClock.elapsedRealtime()
                 try {
                     withTimeout(10_000) {
                         for (source in listOf(ticket, evidence)) {
@@ -60,10 +65,12 @@ class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
                             texts.put(reader.process(InputImage.fromFilePath(applicationContext, Uri.fromFile(source))).await().text.take(8_000))
                         }
                     }
+                    Diagnostics.record(applicationContext, "ocr.complete", texts.length(), SystemClock.elapsedRealtime() - started)
                 } catch (error: Exception) {
                     if (error is CancellationException && error !is TimeoutCancellationException) throw error
                     // The ticket stays available for existing web/cloud review.
-                    Diagnostics.record(applicationContext, "ocr.unread")
+                    Diagnostics.record(applicationContext, if (error is TimeoutCancellationException) "ocr.timeout" else "ocr.unread",
+                        texts.length(), SystemClock.elapsedRealtime() - started)
                 } finally { reader.close() }
                 // Preserve a successful first reading even if the second times out.
                 dao.ocr(id, texts.toString())
@@ -89,6 +96,7 @@ class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
             // longer require local full-size copies. Keep bounded thumbnails.
             saveThumbnail(File(row.evidencePath))
             saveThumbnail(File(row.ticketPath))
+            repository.pruneReplacedFiles(id)
             repository.pruneSent()
             Diagnostics.record(applicationContext, "upload.sent")
             Result.success()
@@ -107,8 +115,8 @@ class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
     private fun saveThumbnail(original: File) {
         if (!original.exists()) return
         val small = File(original.path + ".thumb")
-        runCatching { ImageFiles.prepare(original, small, 480, 80) }
+        val prepared = runCatching { ImageFiles.prepare(original, small, 480, 80) }.isSuccess
         // The full original is retained if thumbnail generation fails.
-        if (small.length() > 0) original.delete()
+        if (prepared && small.length() > 0) original.delete()
     }
 }

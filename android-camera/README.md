@@ -33,11 +33,13 @@ Para preparar el piloto, ejecutar desde la raíz `node scripts/prepare-android-s
 - Evidencia, registro y ticket tienen confirmaciones persistidas separadas. El identificador UUID y el registro único del servidor permiten reanudar sin duplicar.
 - Una sola tarea procesa imágenes a la vez. Las vistas muestran miniaturas y páginas de 20 elementos; nunca se carga la cola completa de imágenes en RAM.
 - La historia local conserva como máximo 200 pares ya enviados. Su limpieza no elimina pendientes, errores ni la evidencia remota; la galería histórica sigue en la web.
+- Las fotos reemplazadas con Repetir se limpian solo después de confirmar el envío actual. Si falla una miniatura, se conserva su original local.
 - Las solicitudes incluyen plazo total y cancelación. La lectura OCR tiene un plazo propio y no bloquea la captura.
 - El OCR local lee ticket y bolsa secuencialmente y conserva lecturas parciales si vence el plazo. El servidor usa las reglas compartidas de confianza; una lectura incierta queda para revisión. Los registros locales de una versión anterior siguen siendo compatibles.
 - WorkManager conserva trabajos tras cierre/reinicio, pero Android puede diferirlos por ahorro de batería. Después de **Forzar detención** hay que volver a abrir la app.
 - El ticket remoto conserva la ventana vigente de 72 horas. Los vencidos se señalan explícitamente, sin confundirlos con tickets enviados.
 - No desinstalar ni borrar datos con pendientes. Los pendientes de la PWA pertenecen al navegador y deben verificarse por separado antes de la migración.
 - El diagnóstico compartido desde Envíos contiene eventos técnicos acotados, sin fotos, códigos, texto OCR ni autores.
+- `UploadRecoveryTest` verifica el flujo de imágenes/OCR/Room con HTTPS local, respuestas interrumpidas y confirmaciones incompletas; no accede a producción. Un arranque en frío puede agotar el plazo de OCR con lectura parcial: se conserva para las reglas de confianza y se registra su duración. La captura no depende de que el OCR termine.
 
 Los tests sintéticos, el emulador y una compilación exitosa no demuestran estabilidad física en gama media/baja. La prueba de 500 pares/2 horas y un turno completo sigue siendo un requisito de aceptación.

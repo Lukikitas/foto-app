@@ -101,4 +101,16 @@ class CaptureRepository(private val context: Context, val dao: CaptureDao) {
             folder.delete()
         }
     }
+    fun pruneReplacedFiles(id: String) {
+        val row = dao.get(id) ?: return
+        // A retake deliberately replaces an earlier image. Keep its file until
+        // both current uploads have been acknowledged, then bound disk usage.
+        if (row.state != "SENT" || !row.evidenceStored || (!row.ticketStored && !row.ticketExpired)) return
+        if (runCatching { UUID.fromString(id).toString() }.getOrNull() != id) return
+        val folder = File(root, id)
+        if (folder.canonicalFile.parentFile != root.canonicalFile) return
+        val retained = setOf(row.ticketPath, row.evidencePath, row.ticketPath + ".thumb", row.evidencePath + ".thumb")
+        folder.listFiles()?.filter { it.isFile && it.path !in retained && Regex("(ticket|evidence)-[a-f0-9-]+\\.jpg(\\.thumb)?").matches(it.name) }
+            ?.forEach { it.delete() }
+    }
 }
