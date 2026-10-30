@@ -1,33 +1,49 @@
-# Delivery Star · Fotos — piloto Android 0.1.0
+# Delivery Star · Fotos — piloto Android 0.2.0
 
-Se puede instalar y probar en el celular del local **sin USB ni computadora**. Es un piloto: todavía falta validar la estabilidad durante un turno real.
+Actualización del piloto para usar en el celular del local **sin USB ni computadora**. La estabilidad durante un turno real sigue pendiente de validación.
 
-## Instalar en el local
+## Cambios
 
-1. Abrir desde el celular [la guía de instalación](https://delivery.star-app.com.ar/manual/piloto-android/), o descargar el archivo `Delivery-Star-Fotos-0.1.0-pilot.apk` adjunto a esta publicación.
-2. Abrir el APK descargado. Si Android lo solicita, habilitar la instalación desde el navegador utilizado. No es necesario activar la depuración USB.
-3. Abrir **Delivery Star · Fotos**, permitir la cámara e indicar quién toma las fotos. Requiere Android 8 o posterior.
+- Cámara casi a pantalla completa y fotos grandes en Envíos. Nombre, gestión y diagnóstico pasan al menú ⋮.
+- Colores de la app web, con aspecto sistema, claro u oscuro.
+- Gran angular cuando Android expone esa lente; 1× y zoom, sin confundir la cámara macro con gran angular. Si el fabricante impide abrir la lente, vuelve a la principal.
+- El fallo de inicialización del lector de tickets ya no impide registrar ni enviar las fotos. Las respuestas incompletas del servidor se reintentan. Los errores indican la etapa y el diagnóstico incluye código HTTP, versión y modelo, sin fotos ni contenido del ticket.
+- Los errores anteriores vuelven a cola al abrir una versión nueva, conservando sus archivos, identificadores y confirmaciones.
+- Aviso de **Actualización pendiente** al detectar una versión nueva. También disponible en **⋮ → Buscar actualizaciones**.
 
-El piloto tiene un identificador distinto de Foto-app Cámara 1.0.3 y del navegador. No hace falta desinstalar la aplicación anterior. Sus pendientes no se transfieren automáticamente: antes de cambiar, comprobar los envíos pendientes allí. No borrar sus datos para destrabarla.
+La captura de pantalla del error 0.1.0 no identifica su causa exacta. Se verificó que la evidencia estaba almacenada y que el contrato de registro del servidor respondía correctamente; las correcciones cubren fallos del cliente que podían interrumpir ese paso. Si el pendiente vuelve a fallar, compartir el diagnóstico para confirmar la causa del equipo real.
+
+## Actualizar desde 0.1.0
+
+1. Abrir desde el celular [la guía de instalación](https://delivery.star-app.com.ar/manual/piloto-android/), o descargar `Delivery-Star-Fotos-0.2.0-pilot.apk` adjunto a esta publicación.
+2. Abrir el APK. Si Android lo solicita, permitir la instalación desde ese navegador. Elegir **Actualizar** sobre Delivery Star · Fotos.
+3. **No desinstalar ni borrar almacenamiento**: actualizar encima conserva fotos y pendientes. Requiere Android 8 o posterior.
+4. Volver a abrir la app y comprobar **Envíos**: los errores anteriores se reintentan sin volver a fotografiar el pedido.
+
+0.1.0 todavía no puede mostrar avisos de actualización: este primer paso es manual. Desde 0.2.0, se consulta el manifiesto al abrir/volver a la app, como máximo cada 15 minutos. **Actualizar** abre el APK publicado y Android pide confirmar la instalación; no se instala en silencio.
+
+Se conserva el identificador `app.deliverystar.capture` y el certificado del piloto anterior. Los pendientes de la web y de Foto-app Cámara 1.0.3 pertenecen a esas aplicaciones y se comprueban por separado.
 
 ## Primera prueba
 
-Usar el piloto con un primer grupo de 20 pedidos reales: ticket y luego bolsa. Continuar con el siguiente pedido cuando diga **Par guardado en este celular**. Evitar fotografiar el mismo pedido en ambas apps durante el ensayo para no cargarlo dos veces.
+Probar un grupo de 20 pedidos reales: ticket y después bolsa. Continuar cuando diga **Par guardado en este celular**. Usar una sola app por pedido para evitar cargas duplicadas.
 
-Desde **Envíos**, comprobar que los pares llegan a **Foto y ticket enviados**. Desde **Gestión**, comprobar que aparecen las fotos correctas. Si se corta la conexión, los pendientes deben conservarse y reintentarse al recuperarla. Si hay un problema, conservar los datos de la app.
+Comprobar que los pares llegan a **Enviado** en Envíos y aparecen correctamente en **⋮ → Gestión web**. Si se corta la conexión, conservar los pendientes y comprobar que se envían al recuperarla. Probar el botón de gran angular, si aparece, y revisar que el archivo guardado tenga el mismo encuadre amplio de la vista previa.
 
-Si el primer grupo funciona, continuar la validación durante el turno y registrar cantidad de pares, horario aproximado y cualquier demora o cierre. Las pruebas largas del roadmap siguen pendientes; este ensayo inicial no las reemplaza.
+Si funciona el primer grupo, seguir con el turno y registrar cantidad de pares, horario de cualquier falla y tipo de conexión. Las pruebas largas del roadmap siguen pendientes; el ensayo inicial no las reemplaza.
 
-## Diagnóstico sin conectar el teléfono
+## Diagnóstico desde el local
 
-Abrir **Envíos → Compartir diagnóstico**. Enviar el archivo `diagnostico-fotos.json` al responsable de la prueba para adjuntarlo a esta conversación. Hacerlo al terminar el ensayo o apenas aparezca una falla, junto con el horario aproximado y si estaban usando Wi-Fi o datos.
+En **Envíos → Compartir diagnóstico**, compartir `diagnostico-fotos.json` con quien coordina la prueba para adjuntarlo a esta conversación. Hacerlo apenas aparezca una falla, junto con horario aproximado y Wi-Fi o datos.
 
-El archivo contiene versión, versión de Android y eventos técnicos recientes. No incluye fotos, nombres, códigos de pedidos ni texto leído del ticket. La app no lo envía automáticamente.
+El archivo incluye versión, Android, fabricante/modelo y eventos técnicos recientes. No incluye fotos, nombres, códigos ni texto del ticket. No se envía automáticamente. Conservar los datos de la app para recuperar los pendientes.
 
 ## Versión y verificaciones
 
-- Código del APK: `670dfcc505fa9a5cf2fbb07a4c124cdc440cc8b6`.
-- Tamaño: 45.709.361 bytes.
-- SHA-256: `f878b3fc2c58f85b1bcdf2fbd1c012a532c0722efae39ca35afbd387ebadcfa4`.
+- Código: etiqueta `android-capture-pilot-v0.2.0`; versión interna 2.
+- Tamaño: 45.725.741 bytes.
+- SHA-256: `e425bcaae33523d04a66e87da421718cd0206b2b4f94d25f6b51aadc78dd6c95`.
 - Firma SHA-256: `28e67793dfc8e10c66379c6ee5a37032863279f4a59f9b68ea587783cdab290f`.
-- Compilación, pruebas JVM y pruebas de recuperación en emulador aprobadas. Rendimiento, legibilidad y comportamiento de batería del equipo real todavía pendientes.
+- Compilación debug/release, once pruebas JVM y lint aprobados.
+- Verificaciones instrumentadas en emulador: recuperación de 500 pares, actualización de cola sin borrar originales ni confirmaciones, captura/navegación y aviso pendiente sin conexión; flujo HTTPS aislado con OCR real, lector no disponible, reintentos por etapa y originales conservados hasta confirmar ticket.
+- La disponibilidad del gran angular, el rendimiento, la legibilidad y la batería del celular real requieren la prueba en el local.

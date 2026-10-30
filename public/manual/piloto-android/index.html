@@ -3,53 +3,62 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#192a34">
+  <meta name="theme-color" content="#efe8e0">
   <meta name="description" content="Instalá el piloto de Delivery Star Fotos y probalo desde el celular del local, sin USB ni computadora.">
   <title>Piloto Android · Delivery Star</title>
   <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #192a34; color: #f5f7f8; }
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; background: #efe8e0; color: #1c1d20; --muted: #4e535b; --border: #c3b8ac; --link: #c10024; }
     * { box-sizing: border-box; }
     body { margin: 0; line-height: 1.6; }
     main { max-width: 720px; margin: auto; padding: 36px 22px 64px; }
-    .brand { color: #ffcf48; font-size: .82rem; letter-spacing: .1em; font-weight: 750; }
+    .brand { color: #e4002b; font-size: .82rem; letter-spacing: .1em; font-weight: 750; }
     h1 { font-size: clamp(2rem, 6vw, 3rem); line-height: 1.12; margin: 20px 0 16px; }
     h2 { font-size: 1.25rem; margin-top: 0; }
     p { margin: 12px 0; }
-    .intro, .meta { color: #b8c6ce; }
-    .download { display: block; margin: 26px 0 8px; padding: 17px 20px; border-radius: 14px; background: #ffcf48; color: #192a34; text-align: center; font-weight: 750; text-decoration: none; }
-    a { color: #ffda73; text-underline-offset: 3px; }
-    a:focus-visible, summary:focus-visible { outline: 3px solid white; outline-offset: 4px; }
+    .intro, .meta { color: var(--muted); }
+    .download { display: block; margin: 26px 0 8px; padding: 17px 20px; border-radius: 10px; background: #e4002b; color: white; text-align: center; font-weight: 750; text-decoration: none; }
+    a { color: var(--link); text-underline-offset: 3px; }
+    a:focus-visible, summary:focus-visible { outline: 3px solid var(--link); outline-offset: 4px; }
     .meta { font-size: .88rem; }
-    section, details { margin-top: 26px; padding: 22px; border: 1px solid #455761; border-radius: 16px; }
+    section, details { margin-top: 26px; padding: 22px; border: 1px solid var(--border); border-radius: 10px; }
     ol { padding-left: 24px; margin-bottom: 0; }
     li { padding-left: 3px; margin: 12px 0; }
-    .note { border-left: 3px solid #ffcf48; padding-left: 14px; margin-top: 26px; }
+    .note { border-left: 3px solid #e4002b; padding-left: 14px; margin-top: 26px; }
     summary { cursor: pointer; font-weight: 650; }
     code { overflow-wrap: anywhere; font-size: .85rem; }
     footer { margin-top: 32px; }
+    @media (prefers-color-scheme: dark) {
+      :root { background: #161616; color: #f1f1f1; --muted: #b3b7be; --border: #3f3f3f; --link: #ff8299; }
+    }
   </style>
 </head>
 <body>
   <main>
     <div class="brand">DELIVERY STAR · ANDROID</div>
-    <h1>Probalo desde el local.</h1>
+    <h1>La cámara del local.</h1>
     <p class="intro">Una cámara para guardar ticket y bolsa antes de enviarlos. Instalá el piloto en el celular de trabajo, sin cables ni computadora.</p>
-    <a class="download" href="https://github.com/Lukikitas/foto-app/releases/download/android-capture-pilot-v0.1.0/Delivery-Star-Fotos-0.1.0-pilot.apk">Descargar APK piloto</a>
-    <p class="meta">Versión 0.1.0-pilot · 46 MB · Android 8 o posterior</p>
+    <a class="download" href="https://github.com/Lukikitas/foto-app/releases/download/android-capture-pilot-v0.2.0/Delivery-Star-Fotos-0.2.0-pilot.apk">Descargar actualización 0.2.0</a>
+    <p class="meta">Versión 0.2.0-pilot · 46 MB · Android 8 o posterior</p>
     <p class="note"><strong>Versión piloto.</strong> Las pruebas automáticas pasaron. Falta comprobar cómo funciona durante un turno real en el celular del local.</p>
     <section>
-      <h2>1. Instalá y abrí la cámara</h2>
+      <h2>1. Actualizá sin borrar los pendientes</h2>
       <ol>
-        <li>Abrí el APK descargado. Si Android lo pide, habilitá la instalación desde el navegador que usaste.</li>
+        <li>Abrí el APK descargado. Si Android lo pide, habilitá la instalación desde el navegador que usaste. Si ya tenés el piloto 0.1.0, elegí <strong>Actualizar</strong>: conserva fotos y pendientes. No desinstales ni borres datos.</li>
         <li>Abrí <strong>Delivery Star · Fotos</strong>, permití la cámara e indicá quién toma las fotos.</li>
-        <li>No hace falta desinstalar la app anterior. Antes de cambiar, revisá sus envíos pendientes: no se transfieren automáticamente al piloto.</li>
+        <li>Al abrir esta versión, los envíos que quedaron con error se reintentan. Los pendientes de la app web o de Foto-app Cámara 1.0.3 son independientes: revisalos allí.</li>
       </ol>
     </section>
     <section>
       <h2>2. Probá un primer grupo de 20 pedidos</h2>
       <p>Sacá el ticket y después la bolsa. Cuando diga <strong>Par guardado en este celular</strong>, podés seguir con el próximo pedido.</p>
-      <p>En <strong>Envíos</strong>, comprobá que los pares llegan a <strong>Foto y ticket enviados</strong>. Desde <strong>Gestión</strong>, revisá que aparezcan las fotos correctas.</p>
+      <p>En <strong>Envíos</strong>, comprobá que los pares llegan a <strong>Enviado</strong>. Desde <strong>⋮ → Gestión web</strong>, revisá que aparezcan las fotos correctas.</p>
+      <p>La cámara ocupa casi toda la pantalla. El gran angular aparece junto a 1× cuando Android permite usar esa lente. En <strong>⋮ → Aspecto</strong> podés elegir sistema, claro u oscuro, con los colores de la web.</p>
       <p>Usá una sola app para cada pedido durante la prueba. Si falta conexión, los pendientes deben conservarse y reintentarse al volver la red.</p>
+    </section>
+    <section>
+      <h2>Próximas actualizaciones</h2>
+      <p>Esta actualización desde 0.1.0 se descarga con el botón de arriba. Desde 0.2.0, la app comprueba nuevas versiones al abrirse y muestra <strong>Actualización pendiente → Actualizar</strong>. También podés usar <strong>⋮ → Buscar actualizaciones</strong>.</p>
+      <p>Android te pedirá confirmar la instalación. Usá siempre <strong>Actualizar</strong> sobre la app existente para conservar las fotos pendientes.</p>
     </section>
     <section>
       <h2>3. Compartí el diagnóstico</h2>
@@ -59,8 +68,8 @@
     </section>
     <details>
       <summary>Información de la versión</summary>
-      <p>SHA-256 del APK:<br><code>f878b3fc2c58f85b1bcdf2fbd1c012a532c0722efae39ca35afbd387ebadcfa4</code></p>
-      <p><a href="https://github.com/Lukikitas/foto-app/releases/tag/android-capture-pilot-v0.1.0">Ver publicación y verificaciones</a></p>
+      <p>SHA-256 del APK:<br><code>e425bcaae33523d04a66e87da421718cd0206b2b4f94d25f6b51aadc78dd6c95</code></p>
+      <p><a href="https://github.com/Lukikitas/foto-app/releases/tag/android-capture-pilot-v0.2.0">Ver publicación y verificaciones</a></p>
     </details>
     <footer><a href="/">Abrir gestión web</a></footer>
   </main>

@@ -11,6 +11,11 @@ const downloadUrl = document.querySelector('a.download')?.href;
 assert.ok(downloadUrl?.startsWith('https://github.com/Lukikitas/foto-app/releases/download/'));
 const expectedHash = document.querySelector('code')?.textContent.trim();
 assert.match(expectedHash, /^[a-f0-9]{64}$/);
+const manifest = JSON.parse(await readFile('public/manual/piloto-android/update.json', 'utf8'));
+assert.ok(Number.isSafeInteger(manifest.versionCode) && manifest.versionCode > 0);
+assert.equal(manifest.downloadUrl, downloadUrl);
+assert.equal(manifest.sha256, expectedHash);
+assert.ok(downloadUrl.endsWith(`/Delivery-Star-Fotos-${manifest.versionName}.apk`));
 const path = new URL(downloadUrl).pathname.split('/');
 const tag = path[5];
 const filename = path[6];
@@ -42,10 +47,15 @@ if (process.argv.includes('--live')) {
   assert.equal(liveDocument.querySelector('a.download')?.href, downloadUrl);
   assert.equal(liveDocument.querySelector('code')?.textContent.trim(), expectedHash);
   assert.ok(liveDocument.body.textContent.includes('Compartir diagnóstico'));
+  const manifestResponse = await fetch(new URL('update.json', pageUrl), {
+    headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(manifestResponse.status, 200);
+  assert.deepEqual(await manifestResponse.json(), manifest, 'The update banner must offer the same signed APK as the page');
   pageVerified = true;
 }
 const report = { at: new Date().toISOString(), pageUrl, pageVerified, downloadUrl,
-  authenticated: false, prerelease: true, bytes, sha256: expectedHash };
+  authenticated: false, prerelease: true, versionCode: manifest.versionCode, bytes, sha256: expectedHash };
 const folder = 'output/android-camera-20261029.local';
 await mkdir(folder, { recursive: true });
 await writeFile(`${folder}/public-pilot-verification.json`, JSON.stringify(report, null, 2));
