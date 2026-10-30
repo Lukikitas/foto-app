@@ -61,6 +61,12 @@ jobs:
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261023135000_thumbnail_job_permissions.sql
       - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261023135000_thumbnail_job_permissions.sql
       - run: psql -v ON_ERROR_STOP=1 -f tests/database/photo-thumbnails.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029090000_capture_registration.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029090000_capture_registration.sql
+      - run: psql -v ON_ERROR_STOP=1 -f tests/database/capture-registration.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029220000_capture_path_guard.sql
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029220000_capture_path_guard.sql
+      - run: psql -v ON_ERROR_STOP=1 -f tests/database/capture-path-guard.sql
   edge:
     runs-on: ubuntu-latest
     steps:
@@ -73,5 +79,5 @@ jobs:
           deno-version: v2.x
       - run: npm ci
       - run: npm run prepare:thumbnails
-      - run: deno check --node-modules-dir=none --no-lock supabase/functions/performance-data/index.ts supabase/functions/photo-thumbnails/index.ts
+      - run: deno check --node-modules-dir=none --no-lock supabase/functions/performance-data/index.ts supabase/functions/photo-thumbnails/index.ts supabase/functions/capture-sync/index.ts supabase/functions/order-code-recovery/index.ts
       - run: deno test --node-modules-dir=none --no-lock --allow-read supabase/functions/photo-thumbnails/thumbnail_test.ts

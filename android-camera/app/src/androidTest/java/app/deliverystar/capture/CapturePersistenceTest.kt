@@ -56,6 +56,12 @@ class CapturePersistenceTest {
             assertEquals(0, db.captures().repeat(row.id))
             assertEquals(1, db.captures().claim(row.id, System.currentTimeMillis()))
             assertEquals("replacement.jpg", db.captures().get(row.id)!!.evidencePath)
+            val retake = Capture().apply { id = UUID.randomUUID().toString(); author = "QA" }
+            db.captures().insert(retake)
+            assertEquals(1, db.captures().complete(retake.id, "previous-bag.jpg", System.currentTimeMillis() + 5000))
+            assertEquals(1, db.captures().repeat(retake.id))
+            assertEquals(1, db.captures().discardDraft(retake.id))
+            assertNull(db.captures().get(retake.id))
         } finally { db.close() }
     }
     @Test fun pruningCanOnlySelectAcknowledgedHistoryAndKeepsTheLastTwoHundred() {

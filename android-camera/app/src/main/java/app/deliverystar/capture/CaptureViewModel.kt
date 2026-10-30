@@ -76,18 +76,36 @@ class CaptureViewModel(application: Application) : AndroidViewModel(application)
         if (busy) return
         busy = true
         viewModelScope.launch {
-            try { draft = repository.repeatEvidence(row.id); lastPair = null; message = "Ticket conservado. Volvé a sacar la bolsa."; error = "" }
-            catch (_: Exception) { error = "El par ya entró en la cola. Empezá uno nuevo para repetirlo." }
+            try { draft = repository.repeatEvidence(row.id); lastPair = null; qualityWarning = ""; message = "Ticket conservado. Volvé a sacar la bolsa."; error = "" }
+            catch (_: Exception) {
+                val stored = withContext(Dispatchers.IO) { runCatching { repository.dao.get(row.id) }.getOrNull() }
+                if (stored?.state == "DRAFT") { draft = stored; lastPair = null }
+                error = if (draft != null) "Ticket conservado. Reintentá sacar la bolsa."
+                    else "El par ya entró en la cola. Empezá uno nuevo para repetirlo."
+            }
             finally { busy = false }
         }
     }
     fun repeatTicket() {
-        val row = draft ?: return
+        val row = draft ?: lastPair ?: return
         if (busy) return
         busy = true
         viewModelScope.launch {
-            try { repository.discardTicket(row.id); draft = null; error = ""; message = "Volvé a sacar el ticket." }
-            catch (_: Exception) { error = "No se pudo reemplazar el ticket. El anterior sigue guardado." }
+            try {
+                if (draft == null) {
+                    // The same atomic review guard used for Repetir bolsa must
+                    // win before either file can be discarded.
+                    draft = repository.repeatEvidence(row.id)
+                    lastPair = null
+                }
+                repository.discardTicket(row.id)
+                draft = null; qualityWarning = ""; error = ""; message = "Volvé a sacar el ticket."
+            } catch (_: Exception) {
+                val stored = withContext(Dispatchers.IO) { runCatching { repository.dao.get(row.id) }.getOrNull() }
+                if (stored?.state == "DRAFT") { draft = stored; lastPair = null }
+                error = if (draft != null) "No se pudo reemplazar el ticket. El anterior sigue guardado."
+                    else "El par ya entró en la cola y no se cambió. Podés empezar otro par."
+            }
             finally { busy = false }
         }
     }

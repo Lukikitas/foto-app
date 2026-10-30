@@ -20,13 +20,14 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0-pilot"
+        resValue("string", "app_name", "Delivery Star · Fotos")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", quoted(setting("SUPABASE_URL")))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(setting("SUPABASE_ANON_KEY")))
         buildConfigField("String", "WEB_URL", quoted("https://delivery.star-app.com.ar"))
         javaCompileOptions { annotationProcessorOptions { arguments["room.schemaLocation"] = "$projectDir/schemas" } }
     }
-    buildFeatures { compose = true; buildConfig = true }
+    buildFeatures { compose = true; buildConfig = true; resValues = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     signingConfigs {
         if (pilotSigning.getProperty("storeFile") != null) create("pilot") {
@@ -38,6 +39,7 @@ android {
     }
     buildTypes {
         debug {
+            resValue("string", "app_name", "Delivery Star · PRUEBAS")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-test"
             buildConfigField("String", "SUPABASE_URL", quoted("https://android-test.invalid"))

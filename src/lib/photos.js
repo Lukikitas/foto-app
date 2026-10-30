@@ -352,6 +352,9 @@ export function photoMatchesFilters(
 }
 
 async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '', capturedAt = null, { signal, captureId } = {}) {
+  // Very old queue entries can have timestamp/string IDs. Their durable path
+  // remains the identity; do not send an invalid value to the UUID column.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(captureId || '')) captureId = undefined;
   const client = supabaseForSignal(signal);
   const photoMeta = normalizePhotoMeta(meta);
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';

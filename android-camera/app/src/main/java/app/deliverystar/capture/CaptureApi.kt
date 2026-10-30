@@ -14,6 +14,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.File
 import java.io.IOException
 import java.time.Instant
@@ -35,7 +36,7 @@ class CaptureApi(
             .readTimeout(45, TimeUnit.SECONDS).writeTimeout(45, TimeUnit.SECONDS)
             .callTimeout(60, TimeUnit.SECONDS).retryOnConnectionFailure(false).build()
     }
-    suspend fun request(path: String, body: RequestBody, method: String = "POST", extraHeaders: Map<String, String> = emptyMap()): Pair<Int, String> {
+    suspend fun request(path: String, body: RequestBody?, method: String = "POST", extraHeaders: Map<String, String> = emptyMap()): Pair<Int, String> {
         check(base.startsWith("https://") || BuildConfig.DEBUG && base.startsWith("http://127.0.0.1")) { "Falta configurar la conexión de esta instalación." }
         check(key.isNotBlank()) { "Falta configurar la conexión de esta instalación." }
         val builder = Request.Builder().url(base.trimEnd('/') + path).header("apikey", key)
@@ -62,11 +63,20 @@ class CaptureApi(
         // This UUID path is immutable. A duplicate confirms an earlier upload
         // whose acknowledgement was lost; never upsert/rewrite that evidence.
         val duplicate = status == 409 || (status == 400 && runCatching { JSONObject(text).optString("error") == "Duplicate" }.getOrDefault(false))
+        if (duplicate) {
+            // A conflicting upload can still be finishing or rolling back.
+            // Keep evidenceStored=false until the actual object is readable.
+            val (headStatus, _) = request("/storage/v1/object/photos/orders/mobile/${row.id}.jpg", null, "HEAD")
+            if (headStatus !in 200..299) throw ApiFailure(if (headStatus in listOf(400, 404)) 503 else headStatus)
+        }
         if (status !in 200..299 && !duplicate) throw ApiFailure(status)
     }
     suspend fun register(row: Capture): JSONObject {
+        val storedTexts = runCatching { JSONArray(row.ocrText) }.getOrElse { JSONArray().put(row.ocrText) }
+        val texts = JSONArray()
+        for (index in 0 until minOf(2, storedTexts.length())) texts.put(storedTexts.optString(index).take(8_000))
         val payload = JSONObject().put("captureId", row.id).put("takenBy", row.author)
-            .put("capturedAt", Instant.ofEpochMilli(row.createdAt).toString()).put("ocrText", row.ocrText)
+            .put("capturedAt", Instant.ofEpochMilli(row.createdAt).toString()).put("ocrTexts", texts)
         val (status, text) = request("/functions/v1/capture-sync", payload.toString().toRequestBody("application/json".toMediaType()))
         if (status !in 200..299) throw ApiFailure(status)
         return JSONObject(text).getJSONObject("photo").also { check(it.optString("id").isNotBlank()) }

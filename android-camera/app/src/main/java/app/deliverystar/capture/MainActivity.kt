@@ -13,6 +13,8 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +28,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -75,6 +82,7 @@ class MainActivity : ComponentActivity() {
             Column(Modifier.weight(1f)) {
                 Text("DELIVERY STAR", style = MaterialTheme.typography.labelLarge, color = Accent)
                 Text("Fotos de pedidos", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                if (BuildConfig.DEBUG) Text("PRUEBAS · Sin envíos reales", color = Accent, style = MaterialTheme.typography.labelSmall)
             }
             Surface(color = Color(0xFF2B3A44), shape = RoundedCornerShape(12.dp)) {
                 Text("$pending pendientes", Modifier.padding(10.dp), style = MaterialTheme.typography.labelMedium)
@@ -105,7 +113,9 @@ class MainActivity : ComponentActivity() {
     val preview = remember { PreviewView(context).apply { implementationMode = PreviewView.ImplementationMode.PERFORMANCE; scaleType = PreviewView.ScaleType.FIT_CENTER } }
     DisposableEffect(session) { onDispose { session.close() } }
     var repeatAvailable by remember(model.lastPair?.id) { mutableStateOf(model.lastPair != null) }
+    var repeatMenu by remember { mutableStateOf(false) }
     LaunchedEffect(model.lastPair?.id) {
+        repeatMenu = false
         model.lastPair?.let { pair -> delay(maxOf(0, pair.reviewUntil - System.currentTimeMillis())); repeatAvailable = false }
     }
     Column(modifier.imePadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -146,7 +156,13 @@ class MainActivity : ComponentActivity() {
         if (model.qualityWarning.isNotBlank()) Text(model.qualityWarning, color = Accent, style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (model.draft != null) OutlinedButton(onClick = model::repeatTicket, enabled = !model.busy) { Text("Repetir ticket") }
-            if (repeatAvailable && model.lastPair != null) OutlinedButton(onClick = model::repeatEvidence, enabled = !model.busy) { Text("Repetir bolsa") }
+            if (repeatAvailable && model.lastPair != null) Box {
+                OutlinedButton(onClick = { repeatMenu = true }, enabled = !model.busy) { Text("Repetir") }
+                DropdownMenu(expanded = repeatMenu, onDismissRequest = { repeatMenu = false }) {
+                    DropdownMenuItem(text = { Text("Repetir ticket") }, onClick = { repeatMenu = false; model.repeatTicket() })
+                    DropdownMenuItem(text = { Text("Repetir bolsa") }, onClick = { repeatMenu = false; model.repeatEvidence() })
+                }
+            }
             Button(onClick = { keyboard?.hide(); model.take(session) }, enabled = granted && session.ready && !model.busy && !model.loading,
                 modifier = Modifier.weight(1f).heightIn(min = 58.dp), shape = RoundedCornerShape(16.dp)) {
                 Text(if (model.busy) "Guardando…" else if (model.draft == null) "Sacar ticket" else "Sacar bolsa", fontWeight = FontWeight.Bold)
@@ -159,10 +175,32 @@ class MainActivity : ComponentActivity() {
                 Column(Modifier.safeDrawingPadding().padding(16.dp)) {
                     TextButton(onClick = { previewPath = null }) { Text("Cerrar foto") }
                     val actual = if (File(path).exists()) path else "$path.thumb"
-                    val image by produceState<android.graphics.Bitmap?>(null, actual) { value = withContext(Dispatchers.IO) { ImageFiles.thumbnail(actual, 1600) } }
-                    image?.let { Image(it.asImageBitmap(), "Foto guardada", Modifier.weight(1f).fillMaxWidth()) }
+                    val image by produceState<android.graphics.Bitmap?>(null, actual) { value = withContext(Dispatchers.IO) { ImageFiles.thumbnail(actual, 1600) ?: ImageFiles.thumbnail("$path.thumb", 1600) } }
+                    image?.let { ZoomablePreview(it, Modifier.weight(1f).fillMaxWidth()) }
                 }
             }
+        }
+    }
+}
+
+@Composable private fun ZoomablePreview(bitmap: android.graphics.Bitmap, modifier: Modifier) {
+    var scale by remember(bitmap) { mutableFloatStateOf(1f) }
+    var offset by remember(bitmap) { mutableStateOf(Offset.Zero) }
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+    val state = rememberTransformableState { zoom, pan, _ ->
+        scale = (scale * zoom).coerceIn(1f, 6f)
+        val fit = minOf(viewport.width.toFloat() / bitmap.width, viewport.height.toFloat() / bitmap.height)
+        val limitX = maxOf(0f, (bitmap.width * fit * scale - viewport.width) / 2f)
+        val limitY = maxOf(0f, (bitmap.height * fit * scale - viewport.height) / 2f)
+        val next = offset + pan
+        offset = Offset(next.x.coerceIn(-limitX, limitX), next.y.coerceIn(-limitY, limitY))
+    }
+    Column(modifier) {
+        TextButton(onClick = { scale = 1f; offset = Offset.Zero }, enabled = scale > 1f) { Text("Restablecer zoom") }
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().onSizeChanged { viewport = it }) {
+            Image(bitmap.asImageBitmap(), "Foto guardada: ampliá y mové con dos dedos", Modifier.fillMaxSize()
+                .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y }
+                .transformable(state))
         }
     }
 }
@@ -212,7 +250,7 @@ class MainActivity : ComponentActivity() {
 @Composable private fun Thumbnail(original: String, onClick: (() -> Unit)? = null) {
     val path = remember(original) { if (File(original).exists()) original else "$original.thumb" }
     val bitmap by produceState<android.graphics.Bitmap?>(null, path) {
-        value = withContext(Dispatchers.IO) { ImageFiles.thumbnail(path) }
+        value = withContext(Dispatchers.IO) { ImageFiles.thumbnail(path) ?: ImageFiles.thumbnail("$original.thumb") }
         // Let the image lifecycle/GC retire bitmaps after composition releases
         // them. Recycling a bitmap still referenced by RenderThread can crash.
     }

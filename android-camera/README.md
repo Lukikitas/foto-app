@@ -21,7 +21,7 @@ Para preparar el piloto, ejecutar desde la raíz `node scripts/prepare-android-s
 
 ## Activación del backend
 
-1. Aplicar `supabase/migrations/20261029090000_capture_registration.sql` después de las migraciones vigentes. Es aditiva y repetible; no modifica pedidos existentes.
+1. Aplicar `supabase/migrations/20261029090000_capture_registration.sql` y luego `20261029220000_capture_path_guard.sql` después de las migraciones vigentes. Son aditivas y repetibles; no modifican pedidos existentes. La segunda protege también los reenvíos de clientes web anteriores que todavía no incluyen identificador de captura.
 2. Desplegar `capture-sync` con verificación JWT activa. Mantener desplegada `order-code-recovery` y su almacenamiento privado de tickets.
 3. Confirmar evidencia real en un entorno de prueba: primer envío, respuesta perdida, reenvío y corrección manual entre reenvíos. El endpoint reutiliza las reglas JavaScript de códigos actuales para interpretar texto extraído localmente con ML Kit; no agrega llamadas a OCR pago.
 4. Distribuir el APK piloto y comprobar en el Moto G15 los criterios del [roadmap](../docs/camera-reliability-roadmap.md).
@@ -34,6 +34,7 @@ Para preparar el piloto, ejecutar desde la raíz `node scripts/prepare-android-s
 - Una sola tarea procesa imágenes a la vez. Las vistas muestran miniaturas y páginas de 20 elementos; nunca se carga la cola completa de imágenes en RAM.
 - La historia local conserva como máximo 200 pares ya enviados. Su limpieza no elimina pendientes, errores ni la evidencia remota; la galería histórica sigue en la web.
 - Las solicitudes incluyen plazo total y cancelación. La lectura OCR tiene un plazo propio y no bloquea la captura.
+- El OCR local lee ticket y bolsa secuencialmente y conserva lecturas parciales si vence el plazo. El servidor usa las reglas compartidas de confianza; una lectura incierta queda para revisión. Los registros locales de una versión anterior siguen siendo compatibles.
 - WorkManager conserva trabajos tras cierre/reinicio, pero Android puede diferirlos por ahorro de batería. Después de **Forzar detención** hay que volver a abrir la app.
 - El ticket remoto conserva la ventana vigente de 72 horas. Los vencidos se señalan explícitamente, sin confundirlos con tickets enviados.
 - No desinstalar ni borrar datos con pendientes. Los pendientes de la PWA pertenecen al navegador y deben verificarse por separado antes de la migración.

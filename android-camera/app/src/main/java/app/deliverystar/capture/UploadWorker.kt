@@ -16,6 +16,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.IOException
+import org.json.JSONArray
 
 class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     companion object { private val processing = Mutex() }
@@ -50,15 +51,22 @@ class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
             if (!row.ocrAttempted) {
                 ImageFiles.prepare(File(row.ticketPath), ticket, 1600, 86)
                 val reader = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                val texts = JSONArray()
                 try {
-                    val text = withTimeout(10_000) { reader.process(InputImage.fromFilePath(applicationContext, Uri.fromFile(ticket))).await().text }
-                    dao.ocr(id, text.take(16_000))
+                    withTimeout(10_000) {
+                        for (source in listOf(ticket, evidence)) {
+                            while (repository.capturing) delay(200)
+                            if (!source.exists()) ImageFiles.prepare(File(row.evidencePath), evidence, 2400, 90)
+                            texts.put(reader.process(InputImage.fromFilePath(applicationContext, Uri.fromFile(source))).await().text.take(8_000))
+                        }
+                    }
                 } catch (error: Exception) {
                     if (error is CancellationException && error !is TimeoutCancellationException) throw error
                     // The ticket stays available for existing web/cloud review.
-                    dao.ocr(id, "")
                     Diagnostics.record(applicationContext, "ocr.unread")
                 } finally { reader.close() }
+                // Preserve a successful first reading even if the second times out.
+                dao.ocr(id, texts.toString())
             }
             row = dao.get(id)!!
             if (row.photoId.isBlank()) {

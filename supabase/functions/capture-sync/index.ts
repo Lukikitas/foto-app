@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { inspectOrderFromOcrTexts, isCompleteOrderCode, isConfidentOrderMatch } from '../../../src/lib/orderCode.js';
+import { captureOrderFromOcr } from '../../../src/lib/captureOcr.js';
 
 const cors = { 'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
@@ -13,7 +13,7 @@ Deno.serve(async request => {
   if (request.method !== 'POST') return reply({ error: 'Método no permitido.' }, 405);
   try {
     const raw = await request.text();
-    if (raw.length > 32_000) return reply({ error: 'Solicitud demasiado grande.' }, 413);
+    if (raw.length > 40_000) return reply({ error: 'Solicitud demasiado grande.' }, 413);
     const body = JSON.parse(raw);
     const id = String(body.captureId || '').toLowerCase();
     const author = String(body.takenBy || '').trim();
@@ -24,9 +24,7 @@ Deno.serve(async request => {
     }
     // Reuse the exact parsing/validation rules used by the web. ML Kit sends
     // on-device OCR text; this does not invoke a paid cloud OCR provider.
-    const text = String(body.ocrText || '').slice(0, 16_000);
-    const inspection = inspectOrderFromOcrTexts([text]);
-    const order = isCompleteOrderCode(inspection?.order) && isConfidentOrderMatch(inspection) ? inspection!.order : null;
+    const order = captureOrderFromOcr(body);
     const path = `orders/mobile/${id}.jpg`;
     const publicUrl = `${base}/storage/v1/object/public/photos/${path}`;
     const { data, error } = await db.rpc('register_photo_capture', {

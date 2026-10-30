@@ -53,6 +53,13 @@ test('photo uploads reconcile uncertain inserts and scoped clients do not accumu
       assert.equal(state.inserted(), undefined);
       assert.equal(state.removed(), 0);
     });
+    await t.test('pre-UUID queue IDs keep path identity without sending invalid database UUIDs', async child => {
+      const photo = { id: 'legacy-server-row' };
+      const state = fixture(child, [{ data: null }], { data: photo });
+      assert.equal(await uploadFile(file, 'legacy', {}, 'files/old-stable.jpg', null, { captureId: 'legacy-1700000000000' }), photo);
+      assert.equal(Object.hasOwn(state.inserted(), 'capture_id'), false);
+      assert.deepEqual(state.filters, [['file_path', 'files/old-stable.jpg']]);
+    });
     await t.test('a failed existence query stops the upload without guessing that the row is absent', async child => {
       const state = fixture(child, [{ data: null, error: new Error('network offline') }], {});
       await assert.rejects(uploadFile(file, 'test'), /network offline/);
