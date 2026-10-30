@@ -1,6 +1,6 @@
 # Cámara Android desde la web — preparación del turno
 
-Estado: preparado localmente, **sin publicar APK, sin push y sin deploy**. Rama `prepare/native-camera-web-handoff`. Web 1.14.2 y Android 0.4.0-pilot (`versionCode=4`).
+Estado: publicación autorizada por el usuario el 30/10/2026. El APK 0.4.0 ya está publicado y su descarga pública fue verificada. Web 1.14.2 y Android 0.4.0-pilot (`versionCode=4`), preparados en `prepare/native-camera-web-handoff` e integrados mediante el procedimiento siguiente.
 
 ## Recorrido
 
@@ -20,7 +20,7 @@ El APK firmado y su SHA-256 se dejan en `output/native-handoff-20261030.local/`.
 
 `public/manual/piloto-android/release-notes-0.4.0.md` contiene el texto de publicación del APK. Las verificaciones y evidencias locales se registran al final de este documento.
 
-## Orden de publicación, solo cuando se autorice
+## Orden de publicación
 
 1. Revisar la rama y el estado del remoto antes de integrar. Subir primero la rama preparada, sin integrarla todavía en `restore-e44b86f` (esa rama publica Pages automáticamente).
 2. Crear la publicación GitHub **prerelease** `android-capture-pilot-v0.4.0` apuntando al commit preparado, adjuntando `Delivery-Star-Fotos-0.4.0-pilot.apk` y su `.sha256`. Usar el texto de release preparado y conservar `--latest=false`. No reemplazar ni borrar los pilotos anteriores.
@@ -45,4 +45,4 @@ Configurar la variable del repositorio `VITE_NATIVE_CAMERA_ENABLED=false` y volv
 - APK final: 45.725.909 bytes, SHA-256 `2120e89c5629021b416f0d16494ed4e6eeb50721c326af92c3c3f2128b8f5ec3`. Certificado SHA-256 `28e67793dfc8e10c66379c6ee5a37032863279f4a59f9b68ea587783cdab290f`, igual al de los pilotos anteriores. Identificador, versión y firma verificados; alineación de 16 KiB comprobada.
 - `rtk proxy node scripts/verify-prepared-native-handoff.mjs`: coincidencia local entre APK, SHA-256, nombre, versión interna, página, manifiesto de actualización y enlace de apertura. Reporte `output/native-handoff-20261030.local/preparation-verification.json`.
 - Build de frontend aprobado. Conserva el aviso previo del empaquetador sobre `import.meta` en `compressImageInWorker.js` del service worker; este cambio no modifica ese módulo.
-- Falta deliberadamente la comprobación de descarga pública de 0.4.0 y de web publicada: requieren publicar y el usuario pidió esperar. Al autorizar, seguir el orden anterior. La experiencia del celular real durante el turno sigue pendiente.
+- Tras la autorización, se publicó el [APK 0.4.0](https://github.com/Lukikitas/foto-app/releases/tag/android-capture-pilot-v0.4.0), apuntando al commit fuente `fbdaa7df9e958fe792f9dfc28c11b96653289b3c`. La descarga completa sin autenticación pasó la verificación de tamaño y SHA-256. La comprobación de página/manifiesto y versión web se ejecuta después del workflow de Pages. La experiencia del celular real durante el turno sigue pendiente.
