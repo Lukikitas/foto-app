@@ -17,6 +17,7 @@
     p { margin: 12px 0; }
     .intro, .meta { color: var(--muted); }
     .download { display: block; margin: 26px 0 8px; padding: 17px 20px; border-radius: 10px; background: #e4002b; color: white; text-align: center; font-weight: 750; text-decoration: none; }
+    .open-camera { display: block; margin: 14px 0 24px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 10px; text-align: center; font-weight: 650; text-decoration: none; }
     a { color: var(--link); text-underline-offset: 3px; }
     a:focus-visible, summary:focus-visible { outline: 3px solid var(--link); outline-offset: 4px; }
     .meta { font-size: .88rem; }
@@ -36,15 +37,17 @@
   <main>
     <div class="brand">DELIVERY STAR · ANDROID</div>
     <h1>La cámara del local.</h1>
-    <p class="intro">Una cámara para guardar ticket y bolsa antes de enviarlos. Instalá el piloto en el celular de trabajo, sin cables ni computadora.</p>
-    <a class="download" href="https://github.com/Lukikitas/foto-app/releases/download/android-capture-pilot-v0.3.0/Delivery-Star-Fotos-0.3.0-pilot.apk">Descargar actualización 0.3.0</a>
-    <p class="meta">Versión 0.3.0-pilot · 46 MB · Android 8 o posterior</p>
+    <p class="intro">Para sacar ticket y bolsa desde la web necesitás Delivery Star · Fotos. Descargá e instalá la app, o actualizala si ya la tenés.</p>
+    <a class="download" href="https://github.com/Lukikitas/foto-app/releases/download/android-capture-pilot-v0.4.0/Delivery-Star-Fotos-0.4.0-pilot.apk">Descargar app · 0.4.0</a>
+    <p class="meta">Versión 0.4.0-pilot · 46 MB · Android 8 o posterior</p>
+    <a class="open-camera" href="intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture;S.browser_fallback_url=https%3A%2F%2Fdelivery.star-app.com.ar%2Fmanual%2Fpiloto-android%2F;end">Ya la instalé · Abrir cámara</a>
     <p class="note"><strong>Versión piloto.</strong> Las pruebas automáticas pasaron. Falta comprobar cómo funciona durante un turno real en el celular del local.</p>
     <section>
       <h2>1. Actualizá sin borrar los pendientes</h2>
       <ol>
         <li>Abrí el APK descargado. Si Android lo pide, habilitá la instalación desde el navegador que usaste. Si ya tenés el piloto, elegí <strong>Actualizar</strong>: conserva fotos y pendientes. No desinstales ni borres datos.</li>
         <li>Abrí <strong>Delivery Star · Fotos</strong>, permití la cámara e indicá quién toma las fotos.</li>
+        <li>Desde la web, <strong>Sacar foto</strong> abre esta cámara. La versión 0.3.0 y las anteriores necesitan actualizarse para recibir ese enlace. Si la descarga ya terminó, abrí el APK desde <strong>Descargas</strong> del navegador para completar la instalación.</li>
         <li>Al abrir esta versión, los envíos que quedaron con error se reintentan. Los pendientes de la app web o de Foto-app Cámara 1.0.3 son independientes: revisalos allí.</li>
       </ol>
     </section>
@@ -69,8 +72,8 @@
     </section>
     <details>
       <summary>Información de la versión</summary>
-      <p>SHA-256 del APK:<br><code>e0c89898daa0eeb05fc9bd4983d057ca562c8f16090fe0fb7638fefa1e7bcb93</code></p>
-      <p><a href="https://github.com/Lukikitas/foto-app/releases/tag/android-capture-pilot-v0.3.0">Ver publicación y verificaciones</a></p>
+      <p>SHA-256 del APK:<br><code>2120e89c5629021b416f0d16494ed4e6eeb50721c326af92c3c3f2128b8f5ec3</code></p>
+      <p><a href="https://github.com/Lukikitas/foto-app/releases/tag/android-capture-pilot-v0.4.0">Ver publicación y verificaciones</a></p>
     </details>
     <footer><a href="/">Abrir gestión web</a></footer>
   </main>

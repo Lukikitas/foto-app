@@ -160,6 +160,15 @@
   order: var(--nav-order, 0);
 }
 
+.native-camera-entry { width: min(100%, 560px); margin: 0 auto; padding: 20px 16px; }
+.native-camera-entry h1 { margin: 0 0 8px; font-size: 1.6rem; }
+.native-camera-entry > p { margin: 0 0 20px; }
+.native-camera-entry .uploader__hero-camera-btn { text-decoration: none; margin-bottom: 16px; }
+.native-camera-entry .uploader__hero-icon-ring svg { width: 36px; height: 36px; }
+.native-camera-entry .native-camera-entry__hint { font-size: .9rem; line-height: 1.5; margin: 12px 0; opacity: .8; }
+.native-camera-entry__download { display: inline-block; padding: 12px 0; color: inherit; text-underline-offset: 4px; }
+.native-camera-entry a:focus-visible { outline: 3px solid var(--accent, #e4002b); outline-offset: 4px; }
+
 .app-nav__btn--capture { --nav-order: 1; }
 .app-nav__btn--metrics { --nav-order: 2; }
 .app-nav__btn--orders { --nav-order: 3; }

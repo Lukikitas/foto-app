@@ -1,7 +1,7 @@
 {
   "name": "foto-app",
   "private": true,
-  "version": "1.14.1",
+  "version": "1.14.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "node --test src/lib/*.test.js",
-    "test:ui": "node tests/ui/run-performance.mjs && node tests/ui/run-performance.mjs --mobile",
+    "test:ui": "node tests/ui/run-performance.mjs && node tests/ui/run-performance.mjs --mobile && npm run test:native-handoff",
+    "test:native-handoff": "node tests/ui/run-native-camera.mjs && node tests/ui/run-native-camera.mjs --desktop && node tests/ui/run-native-camera.mjs --rollback",
     "prepare:thumbnails": "node scripts/prepare-thumbnail-assets.mjs",
     "test:database": "node tests/database/run-isolated.mjs"
   },

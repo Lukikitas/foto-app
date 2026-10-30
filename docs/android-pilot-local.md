@@ -2,6 +2,8 @@
 
 Actualización para el celular del local, sin USB ni computadora.
 
+La versión 0.4.0 y el acceso desde la web están **preparados localmente, todavía sin publicar**. El orden para activarlos está en [Cámara Android desde la web](native-camera-web-handoff.md). Esta guía describe el piloto 0.3.0 que sigue publicado hasta autorizar el cambio.
+
 ## Cambios
 
 - Una banda fija muestra **1 · TICKET / 2 · BOLSA** y resalta en rojo el paso actual. Sin animaciones, sonidos ni avisos que tapen la cámara.

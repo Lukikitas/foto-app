@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'public/tesseract', 'src/vendor']),
+  globalIgnores(['dist', 'output', 'public/tesseract', 'src/vendor']),
   {
     files: ['vite.config.js', '**/*.test.js'],
     languageOptions: {

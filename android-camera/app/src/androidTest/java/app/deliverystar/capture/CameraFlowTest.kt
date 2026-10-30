@@ -85,6 +85,46 @@ class CameraFlowTest {
         }
     }
 
+    @Test fun webLinkReturnsToCameraAndPreservesTheIncompleteTicketOnWarmAndColdLaunch() {
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand("pm grant ${application.packageName} ${Manifest.permission.CAMERA}"))
+            .bufferedReader().use { it.readText() }
+        val link = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("deliverystar://capture"))
+            .setPackage(application.packageName).addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra("author", "must not replace author").putExtra("return_url", "https://invalid.example")
+        val resolved = application.packageManager.resolveActivity(link, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        assertEquals(MainActivity::class.java.name, resolved?.activityInfo?.name)
+        val author = "QA enlace web"
+        var ticket: Capture? = null
+        var bytes = byteArrayOf()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            var original: MainActivity? = null
+            scenario.onActivity { original = it }
+            setAuthor(author)
+            waitFor("ticket shutter for link") { clickable("Sacar ticket")?.isEnabled == true }
+            clickable("Sacar ticket")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            waitFor("ticket saved before link") { application.repository.dao.draft()?.author == author }
+            ticket = application.repository.dao.draft()!!
+            bytes = File(ticket!!.ticketPath).readBytes()
+            waitFor("bag shutter before link") { clickable("Sacar bolsa")?.isEnabled == true }
+            clickable("Envíos")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            waitFor("queue before link") { findText("Sacar bolsa") == null }
+            application.startActivity(link)
+            waitFor("warm link resumes bag") { clickable("Sacar bolsa")?.isEnabled == true }
+            scenario.onActivity { assertSame("The link must reuse the existing activity", original, it) }
+            assertEquals(ticket!!.id, application.repository.dao.draft()?.id)
+            assertEquals(author, application.repository.dao.draft()?.author)
+            assertArrayEquals(bytes, File(ticket!!.ticketPath).readBytes())
+        }
+        ActivityScenario.launch<MainActivity>(link).use {
+            waitFor("cold link recovers bag") { clickable("Sacar bolsa")?.isEnabled == true }
+            assertEquals(ticket!!.id, application.repository.dao.draft()?.id)
+            assertEquals(author, application.repository.dao.draft()?.author)
+            assertArrayEquals(bytes, File(ticket!!.ticketPath).readBytes())
+        }
+        assertTrue(Diagnostics.export(application).readText().contains("web.camera.open"))
+    }
+
     @Test fun rearLensChooserRemainsAvailableWithoutChangingSavedCaptures() {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand("pm grant ${application.packageName} ${Manifest.permission.CAMERA}"))
             .bufferedReader().use { it.readText() }

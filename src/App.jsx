@@ -14,6 +14,8 @@ import NavIcon from './components/NavIcon';
 import UpdatePrompt from './components/UpdatePrompt';
 const PhotoGallery = lazy(() => import('./components/PhotoGallery'));
 import PhotoUploader from './components/PhotoUploader';
+import NativeCameraEntry from './components/NativeCameraEntry';
+import { nativeCameraLinks, usesNativeCamera } from './lib/nativeCamera';
 import UploadQueueStatus from './components/UploadQueueStatus';
 import './App.css';
 
@@ -48,6 +50,7 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
+  const nativeCapture = usesNativeCamera();
   const [metricsDirty,setMetricsDirty] = useState(false);
   const [focusedCase,setFocusedCase] = useState(null);
   const [metricsRequest, setMetricsRequest] = useState(null);
@@ -114,8 +117,9 @@ export default function App() {
     if (next === TABS.pending) setPendingVisited(true);
     setPendingReturn(fromPending);
     setTab(next);
+    if (next === TABS.capture && nativeCapture) window.location.assign(nativeCameraLinks(window.location.origin).open);
     return true;
-  },[desktop,metricsDirty,pendingDirty,tab]);
+  },[desktop,metricsDirty,pendingDirty,tab,nativeCapture]);
   const manageMetricCase=useCallback(item=>{setFocusedCase(item?.id ? item : null);void navigate(item?.id ? TABS.history : TABS.complaints);},[navigate]);
   const requestCruzar=useCallback(()=>setTab(TABS.complaints),[]);
   const requestHistory=useCallback(()=>setTab(TABS.history),[]);
@@ -196,7 +200,7 @@ export default function App() {
             <DailyPendingPage active={desktop && tab === TABS.pending} onLoadDay={openPendingDay} onLoadComplaints={openPendingComplaints} onCase={openPendingCase} onDirtyChange={setPendingDirty} />
           </Suspense></div>}
           {tab === TABS.capture && (
-            <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
+            nativeCapture ? <NativeCameraEntry /> : <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
           )}
           {tab === TABS.orders && (
             <Suspense fallback={<p className="gallery__state">Cargando galería…</p>}><PhotoGallery

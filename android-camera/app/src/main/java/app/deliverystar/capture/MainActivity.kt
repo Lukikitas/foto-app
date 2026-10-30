@@ -82,8 +82,20 @@ private val Accent = Color(0xFFE4002B)
 private val Overlay = Color(0xB3000000)
 
 class MainActivity : ComponentActivity() {
+    private var webEntry by mutableIntStateOf(0)
+    private fun receiveCaptureLink(incoming: Intent?) {
+        if (CaptureLink.matches(incoming?.action, incoming?.dataString)) {
+            webEntry++
+            Diagnostics.record(this, "web.camera.open")
+        }
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        receiveCaptureLink(intent)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        receiveCaptureLink(intent)
         setContent {
             val model: CaptureViewModel = viewModel()
             val dark = when (model.themeMode) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
@@ -96,7 +108,7 @@ class MainActivity : ComponentActivity() {
                 background = Color(0xFFEFE8E0), surface = Color(0xFFF7F3EE), onSurface = Color(0xFF1C1D20),
                 onSurfaceVariant = Color(0xFF4E535B), outline = Color(0xFFC3B8AC), error = Color(0xFFB42318))
             MaterialTheme(colorScheme = colors, shapes = Shapes(small = RoundedCornerShape(8.dp), medium = RoundedCornerShape(10.dp), large = RoundedCornerShape(12.dp))) {
-                Surface(Modifier.fillMaxSize(), color = colors.background) { CaptureApp(model) }
+                Surface(Modifier.fillMaxSize(), color = colors.background) { CaptureApp(model, webEntry) }
             }
         }
     }
@@ -111,12 +123,19 @@ private fun shareDiagnostics(context: Context) {
     }.onFailure { Toast.makeText(context, "No se pudo preparar el diagnóstico. Revisá el espacio.", Toast.LENGTH_LONG).show() }
 }
 
-@Composable private fun CaptureApp(model: CaptureViewModel) {
+@Composable private fun CaptureApp(model: CaptureViewModel, webEntry: Int) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var tab by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf(false) }
     var editAuthor by remember { mutableStateOf(model.author.isBlank()) }
+    var handledEntry by remember { mutableIntStateOf(0) }
+    LaunchedEffect(webEntry, model.busy) {
+        if (webEntry > handledEntry && !model.busy) {
+            tab = 0
+            handledEntry = webEntry
+        }
+    }
     val pendingSource = remember(model) { model.repository.dao.observePendingCount() }
     val pending by pendingSource.observeAsState(0)
     DisposableEffect(owner) {
