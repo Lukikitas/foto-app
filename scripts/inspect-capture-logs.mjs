@@ -9,5 +9,7 @@ if (!response.ok) throw new Error(`Log service returned HTTP ${response.status}`
 const data = await response.json();
 if (data.error) throw new Error(String(data.error).slice(0, 600));
 // Only the fixed function's invocation/console messages, never metadata or headers.
-const rows = data.result || data.data || [];
+console.log(JSON.stringify({ responseKeys: Object.keys(data) }));
+const rows = data.result || data.data;
+if (!Array.isArray(rows)) throw new Error('Unexpected log service result shape');
 console.log(JSON.stringify(rows.map(row => ({ timestamp: row.timestamp, source: row.source, event: String(row.event_message || '').slice(0, 500) })), null, 2));
