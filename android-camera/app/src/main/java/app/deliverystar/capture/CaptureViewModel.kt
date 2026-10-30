@@ -18,6 +18,8 @@ class CaptureViewModel(application: Application) : AndroidViewModel(application)
     val repository = (application as CaptureApplication).repository
     private val prefs = application.getSharedPreferences("capture-settings", Application.MODE_PRIVATE)
     var author by mutableStateOf(prefs.getString("author", "") ?: "")
+    var themeMode by mutableStateOf(prefs.getString("appearance", "system") ?: "system"); private set
+    fun cycleTheme() { themeMode = when (themeMode) { "system" -> "light"; "light" -> "dark"; else -> "system" }; prefs.edit().putString("appearance", themeMode).apply() }
     var draft by mutableStateOf<Capture?>(null); private set
     var lastPair by mutableStateOf<Capture?>(null); private set
     var busy by mutableStateOf(false); private set
@@ -25,6 +27,23 @@ class CaptureViewModel(application: Application) : AndroidViewModel(application)
     var message by mutableStateOf(""); private set
     var error by mutableStateOf(""); private set
     var qualityWarning by mutableStateOf(""); private set
+    var update by mutableStateOf(AppUpdates.cached(application)); private set
+    var updateNotice by mutableStateOf(""); private set
+    private var updateCheckAt = 0L
+    private var checkingUpdate = false
+
+    fun checkUpdates(force: Boolean = false) {
+        if (checkingUpdate || !force && System.currentTimeMillis() - updateCheckAt < 15 * 60_000) return
+        checkingUpdate = true; updateCheckAt = System.currentTimeMillis()
+        viewModelScope.launch {
+            try {
+                update = withContext(Dispatchers.IO) { AppUpdates.check(getApplication()) }
+                if (force && update == null) updateNotice = "Ya tenés la versión más reciente."
+            } catch (_: Exception) { if (force) updateNotice = "No se pudo comprobar la actualización. Reintentá con conexión." }
+            finally { checkingUpdate = false }
+        }
+    }
+    fun clearUpdateNotice() { updateNotice = "" }
 
     init {
         viewModelScope.launch {
@@ -57,7 +76,6 @@ class CaptureViewModel(application: Application) : AndroidViewModel(application)
                     message = "Par guardado en este celular. Podés seguir."
                     qualityWarning = withContext(Dispatchers.IO) { runCatching { CaptureQuality.inspect(lastPair!!.evidencePath, false) }.getOrDefault("") }
                 }
-                session.requestZoom(1f)
             } catch (failure: Exception) {
                 if (failure is CancellationException && failure !is TimeoutCancellationException) throw failure
                 if (failure is TimeoutCancellationException) session.recover()

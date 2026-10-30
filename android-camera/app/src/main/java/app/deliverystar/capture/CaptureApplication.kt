@@ -18,6 +18,15 @@ class CaptureApplication : Application() {
             Diagnostics.record(this, "process.crash")
             previous?.uncaughtException(thread, error)
         }
-        scope.launch { runCatching { repository.recover() }.onFailure { Diagnostics.record(this@CaptureApplication, "queue.recovery.failed") } }
+        scope.launch {
+            runCatching {
+                val prefs = getSharedPreferences("queue-upgrade", MODE_PRIVATE)
+                if (prefs.getInt("version", 0) < BuildConfig.VERSION_CODE) {
+                    repository.retryAfterUpgrade()
+                    prefs.edit().putInt("version", BuildConfig.VERSION_CODE).commit()
+                }
+                repository.recover()
+            }.onFailure { Diagnostics.record(this@CaptureApplication, "queue.recovery.failed") }
+        }
     }
 }

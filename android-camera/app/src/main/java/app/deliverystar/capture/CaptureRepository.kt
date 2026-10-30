@@ -89,6 +89,12 @@ class CaptureRepository(private val context: Context, val dao: CaptureDao) {
         }
         pruneSent()
     }
+    suspend fun retryAfterUpgrade() = withContext(Dispatchers.IO) {
+        for (row in dao.errorsForUpgrade()) {
+            dao.state(row.id, "READY", "")
+            schedule(row.id)
+        }
+    }
     fun pruneSent() {
         // The web is the historical gallery. Bound the native history to 200
         // acknowledged pairs; never prune drafts, errors or pending transfers.

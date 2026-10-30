@@ -79,13 +79,15 @@ class CaptureApi(
             .put("capturedAt", Instant.ofEpochMilli(row.createdAt).toString()).put("ocrTexts", texts)
         val (status, text) = request("/functions/v1/capture-sync", payload.toString().toRequestBody("application/json".toMediaType()))
         if (status !in 200..299) throw ApiFailure(status)
-        return JSONObject(text).getJSONObject("photo").also { check(it.optString("id").isNotBlank()) }
+        return try { JSONObject(text).getJSONObject("photo").also { if (it.optString("id").isBlank()) throw ApiFailure(502) } }
+        catch (_: org.json.JSONException) { throw ApiFailure(502) }
     }
     suspend fun uploadTicket(photoId: String, file: File): Boolean {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("photoId", photoId)
             .addFormDataPart("ticket", "ticket.jpg", file.asRequestBody("image/jpeg".toMediaType())).build()
         val (status, text) = request("/functions/v1/order-code-recovery", body)
         if (status !in 200..299) throw ApiFailure(status)
-        return JSONObject(text).optBoolean("stored")
+        return try { JSONObject(text).getBoolean("stored") }
+        catch (_: org.json.JSONException) { throw ApiFailure(502) }
     }
 }

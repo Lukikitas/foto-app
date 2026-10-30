@@ -9,6 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import java.io.File
 import java.util.UUID
@@ -17,11 +18,26 @@ import java.util.UUID
 class CameraFlowTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val application = ApplicationProvider.getApplicationContext<CaptureApplication>()
+    @Before fun isolateIncompleteTestDraft() {
+        assertTrue(BuildConfig.DEBUG)
+        assertEquals("https://android-test.invalid", BuildConfig.SUPABASE_URL)
+        application.repository.dao.draft()?.let { draft ->
+            assertTrue("Only our own synthetic draft can be discarded", draft.author.startsWith("QA"))
+            kotlinx.coroutines.runBlocking { application.repository.discardTicket(draft.id) }
+        }
+    }
     private fun waitFor(label: String, predicate: () -> Boolean) {
         val deadline = System.currentTimeMillis() + 25_000
         while (System.currentTimeMillis() < deadline) {
+            // UiAutomation may retain virtual Compose nodes across text/state
+            // updates. Re-fetch the current tree instead of a cached shutter.
+            if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
             if (predicate()) return
             Thread.sleep(150)
+        }
+        instrumentation.uiAutomation.takeScreenshot()?.let { screenshot ->
+            File(application.cacheDir, "failed-camera-test.png").outputStream().use { screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            screenshot.recycle()
         }
         fail("Timed out: $label; UI=${describe(instrumentation.uiAutomation.rootInActiveWindow).take(5000)}")
     }
@@ -29,7 +45,7 @@ class CameraFlowTest {
     // find-by-text shortcut does not traverse all provider implementations.
     private fun findText(text: String, root: AccessibilityNodeInfo? = instrumentation.uiAutomation.rootInActiveWindow): AccessibilityNodeInfo? {
         if (root == null) return null
-        if (root.text?.toString() == text) return root
+        if (root.text?.toString() == text || root.contentDescription?.toString() == text) return root
         for (index in 0 until root.childCount) findText(text, root.getChild(index))?.let { return it }
         return null
     }
@@ -49,6 +65,41 @@ class CameraFlowTest {
         for (index in 0 until root.childCount) editable(root.getChild(index))?.let { return it }
         return null
     }
+    private fun setAuthor(author: String) {
+        if (editable(instrumentation.uiAutomation.rootInActiveWindow) == null) {
+            waitFor("options") { clickable("Opciones") != null }
+            clickable("Opciones")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            waitFor("author option") { clickable("Quién saca las fotos") != null }
+            clickable("Quién saca las fotos")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+        waitFor("author field") { editable(instrumentation.uiAutomation.rootInActiveWindow) != null }
+        editable(instrumentation.uiAutomation.rootInActiveWindow)!!.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,
+            Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, author) })
+        waitFor("confirm author") { clickable("Listo")?.isEnabled == true }
+        clickable("Listo")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    @Test fun pendingUpdateStaysVisibleOfflineWithoutChangingSavedCaptures() {
+        assertTrue(BuildConfig.DEBUG)
+        val prefs = application.getSharedPreferences("app-updates", android.content.Context.MODE_PRIVATE)
+        val previous = prefs.getString("manifest", null)
+        val ids = application.repository.dao.pending().map { it.id }.toSet()
+        prefs.edit().putString("manifest", org.json.JSONObject().put("versionCode", 999)
+            .put("versionName", "prueba futura").put("downloadUrl", "https://github.com/Lukikitas/foto-app/releases/download/test/test.apk").toString()).commit()
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use {
+                setAuthor("QA actualización")
+                waitFor("pending update banner") { findText("Actualización pendiente · prueba futura") != null }
+                assertTrue(clickable("Actualizar")!!.isEnabled)
+                assertEquals(ids, application.repository.dao.pending().map { row -> row.id }.toSet())
+                val screenshot = instrumentation.uiAutomation.takeScreenshot()
+                File(application.cacheDir, "update-screen.png").outputStream().use { output -> screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output) }
+                screenshot.recycle()
+            }
+        } finally {
+            prefs.edit().apply { if (previous == null) remove("manifest") else putString("manifest", previous) }.commit()
+        }
+    }
 
     @Test fun cameraSavesTicketAndBagAndQueuesThePairWithoutWaitingForNetwork() {
         // This test must never send synthetic photos to the real backend.
@@ -59,9 +110,7 @@ class CameraFlowTest {
             .bufferedReader().use { it.readText() }
         ActivityScenario.launch(MainActivity::class.java).use {
             val author = "QA-${UUID.randomUUID().toString().take(8)}"
-            waitFor("author field") { editable(instrumentation.uiAutomation.rootInActiveWindow) != null }
-            editable(instrumentation.uiAutomation.rootInActiveWindow)!!.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,
-                Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, author) })
+            setAuthor(author)
             waitFor("ready shutter") { clickable("Sacar ticket")?.isEnabled == true }
             assertTrue(clickable("Sacar ticket")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             waitFor("durable incomplete ticket") { application.repository.dao.draft()?.author == author }
@@ -90,6 +139,7 @@ class CameraFlowTest {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand("pm grant ${application.packageName} ${Manifest.permission.CAMERA}"))
             .bufferedReader().use { it.readText() }
         ActivityScenario.launch(MainActivity::class.java).use {
+            setAuthor("QA navegación")
             repeat(3) {
                 waitFor("camera ready before navigation") { clickable("Sacar ticket")?.isEnabled == true }
                 assertTrue(clickable("Envíos")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
@@ -106,10 +156,8 @@ class CameraFlowTest {
         val latencies = org.json.JSONArray()
         val memory = org.json.JSONArray().put(android.os.Debug.getPss())
         ActivityScenario.launch(MainActivity::class.java).use {
-            waitFor("author field for continuous capture") { editable(instrumentation.uiAutomation.rootInActiveWindow) != null }
             val author = "QA-stress-${UUID.randomUUID().toString().take(8)}"
-            editable(instrumentation.uiAutomation.rootInActiveWindow)!!.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,
-                Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, author) })
+            setAuthor(author)
             repeat(30) { index ->
                 waitFor("ticket shutter $index") { clickable("Sacar ticket")?.isEnabled == true }
                 var started = android.os.SystemClock.elapsedRealtime()

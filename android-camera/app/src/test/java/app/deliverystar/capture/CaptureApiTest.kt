@@ -13,6 +13,15 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 class CaptureApiTest {
+    @Test fun malformedSuccessResponseRemainsRetryableInsteadOfStrandingTheCapture() = runBlocking {
+        val server = MockWebServer().apply { start() }
+        try {
+            val api = CaptureApi(server.url("/").toString().replace("localhost", "127.0.0.1"), "test-only")
+            server.enqueue(MockResponse().setBody("<html>connection interrupted</html>"))
+            try { api.register(Capture()); fail("Invalid response acknowledged") }
+            catch (error: ApiFailure) { assertEquals(502, error.status); assertTrue(error.retryable) }
+        } finally { server.shutdown() }
+    }
     @Test fun registerPreservesIndependentReadingsAndLegacyPersistedText() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {

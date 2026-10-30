@@ -76,7 +76,10 @@ class UploadRecoveryTest {
         }
     }
 
-    @Test fun fullNativePipelineResumesEachStageAndKeepsOriginalsUntilTicketAcknowledgement() = runBlocking(Dispatchers.IO) {
+    @Test fun fullNativePipelineResumesEachStageAndKeepsOriginalsUntilTicketAcknowledgement() = exerciseRecovery(false)
+    @Test fun unavailableRecognizerStillRegistersAndUploadsThePreservedPhotos() = exerciseRecovery(true)
+
+    private fun exerciseRecovery(failRecognizer: Boolean) = runBlocking(Dispatchers.IO) {
         assertTrue(BuildConfig.DEBUG)
         assertEquals("https://android-test.invalid", BuildConfig.SUPABASE_URL)
         val id = UUID.randomUUID().toString()
@@ -111,7 +114,10 @@ class UploadRecoveryTest {
             // Evidence succeeds, then registration loses its acknowledgement.
             server.enqueue(MockResponse().setBody("{}"))
             server.enqueue(MockResponse().setResponseCode(503))
-            assertEquals(ListenableWorker.Result.retry(), worker.processCapture(repository, api, id))
+            assertEquals(ListenableWorker.Result.retry(), worker.processCapture(repository, api, id) {
+                if (failRecognizer) throw IllegalStateException("Synthetic unavailable recognizer")
+                com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+            })
             val afterEvidence = db.captures().get(id)!!
             assertTrue(afterEvidence.evidenceStored)
             assertTrue(afterEvidence.ocrAttempted)
@@ -126,11 +132,12 @@ class UploadRecoveryTest {
             // A busy cold boot may exhaust the shared OCR deadline after the
             // first reading. That partial result must be preserved exactly;
             // decoding errors must not be mistaken for the documented timeout.
-            assertTrue("The bundled recognizer must read the generated ticket offline", readings.length() in 1..2)
+            if (failRecognizer) assertEquals(0, readings.length())
+            else assertTrue("The bundled recognizer must read the generated ticket offline", readings.length() in 1..2)
             repeat(readings.length()) { assertTrue(readings.getString(it).contains("1234567890")) }
             val events = JSONArray(context.getSharedPreferences("diagnostics", Context.MODE_PRIVATE).getString("events", "[]"))
             val lastOcr = (0 until events.length()).map { events.getJSONObject(it) }.last { it.getString("event").startsWith("ocr.") }
-            assertEquals(if (readings.length() == 2) "ocr.complete" else "ocr.timeout", lastOcr.getString("event"))
+            assertEquals(if (failRecognizer) "ocr.unread" else if (readings.length() == 2) "ocr.complete" else "ocr.timeout", lastOcr.getString("event"))
             assertEquals(readings.length(), lastOcr.getInt("status"))
             if (readings.length() == 1) assertTrue(lastOcr.getLong("duration") >= 9_000)
             assertEquals(registration.getJSONArray("ocrTexts").toString(), afterEvidence.ocrText)

@@ -15,6 +15,32 @@ import java.util.UUID
 @RunWith(AndroidJUnit4::class)
 class CapturePersistenceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    @Test fun upgradeRetriesErrorsWithoutDiscardingAcknowledgementsOrOriginals() = runBlocking {
+        val name = "upgrade-${UUID.randomUUID()}.db"
+        val db = Room.databaseBuilder(context, CaptureDatabase::class.java, name).build()
+        val folder = File(context.cacheDir, "upgrade-${UUID.randomUUID()}").apply { mkdirs() }
+        val row = Capture().apply {
+            id = UUID.randomUUID().toString(); author = "QA"; state = "ERROR"
+            ticketPath = File(folder, "ticket.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }.path
+            evidencePath = File(folder, "evidence.jpg").apply { writeBytes(byteArrayOf(4, 5, 6)) }.path
+            evidenceStored = true; photoId = "already-registered"; ocrAttempted = true
+        }
+        try {
+            db.captures().insert(row)
+            CaptureRepository(context, db.captures()).retryAfterUpgrade()
+            val saved = db.captures().get(row.id)!!
+            assertEquals("READY", saved.state)
+            assertTrue(saved.evidenceStored)
+            assertTrue(saved.ocrAttempted)
+            assertEquals(row.photoId, saved.photoId)
+            assertArrayEquals(byteArrayOf(1, 2, 3), File(saved.ticketPath).readBytes())
+            assertArrayEquals(byteArrayOf(4, 5, 6), File(saved.evidencePath).readBytes())
+        } finally {
+            androidx.work.WorkManager.getInstance(context).cancelUniqueWork("capture-${row.id}").result.get()
+            db.close(); context.deleteDatabase(name)
+            folder.listFiles()?.forEach { it.delete() }; folder.delete()
+        }
+    }
     @Test fun fiveHundredPairsSurviveDatabaseReopenWithOriginalBytesAndAcknowledgements() {
         val name = "recovery-${UUID.randomUUID()}.db"
         var db = Room.databaseBuilder(context, CaptureDatabase::class.java, name).build()

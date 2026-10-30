@@ -14,6 +14,7 @@ public interface CaptureDao {
     @Query("SELECT * FROM captures WHERE state='DRAFT' ORDER BY createdAt LIMIT 1") Capture draft();
     @Query("SELECT * FROM captures WHERE state NOT IN ('SENT','DRAFT') ORDER BY createdAt") List<Capture> pending();
     @Query("SELECT id,state,reviewUntil FROM captures WHERE state NOT IN ('SENT','DRAFT','ERROR') ORDER BY createdAt") List<CaptureWork> pendingWork();
+    @Query("SELECT id,state,reviewUntil FROM captures WHERE state='ERROR' ORDER BY createdAt") List<CaptureWork> errorsForUpgrade();
     @Query("SELECT * FROM captures WHERE state='SENT' ORDER BY createdAt DESC LIMIT 100 OFFSET 200") List<Capture> sentToPrune();
     @Query("DELETE FROM captures WHERE id=:id AND state='SENT'") int deleteSent(String id);
     @Query("SELECT * FROM captures ORDER BY createdAt DESC LIMIT 30") LiveData<List<Capture>> observeRecent();
