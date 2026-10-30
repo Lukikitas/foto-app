@@ -31,7 +31,7 @@ class CameraFlowTest {
         while (System.currentTimeMillis() < deadline) {
             // UiAutomation may retain virtual Compose nodes across text/state
             // updates. Re-fetch the current tree instead of a cached shutter.
-            if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
+            if (android.os.Build.VERSION.SDK_INT >= 34) instrumentation.uiAutomation.clearCache()
             if (predicate()) return
             Thread.sleep(150)
         }
