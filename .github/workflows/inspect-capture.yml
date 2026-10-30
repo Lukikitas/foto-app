@@ -1,0 +1,26 @@
+name: Inspect capture errors
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Start of a UTC window (at most fifteen minutes)
+        required: true
+      end:
+        description: End of the UTC window
+        required: true
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/inspect-capture-logs.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          LOG_START: ${{ inputs.start }}
+          LOG_END: ${{ inputs.end }}
