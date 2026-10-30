@@ -3,6 +3,7 @@ import { dismissUpload, retryUpload, retryAllFailedUploads } from '../lib/upload
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { confirmAction } from '../lib/confirmAction';
 import { IMAGE_READ_ERROR } from '../lib/readImage';
+import { downloadReliabilityReport } from '../lib/reliabilityDiagnostics.js';
 
 const STATUS_LABEL = {
   pending: 'En cola',
@@ -37,10 +38,11 @@ export default function UploadQueueStatus() {
         )}
       </div>
       {activeCount > 0 && (
-        <p className="upload-queue__hint">Podés cambiar de app; la cola sigue subiendo.</p>
+        <p className="upload-queue__hint">Los pendientes guardados se recuperan al volver. El celular puede pausar las subidas mientras esta app está en segundo plano.</p>
       )}
 
       {failedCount > 0 && <div className="upload-queue__hint"><p>{failedCount} foto{failedCount === 1 ? '' : 's'} con error. Reintentá con la app abierta; los pendientes se conservan hasta confirmar la subida.</p><button type="button" className="btn btn--small btn--ghost" onClick={retryAllFailedUploads}>Reintentar todas ({failedCount})</button></div>}
+      <button type="button" className="btn btn--small btn--ghost" onClick={downloadReliabilityReport}>Descargar diagnóstico</button>
       {activeCount>=8 && <p className="upload-queue__hint">Hay {activeCount} tareas pendientes. Las capturas guardadas esperan su turno; el procesamiento se adapta para mantener ágil la cámara.</p>}
       {pageCount>1 && <div className="upload-queue__header"><button className="btn btn--small btn--ghost" disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>Anteriores</button><span>Página {currentPage+1} de {pageCount} · {items.length} tareas</span><button className="btn btn--small btn--ghost" disabled={currentPage===pageCount-1} onClick={()=>setPage(currentPage+1)}>Siguientes</button></div>}
       <ul className="upload-queue__list">

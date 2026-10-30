@@ -66,7 +66,7 @@ export function fileExtension(file, fallback = 'jpg') {
 export function buildStoragePath(item, file) {
   if (item?.storagePath) return item.storagePath;
   const ext = fileExtension(file, file?.type?.startsWith('image/') ? 'jpg' : 'bin');
-  const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+  const id = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(item?.id || '') ? item.id : typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `${Date.now()}`;
   if (item?.kind === 'file') return `files/${id}.${ext}`;
@@ -80,6 +80,7 @@ export function pickStoredQueueRecord(records, owner, now = Date.now(), options 
 
   return [...(records || [])]
     .filter((record) => record?.id && record.status !== 'done' && record.status !== 'error')
+    .filter((record) => !(record.nextAttemptAt > now))
     .sort((left, right) => (left.createdAt || 0) - (right.createdAt || 0))
     .find((record) => {
       if (skipIds?.has(record.id)) return false;

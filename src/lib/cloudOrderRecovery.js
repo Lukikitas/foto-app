@@ -7,23 +7,24 @@ async function client() {
   return (await import('./supabase.js')).supabase;
 }
 
-export async function keepTicketForRecovery(photoId, ticket) {
+export async function keepTicketForRecovery(photoId, ticket, { signal } = {}) {
   if (!cloudRecoveryEnabled || !photoId || !ticket) return false;
   const compressed = await compressImage(ticket, { maxDimension: 1600, jpegQuality: 0.86 });
   const form = new FormData();
   form.set('photoId', photoId);
   form.set('ticket', compressed, 'ticket.jpg');
   const supabase = await client();
-  const { data, error } = await supabase.functions.invoke('order-code-recovery', { body: form });
+  const { data, error } = await supabase.functions.invoke('order-code-recovery', { body: form, signal });
   if (error) throw error;
+  if (!data?.stored) throw Object.assign(new Error('El ticket espera disponibilidad de almacenamiento remoto.'), { status: 503 });
   return Boolean(data?.stored);
 }
 
-export async function recoverOrderCodeInCloud(photoId) {
+export async function recoverOrderCodeInCloud(photoId, { signal } = {}) {
   if (!cloudRecoveryEnabled || !photoId) return null;
   const supabase = await client();
   const { data, error } = await supabase.functions.invoke('order-code-recovery', {
-    body: { action: 'analyze', photoId },
+    body: { action: 'analyze', photoId }, signal,
   });
   if (error) throw error;
   return data?.code ? {

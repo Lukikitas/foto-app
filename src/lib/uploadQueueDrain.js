@@ -36,6 +36,7 @@ export async function processStoredUploadQueue(overrides = {}) {
   storedDrain = (async () => {
     try {
       const seen = new Set();
+      let retryScheduled = false;
       let waitedForPageLease = false;
       let records = await listQueueSummaries();
       let rescanned = false;
@@ -58,6 +59,9 @@ export async function processStoredUploadQueue(overrides = {}) {
               continue;
             }
           }
+          // Reject a background sync with retryable pending work so the browser
+          // can schedule another sync instead of treating this as a full drain.
+          if (retryScheduled && owner === QUEUE_OWNER.sw) throw new Error('Hay subidas pendientes de reintento por conexión.');
           return;
         }
         seen.add(record.id);
@@ -80,6 +84,7 @@ export async function processStoredUploadQueue(overrides = {}) {
             },
             ...itemOverrides,
           });
+          if (result?.retryScheduled) retryScheduled = true;
           if (result?.yielded) continue;
         } catch (error) {
           console.error(error);

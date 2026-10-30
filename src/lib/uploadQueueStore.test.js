@@ -164,3 +164,10 @@ test('a browser without IndexedDB must not report a memory-only capture as saved
   try {useQueueStoreForTests(null);await assert.rejects(putQueueRecord(serializeQueueRecord(sampleItem())),/no permite guardar la cola/);}
   finally {if(previous===undefined)delete globalThis.window;else globalThis.window=previous;}
 });
+test('old transient network errors resume automatically after a restart', () => {
+  const original = serializeQueueRecord({ id: 'legacy-network', file: new File(['evidence'], 'evidence.jpg'), status: 'error', error: 'Failed to fetch' });
+  const restored = hydrateQueueRecord(original);
+  assert.equal(restored.status, 'pending');
+  assert.equal(restored.error, null);
+  assert.equal(restored.file.size, 8);
+});

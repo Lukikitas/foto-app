@@ -55,7 +55,7 @@ test('1,000 parked captures retain no binary files and reload exact evidence and
     const loaded=hydrateQueueRecord(await store.get(parked.id));
     assert.deepEqual(new Uint8Array(await loaded.file.arrayBuffer()),Uint8Array.of(Number(loaded.id)%256,17));
     assert.deepEqual(new Uint8Array(await loaded.ticketFile.arrayBuffer()),Uint8Array.of(5,Number(loaded.id)%256));
-    assert.equal(loaded.status,'error');assert.equal(loaded.createdAt,1700000000000+Number(loaded.id));assert.equal(loaded.storagePath,'orders/'+loaded.id+'.jpg');assert.equal(loaded.file.name,'evidence-'+loaded.id+'.jpg');
+    assert.equal(loaded.status,'pending');assert.equal(loaded.error,null);assert.equal(loaded.createdAt,1700000000000+Number(loaded.id));assert.equal(loaded.storagePath,'orders/'+loaded.id+'.jpg');assert.equal(loaded.file.name,'evidence-'+loaded.id+'.jpg');
   }
 });
 test('unsaved and failed captures keep their only in-memory copies',()=>{

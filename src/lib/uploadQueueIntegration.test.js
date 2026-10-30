@@ -23,7 +23,7 @@ test('page queue parks 135 captures, loads one pair at a time and restores failu
     assert.equal(processed,135);assert.equal(reads,135);assert.equal((await store.list()).length,135);
     // Error persistence normally belongs to the real processor. Simulate its record,
     // then restart the page and verify the same IDs and original bytes remain.
-    for(const row of await store.list())await store.put({...row,status:'error',error:'network offline'});
+    for(const row of await store.list())await store.put({...row,status:'error',error:'archivo inválido'});
     queue.resetUploadQueueForTests({processor});const restored=await queue.restorePersistedQueue();
     assert.equal(restored.length,135);assert.ok(restored.every(item=>item.status==='error'));
     for(const row of await store.list())assert.equal(row.file.size,1);

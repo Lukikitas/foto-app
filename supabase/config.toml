@@ -6,3 +6,6 @@ verify_jwt = true
 [functions.photo-thumbnails]
 verify_jwt = true
 static_files = ["./functions/photo-thumbnails/assets/*"]
+[functions.capture-sync]
+verify_jwt = true
+

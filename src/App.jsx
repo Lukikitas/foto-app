@@ -2,7 +2,8 @@ import { confirmAction } from './lib/confirmAction';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { PHOTO_GALLERY_KINDS } from './lib/photos';
 import { activity } from './lib/activity';
-import { restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
+import { enqueue, restorePersistedQueue, setUploadCompleteHandler } from './lib/uploadQueue';
+import { recoverCompletedCaptureDrafts } from './lib/captureDraftStore.js';
 import { getTheme, saveTheme } from './lib/theme';
 import { isPhoneViewport, PHONE_MEDIA_QUERY } from './lib/viewport';
 import { APP_VERSION } from './lib/version';
@@ -79,6 +80,7 @@ export default function App() {
       setRefreshKey((k) => k + 1);
     });
     restorePersistedQueue();
+    void recoverCompletedCaptureDrafts(enqueue).catch(error => console.error('Se conserva el borrador pendiente de recuperación.', error));
   }, []);
 
   useEffect(() => {

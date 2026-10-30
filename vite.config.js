@@ -52,6 +52,8 @@ function tesseractAssets() {
 export default defineConfig({
   // Dominio propio de GitHub Pages: https://delivery.star-app.com.ar/
   base: '/',
+  // Android/QA reports are not application entrypoints.
+  optimizeDeps: { entries: ['index.html'] },
   build: {
     rolldownOptions: {
       output: { codeSplitting: { groups: [

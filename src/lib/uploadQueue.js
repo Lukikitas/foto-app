@@ -1,6 +1,7 @@
 import { releaseQueueFiles, mergeQueueStateWithStoredFiles } from './queueMemory.js';
 import { activity } from './activity.js';
 import { measurePerformance } from './performanceMetrics.js';
+import { queueItemReady } from './uploadRetry.js';
 import { checkpointUploadQueue, canRetireMissingItem } from './uploadQueueSafety.js';
 import { detectOrderFromPhoto } from './orderOcr.js';
 import { compressImageInWorker as compressImage } from './compressImageInWorker.js';
@@ -166,6 +167,8 @@ export function subscribe(listener) {
 }
 
 export async function enqueue({
+  id: captureId,
+  createdAt = Date.now(),
   file,
   ticketFile,
   kind = 'order',
@@ -174,8 +177,22 @@ export async function enqueue({
   aggregator = '',
   meta,
 }) {
+  const id = captureId || crypto.randomUUID();
+  const current = queue.find(item => item.id === id);
+  if (current) {
+    if (current.initialPersistPending) await persistLocks.get(id);
+    if (current.localSaveFailed) throw new Error('No se pudo guardar el par. Conservá el borrador.');
+    return id;
+  }
+  const stored = captureId ? await getQueueRecord(id) : null;
+  if (stored) { await syncQueueFromStore([id]); return id; }
+  if (queue.some(item => item.id === id)) {
+    await persistLocks.get(id);
+    if (queue.find(item => item.id === id)?.localSaveFailed) throw new Error('No se pudo guardar el par. Conservá el borrador.');
+    return id;
+  }
   const item = {
-    id: crypto.randomUUID(),
+    id,
     file,
     ticketFile,
     kind,
@@ -189,7 +206,7 @@ export async function enqueue({
     status: 'pending',
     initialPersistPending: true,
     error: null,
-    createdAt: Date.now(),
+    createdAt,
     storagePath: '',
   };
 
@@ -223,6 +240,7 @@ export function retryUpload(id) {
 
   item.status = 'pending';
   item.error = null;
+  item.nextAttemptAt = 0;
   item.initialPersistPending = true;
   notify();
   void persistItem(item, { reportError: true })
@@ -286,7 +304,7 @@ async function processQueue() {
   }
 
   const now = Date.now();
-  const next = queue.find((entry) => entry.status === 'pending'
+  const next = queue.find((entry) => queueItemReady(entry, now)
     && !entry.initialPersistPending
     && !isForeignLeaseActive(entry, getQueueOwner(), now));
   if (leaseRetryTimer) {
@@ -295,9 +313,12 @@ async function processQueue() {
   }
   if (!next) {
     const blocked = queue.filter((entry) => entry.status === 'pending'
-      && isForeignLeaseActive(entry, getQueueOwner(), now));
+      && (entry.nextAttemptAt > now || isForeignLeaseActive(entry, getQueueOwner(), now)));
     if (blocked.length) {
-      const delay = Math.max(100, Math.min(...blocked.map((entry) => entry.leaseUntil)) - now + 50);
+      const delay = Math.max(100, Math.min(...blocked.map((entry) => Math.max(
+        entry.nextAttemptAt || 0,
+        isForeignLeaseActive(entry, getQueueOwner(), now) ? entry.leaseUntil : 0,
+      ))) - now + 50);
       leaseRetryTimer = setTimeout(() => {
         leaseRetryTimer = null;
         void syncQueueFromStore().then(() => processQueue());
@@ -389,6 +410,7 @@ async function syncQueueImpl(ids) {
       current.orderDigits = hydrated.orderDigits;
       current.aggregator = hydrated.aggregator;
       current.storagePath = hydrated.storagePath;
+      for (const key of ['retryAttempt', 'nextAttemptAt', 'uploadedPhoto', 'ticketUploaded']) current[key] = hydrated[key];
       current.file=null; current.ticketFile=null; current.filesUnloaded=true;current.persisted=true;
       for(const key of ['fileName','fileType','ticketName','ticketType','hasFile','hasTicket','fileSize','ticketSize'])current[key]=hydrated[key];
       current.leaseOwner = hydrated.leaseOwner;

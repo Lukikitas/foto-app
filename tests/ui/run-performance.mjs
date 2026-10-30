@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 import { act } from 'react';
+import { IDBFactory } from 'fake-indexeddb';
 
 // React DOM integration, no real browser, camera, credentials or remote writes.
 process.env.VITE_SUPABASE_URL='https://fixture.supabase.co';
@@ -11,6 +12,7 @@ const pageSize=process.argv.includes('--mobile')?30:100;
 for(const key of ['window','document','navigator','localStorage','sessionStorage','HTMLElement','Element','MutationObserver','Event','MouseEvent'])
   Object.defineProperty(globalThis,key,{configurable:true,writable:true,value:key==='window'?dom.window:dom.window[key]});
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+globalThis.indexedDB = new IDBFactory();
 window.matchMedia=()=>({matches:pageSize===30,addEventListener(){},removeEventListener(){}});
 globalThis.BroadcastChannel=class extends EventTarget { postMessage() {} close() {} };
 window.scrollTo=()=>{};

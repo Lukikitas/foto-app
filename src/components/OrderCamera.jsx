@@ -10,6 +10,7 @@ import { inspectCaptureCanvas, isSameCapturedScene, pickSharpest } from '../lib/
 import PhotoLightbox from './PhotoLightbox';
 import PhotographerPicker from './PhotographerPicker';
 import useCameraControls from './useCameraControls';
+import { saveCaptureDraft, getCaptureDraft, deleteCaptureDraft, listCaptureDraftIds } from '../lib/captureDraftStore.js';
 
 const STEPS = {
   ticket: 'ticket',
@@ -170,7 +171,7 @@ function getLiveTrack(stream) {
   return stream?.getVideoTracks?.()[0] || null;
 }
 
-export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, onCancel }) {
+export default function OrderCamera({ takenBy, captureMeta, onTakenByChange, onCapturePair, onCancel }) {
   useEffect(() => {
     activity.setCamera(true);
     return () => activity.setCamera(false);
@@ -178,6 +179,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   const videoRef = useRef(null);
   const ticketFileRef = useRef(null);
   const ticketUpgradeRef = useRef(null);
+  const draftRef = useRef(null);
+  const [restoringDraft, setRestoringDraft] = useState(true);
   const pendingPairRef = useRef(null);
   const flashOnRef = useRef(getCameraFlash());
   const [step, setStep] = useState(STEPS.ticket);
@@ -200,6 +203,24 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   const flushRef = useRef(() => {});
   const [takenByHistory, setTakenByHistory] = useState(getTakenByHistory);
   const [whoOpen, setWhoOpen] = useState(() => !takenBy?.trim());
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      for (const id of await listCaptureDraftIds()) {
+        const draft = await getCaptureDraft(id);
+        if (!draft?.ticketFile || draft.evidenceFile || cancelled) continue;
+        draftRef.current = draft;
+        ticketFileRef.current = draft.ticketFile;
+        adoptStrip({ ticketUrl: URL.createObjectURL(draft.ticketFile) });
+        setStep(STEPS.evidence);
+        setToast('Ticket recuperado — sacá la bolsa');
+        break;
+      }
+    })().catch(error => { if (!cancelled) setError(error.message); })
+      .finally(() => { if (!cancelled) setRestoringDraft(false); });
+    return () => { cancelled = true; };
+  }, [setError]);
 
   useEffect(() => {
     flashOnRef.current = flashOn;
@@ -238,6 +259,9 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   }, []);
 
   function resetToTicket() {
+    const discarded = draftRef.current;
+    draftRef.current = null;
+    if (discarded) void deleteCaptureDraft(discarded.id).catch(error => setError(error.message));
     ticketFileRef.current = null;
     ticketUpgradeRef.current = null;
     setStep(STEPS.ticket);
@@ -296,12 +320,16 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   }
 
   function commitPair(pair) {
-    const { ticketFile, ticketUpgrade, evidenceFile, evidenceUpgrade } = pair;
-    void Promise.all([ticketUpgrade || null, evidenceUpgrade || null])
-      .then(([betterTicket, betterEvidence]) => onCapturePair({
-        ticketFile: betterTicket || ticketFile,
-        evidenceFile: betterEvidence || evidenceFile,
-      }))
+    // The frozen frame is already durable. Preserve the optional sharper still
+    // when available without reopening the original in-memory-only interval.
+    void Promise.all([pair.ticketUpgrade || null, pair.evidenceUpgrade || null])
+      .then(async ([ticket, evidence]) => {
+        if (ticket || evidence) {
+          try { await saveCaptureDraft({ ...pair, ticketFile: ticket || pair.ticketFile, evidenceFile: evidence || pair.evidenceFile }); }
+          catch { /* The previously committed frozen-frame draft is still safe. */ }
+        }
+        return onCapturePair({ draftId: pair.id, ticketFile: pair.ticketFile, evidenceFile: pair.evidenceFile });
+      })
       .then(() => {
         setQueuedPairs((count) => count + 1);
         // Only mark the strip as saved when it still shows this very pair.
@@ -337,6 +365,8 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     pendingPairRef.current = null;
     ticketFileRef.current = pending.pair.ticketFile;
     ticketUpgradeRef.current = pending.pair.ticketUpgrade;
+    draftRef.current = { ...pending.pair, evidenceFile: null };
+    void saveCaptureDraft(draftRef.current).catch(error => setError(error.message));
     adoptStrip({ ticketUrl: stripUrlsRef.current.ticket });
     setStep(STEPS.evidence);
     void camera.resetForStep(false);
@@ -358,6 +388,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       if (pending) {
         window.clearTimeout(pending.timer);
         pendingPairRef.current = null;
+        void deleteCaptureDraft(pending.pair.id).catch(error => setError(error.message));
       }
       resetToTicket();
     } else {
@@ -366,7 +397,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
   }
 
   async function handleCapture() {
-    if (status !== 'ready' || takingPhoto || zoomBusy) return;
+    if (status !== 'ready' || takingPhoto || zoomBusy || restoringDraft) return;
     activity.touch();
 
     if (!takenBy?.trim()) {
@@ -396,6 +427,10 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
           !hardwareZoom && zoom > 1,
           captureWorkPolicy({pendingTasks,deviceMemory:navigator.deviceMemory}),
         ));
+        const draft = { id: crypto.randomUUID(), createdAt: Date.now(), ticketFile: shot.file,
+          meta: { ...captureMeta, taken_by: takenBy.trim(), has_complaint: false } };
+        await saveCaptureDraft(draft);
+        draftRef.current = draft;
         ticketFileRef.current = shot.file;
         ticketUpgradeRef.current = shot.upgrade;
         adoptStrip({ ticketUrl: URL.createObjectURL(shot.file) });
@@ -419,13 +454,15 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
       ));
       const ticketFile = ticketFileRef.current;
       const ticketUpgrade = ticketUpgradeRef.current;
-      ticketFileRef.current = null;
-      ticketUpgradeRef.current = null;
       if (!ticketFile) {
         throw new Error('Falta la foto del ticket. Volvé a empezar el par.');
       }
 
-      const pair = { ticketFile, ticketUpgrade, evidenceFile: shot.file, evidenceUpgrade: shot.upgrade };
+      const pair = { ...draftRef.current, ticketFile, ticketUpgrade, evidenceFile: shot.file, evidenceUpgrade: shot.upgrade };
+      await saveCaptureDraft(pair);
+      draftRef.current = null;
+      ticketFileRef.current = null;
+      ticketUpgradeRef.current = null;
       // Every pair stays pending for a few seconds so the strip can offer
       // "Repetir"; it is queued in the background on the next shutter press,
       // on cancel/unmount or as soon as the app goes to the background.
@@ -440,7 +477,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
         evidenceUrl: URL.createObjectURL(shot.file),
         pair,
       });
-      showToast('Par listo ✓');
+      showToast('Guardado en este celular ✓');
       if (navigator.vibrate) navigator.vibrate([35, 50, 45]);
       setError(null);
       setStep(STEPS.ticket);
@@ -468,7 +505,7 @@ export default function OrderCamera({ takenBy, onTakenByChange, onCapturePair, o
     : isTicketStep
       ? 'Sacar foto del ticket'
       : 'Sacar foto de la bolsa';
-  const canCapture = status === 'ready' && !takingPhoto && !zoomBusy && photographerReady;
+  const canCapture = status === 'ready' && !takingPhoto && !zoomBusy && photographerReady && !restoringDraft;
   const qualityMessage = {
     dark: 'La foto salió oscura.',
     blurry: 'La foto podría estar movida.',

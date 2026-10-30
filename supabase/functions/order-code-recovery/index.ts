@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { inspectOrderFromOcrTexts, isCompleteOrderCode } from '../../../src/lib/orderCode.js';
 import { detectAggregator } from '../../../src/lib/aggregators.js';
 import { evaluateScheduledReadings } from '../../../src/lib/recoveryConfidence.js';
+import { ensureTicketStored } from '../../../src/lib/ticketUploadProtocol.js';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -361,25 +362,22 @@ Deno.serve(async (request) => {
       if (Date.now() - new Date(photo.created_at).getTime() > 72 * 60 * 60 * 1000) {
         return reply({ error: 'El plazo para guardar el ticket terminó.' }, 409);
       }
-      const { data: existingTicket } = await db.from('unresolved_ticket_refs')
-        .select('photo_id').eq('photo_id', photoId).maybeSingle();
-      if (existingTicket) return reply({ stored: true, cached: true });
       const path = `${photoId}.jpg`;
-      const { data: reserved, error: reserveError } = await db.rpc('reserve_order_ticket', {
-        ticket_photo_id: photoId,
-        ticket_path: path,
-        ticket_bytes: ticket.size,
-      });
-      if (reserveError) throw reserveError;
-      if (!reserved) return reply({ stored: false, reason: 'quota' });
-      const { error } = await db.storage.from(TICKET_BUCKET).upload(path, ticket, {
-        upsert: false, contentType: ticket.type,
-      });
-      if (error) {
-        await db.from('unresolved_ticket_refs').delete().eq('photo_id', photoId);
-        return reply({ stored: false, reason: 'storage' });
-      }
-      return reply({ stored: true });
+      return reply(await ensureTicketStored({
+        findReference: async () => checked(await db.from('unresolved_ticket_refs')
+          .select('photo_id').eq('photo_id', photoId).maybeSingle()).data,
+        reserve: async () => Boolean(checked(await db.rpc('reserve_order_ticket', {
+          ticket_photo_id: photoId, ticket_path: path, ticket_bytes: ticket.size,
+        })).data),
+        exists: async () => {
+          const { data, error } = await db.storage.from(TICKET_BUCKET).exists(path);
+          if (error && ![400, 404].includes(Number((error as { status?: number }).status))) throw error;
+          return data;
+        },
+        upload: async () => { checked(await db.storage.from(TICKET_BUCKET).upload(path, ticket, {
+          upsert: false, contentType: ticket.type,
+        })); },
+      }));
     }
     const body = await request.json();
     if (body.action === 'cleanup') {

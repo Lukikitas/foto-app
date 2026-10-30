@@ -3,6 +3,8 @@ import { EVIDENCE_IMAGE_OPTIONS } from './compressImage.js';
 import { buildStoragePath, isDocumentHidden, itemNeedsOcr } from './uploadQueueProtocol.js';
 import { saveUnresolvedTicket } from './unresolvedTicketStore.js';
 import { measurePerformance } from './performanceMetrics.js';
+import { scheduleUploadRetry } from './uploadRetry.js';
+import { recordReliability } from './reliabilityDiagnostics.js';
 
 function releaseTicket(item) {
   item.ticketFile = null;
@@ -74,7 +76,7 @@ export async function processQueueItem(item, options = {}) {
   }, 8000);
 
   try {
-    if (itemNeedsOcr(item)) {
+    if (itemNeedsOcr(item) && !item.uploadedPhoto) {
       item.status = 'analyzing';
       item.label = 'Leyendo el código…';
       notify();
@@ -108,7 +110,7 @@ export async function processQueueItem(item, options = {}) {
     notify();
     await persist(item);
 
-    const preparedFile = item.file?.type?.startsWith('image/')
+    const preparedFile = !item.uploadedPhoto && item.file?.type?.startsWith('image/')
       ? await measurePerformance('queue.compress', () => compressImage(item.file, item.kind === 'order' ? EVIDENCE_IMAGE_OPTIONS : undefined))
       : item.file;
 
@@ -124,9 +126,12 @@ export async function processQueueItem(item, options = {}) {
     notify();
     await persist(item);
 
-    let photo;
-    if (item.kind === 'file') {
-      photo = await uploadFile(preparedFile, item.title, item.meta, item.storagePath, capturedAt);
+    let photo = item.uploadedPhoto;
+    if (photo) {
+      // Evidence and registration are already acknowledged. A ticket retry must
+      // never repeat the evidence upload or recreate its database record.
+    } else if (item.kind === 'file') {
+      photo = await uploadFile(preparedFile, item.title, item.meta, item.storagePath, capturedAt, { signal, captureId: item.id });
     } else if (item.orderDigits) {
       photo = await uploadPhoto(
         preparedFile,
@@ -135,6 +140,7 @@ export async function processQueueItem(item, options = {}) {
         item.aggregator,
         item.storagePath,
         capturedAt,
+        { signal, captureId: item.id },
       );
     } else if (detectedOrder?.aggregator) {
       photo = await uploadPhoto(
@@ -144,28 +150,43 @@ export async function processQueueItem(item, options = {}) {
         detectedOrder.aggregator,
         item.storagePath,
         capturedAt,
+        { signal, captureId: item.id },
       );
     } else {
-      photo = await uploadUnidentifiedOrder(preparedFile, item.meta, item.storagePath, capturedAt);
+      photo = await uploadUnidentifiedOrder(preparedFile, item.meta, item.storagePath, capturedAt, { signal, captureId: item.id });
     }
+    if (!photo?.id) throw new Error('El servidor no confirmó la foto. Conservá el pendiente.');
+    item.uploadedPhoto = photo;
+    await persist(item);
 
     if (item.ticketFile && !item.orderDigits && item.kind === 'order') {
       if (!photo?.id) throw new Error('No se pudo conservar el ticket sin identificar.');
       await retainUnresolvedTicket(photo.id, item.ticketFile);
     }
-    if (item.ticketFile && item.kind === 'order' && photo?.id && keepTicketForRecovery) {
+    if (item.ticketFile && item.kind === 'order' && !item.ticketUploaded && keepTicketForRecovery) {
       // Todos los pedidos conservan su ticket en Supabase durante 72 h para
       // poder verlo desde Editar, aunque el código ya se haya encontrado.
       // Un fallo (cuota, red, ventana) no detiene el resto del proceso.
       try {
-        await keepTicketForRecovery(photo.id, item.ticketFile);
+        item.ticketUploaded = await keepTicketForRecovery(photo.id, item.ticketFile, { signal });
+        if (!item.ticketUploaded && item.orderDigits) await retainUnresolvedTicket(photo.id, item.ticketFile);
+        await persist(item);
       } catch (ticketError) {
+        if (scheduleUploadRetry(item, ticketError)) {
+          recordReliability('queue.retry', { attempt: item.retryAttempt, delay: item.nextAttemptAt - Date.now() });
+          notify();
+          await persist(item, { holdLease: false });
+          return { retryScheduled: true, photo };
+        }
+        // Keep a recoverable local ticket even when a permanent quota or server
+        // configuration error prevents its remote transfer.
+        await retainUnresolvedTicket(photo.id, item.ticketFile);
         console.warn('No se pudo subir el ticket; la foto se sube igual.', ticketError);
       }
     }
     if (!item.orderDigits && item.kind === 'order' && photo?.id && recoverOrderCodeInCloud) {
       try {
-        const recovered = await recoverOrderCodeInCloud(photo.id);
+        const recovered = await recoverOrderCodeInCloud(photo.id, { signal });
         if (recovered?.displayCode && recovered.reliable && recovered.aggregator) {
           photo = await uploadPhoto(
             preparedFile,
@@ -174,6 +195,7 @@ export async function processQueueItem(item, options = {}) {
             recovered.aggregator,
             item.storagePath,
             capturedAt,
+            { signal, captureId: item.id },
           );
           item.orderDigits = recovered.displayCode;
           item.aggregator = recovered.aggregator;
@@ -193,6 +215,13 @@ export async function processQueueItem(item, options = {}) {
   } catch (error) {
     if (isInterrupted(error, shouldYield, signal)) return yieldNow();
     if (item.status === 'analyzing' && isDocumentHidden()) return yieldNow();
+    if (scheduleUploadRetry(item, error)) {
+      recordReliability('queue.retry', { attempt: item.retryAttempt, delay: item.nextAttemptAt - Date.now() });
+      notify();
+      await persist(item, { holdLease: false });
+      return { retryScheduled: true };
+    }
+    recordReliability('queue.error');
     const analyzing = item.status === 'analyzing';
     item.status = 'error';
     item.error = error.message || (analyzing ? OCR_ENGINE_ERROR : 'Error al subir la foto.');

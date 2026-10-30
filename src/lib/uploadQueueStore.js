@@ -1,6 +1,7 @@
 import { queueRecordSummary } from './queueMemory.js';
 import { OCR_ENGINE_ERROR } from './tesseractAssets.js';
 import { itemNeedsOcr } from './uploadQueueProtocol.js';
+import { isTransientUploadError } from './uploadRetry.js';
 
 const DB_NAME = 'foto-app-upload-queue';
 const DB_VERSION = 1;
@@ -43,6 +44,10 @@ export function serializeQueueRecord(item) {
     ticketName: item.ticketFile?.name || item.ticketName || '',
     ticketType: item.ticketFile?.type || item.ticketType || '',
     storagePath: item.storagePath || '',
+    retryAttempt: item.retryAttempt || 0,
+    nextAttemptAt: item.nextAttemptAt || 0,
+    uploadedPhoto: item.uploadedPhoto || null,
+    ticketUploaded: Boolean(item.ticketUploaded),
     leaseOwner: item.leaseOwner || null,
     leaseUntil: item.leaseUntil || 0,
   };
@@ -69,7 +74,8 @@ export function hydrateQueueRecord(record, {includeFiles=true} = {}) {
   const file = includeFiles ? fileFromStoredBlob(record.file, record.fileName, record.fileType) : null;
   if (includeFiles && !file) return null;
 
-  const resume = isInterruptedQueueStatus(record.status) || isRetryableBackgroundOcrError(record);
+  const resume = isInterruptedQueueStatus(record.status) || isRetryableBackgroundOcrError(record)
+    || record.status === 'error' && isTransientUploadError({ message: record.error });
   return {
     id: record.id,
     file,
@@ -88,6 +94,10 @@ export function hydrateQueueRecord(record, {includeFiles=true} = {}) {
     error: resume ? null : record.error || null,
     createdAt: record.createdAt || Date.now(),
     storagePath: record.storagePath || '',
+    retryAttempt: record.retryAttempt || 0,
+    nextAttemptAt: record.nextAttemptAt || 0,
+    uploadedPhoto: record.uploadedPhoto || null,
+    ticketUploaded: Boolean(record.ticketUploaded),
     leaseOwner: record.leaseOwner || null,
     leaseUntil: record.leaseUntil || 0,
   };

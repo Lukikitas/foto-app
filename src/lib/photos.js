@@ -1,6 +1,6 @@
 import { endOfDateTime, endOfDay, startOfDateTime, startOfDay } from './date';
 import { AGGREGATORS, detectAggregator, getPhotoAggregator } from './aggregators';
-import { supabase } from './supabase';
+import { supabase, supabaseForSignal } from './supabase';
 import { fetchAllPages } from './paginate';
 import { downloadPhoto } from './photoDownload.js';
 import { deleteUnresolvedTicket } from './unresolvedTicketStore.js';
@@ -351,7 +351,8 @@ export function photoMatchesFilters(
   return true;
 }
 
-async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '', capturedAt = null) {
+async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '', capturedAt = null, { signal, captureId } = {}) {
+  const client = supabaseForSignal(signal);
   const photoMeta = normalizePhotoMeta(meta);
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
   const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
@@ -361,29 +362,38 @@ async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '
   const createdAt =
     typeof capturedAt === 'string' && !Number.isNaN(Date.parse(capturedAt)) ? capturedAt : null;
 
-  const { data: existing } = await supabase
-    .from('photos')
-    .select()
-    .eq('file_path', resolvedPath)
-    .maybeSingle();
+  const findStored = async () => {
+    const result = await client.from('photos').select()
+      .eq(captureId ? 'capture_id' : 'file_path', captureId || resolvedPath).maybeSingle();
+    if (result.error) throw result.error;
+    if (result.data || !captureId) return result.data;
+    // Queued tasks from earlier releases may already have committed a row
+    // without capture_id. Reconcile their persisted path before uploading.
+    const legacy = await client.from('photos').select().eq('file_path', resolvedPath).maybeSingle();
+    if (legacy.error) throw legacy.error;
+    if (legacy.data?.capture_id && legacy.data.capture_id !== captureId) throw new Error('La ruta pertenece a otra captura. Conservá el pendiente para revisar.');
+    return legacy.data;
+  };
+  const existing = await findStored();
   if (existing) return existing;
 
-  const { error: uploadError } = await supabase.storage
+  const { error: uploadError } = await client.storage
     .from(BUCKET)
     .upload(resolvedPath, file, { cacheControl: '3600', upsert: true });
 
   if (uploadError) throw uploadError;
 
-  const { data: urlData } = supabase.storage
+  const { data: urlData } = client.storage
     .from(BUCKET)
     .getPublicUrl(resolvedPath);
 
-  const { data, error: dbError } = await supabase
+  const { data, error: dbError } = await client
     .from('photos')
     .insert({
       name,
       file_path: resolvedPath,
       public_url: urlData.publicUrl,
+      ...(captureId ? { capture_id: captureId } : {}),
       aggregator: AGGREGATORS[folder.split('/')[1]] ? folder.split('/')[1] : null,
       ...photoMeta,
       ...(createdAt ? { created_at: createdAt } : {}),
@@ -392,13 +402,11 @@ async function insertStoredFile(file, name, meta = {}, folder = '', filePath = '
     .single();
 
   if (dbError) {
-    const { data: inserted } = await supabase
-      .from('photos')
-      .select()
-      .eq('file_path', resolvedPath)
-      .maybeSingle();
+    const inserted = await findStored().catch(() => null);
     if (inserted) return inserted;
-    await supabase.storage.from(BUCKET).remove([resolvedPath]);
+    // A timeout/failed response may follow a committed insert. Removing the
+    // object here can destroy evidence owned by that successful transaction.
+    // Keep the stable path and reconcile it on the next attempt.
     throw dbError;
   }
 
@@ -412,6 +420,7 @@ export async function uploadPhoto(
   aggregator = 'sin_agregador',
   filePath = '',
   capturedAt = null,
+  options,
 ) {
   if (!isValidOrderDigits(orderDigits)) {
     throw new Error('Ingresá el código completo o los últimos 4 dígitos del pedido.');
@@ -425,6 +434,7 @@ export async function uploadPhoto(
     `orders/${storageAggregator}`,
     filePath,
     capturedAt,
+    options,
   );
   if (photo?.name === UNIDENTIFIED_ORDER_NAME) {
     return updatePhoto(photo.id, orderDigits, meta, storageAggregator);
@@ -432,11 +442,11 @@ export async function uploadPhoto(
   return photo;
 }
 
-export async function uploadUnidentifiedOrder(file, meta = {}, filePath = '', capturedAt = null) {
-  return insertStoredFile(file, UNIDENTIFIED_ORDER_NAME, meta, 'orders/no_code', filePath, capturedAt);
+export async function uploadUnidentifiedOrder(file, meta = {}, filePath = '', capturedAt = null, options) {
+  return insertStoredFile(file, UNIDENTIFIED_ORDER_NAME, meta, 'orders/no_code', filePath, capturedAt, options);
 }
 
-export async function uploadFile(file, title, meta = {}, filePath = '', capturedAt = null) {
+export async function uploadFile(file, title, meta = {}, filePath = '', capturedAt = null, options) {
   const fallback = file.name.replace(/\.[^.]+$/, '') || 'Archivo';
   const name = normalizePhotoName(title, fallback);
   return insertStoredFile(
@@ -450,6 +460,7 @@ export async function uploadFile(file, title, meta = {}, filePath = '', captured
     'files',
     filePath,
     capturedAt,
+    options,
   );
 }
 

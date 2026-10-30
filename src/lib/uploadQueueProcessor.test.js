@@ -82,6 +82,31 @@ test('processQueueItem reads the ticket and then uploads with a stable path', as
   assert.match(item.storagePath, /^orders\/pedidosya\//);
 });
 
+test('a transient ticket failure checkpoints the photo and resumes without reuploading it', async () => {
+  const item = sampleItem();
+  let attempts = 0;
+  let compressions = 0;
+  const deps = mockDeps({
+    compressImage: async file => { compressions++; return file; },
+    keepTicketForRecovery: async () => {
+      if (++attempts === 1) throw Object.assign(new Error('server unavailable'), { status: 503 });
+      return true;
+    },
+  });
+  const first = await processQueueItem(item, deps);
+  assert.equal(first.retryScheduled, true);
+  assert.equal(item.status, 'pending');
+  assert.equal(item.uploadedPhoto.id, 'photo-1');
+  assert.ok(item.ticketFile);
+  assert.ok(item.nextAttemptAt > Date.now());
+  item.nextAttemptAt = 0;
+  await processQueueItem(item, deps);
+  assert.equal(item.status, 'done');
+  assert.equal(attempts, 2);
+  assert.equal(deps.uploaded.length, 1);
+  assert.equal(compressions, 1);
+});
+
 test('the photo keeps the capture time even if the upload runs much later', async () => {
   // createdAt = momento en que se encoló el par (recién sacadas las fotos);
   // la cola puede demorar y la fila igual debe guardar esa hora.

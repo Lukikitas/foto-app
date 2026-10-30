@@ -4,6 +4,7 @@ import PhotographerPicker from './PhotographerPicker';
 import { isValidOrderDigits } from '../lib/photos';
 import { getTakenByHistory, saveLastTakenBy } from '../lib/storage';
 import { enqueue } from '../lib/uploadQueue';
+import { commitCaptureDraft } from '../lib/captureDraftStore.js';
 
 function getEmptyMeta(author = '') {
   return {
@@ -95,11 +96,12 @@ export default function PhotoUploader({ author, onAuthorChange }) {
     setError(null);
   }
 
-  async function handleOrderCapture({ ticketFile, evidenceFile }) {
+  async function handleOrderCapture({ draftId, ticketFile, evidenceFile }) {
     setError(null);
     saveLastTakenBy(meta.taken_by);
     setTakenByHistory(getTakenByHistory());
-    await enqueue({
+    if (draftId) await commitCaptureDraft(draftId, enqueue);
+    else await enqueue({
       file: evidenceFile,
       ticketFile,
       kind: 'order',
@@ -186,6 +188,7 @@ export default function PhotoUploader({ author, onAuthorChange }) {
       {orderCameraOpen && (
         <OrderCamera
           takenBy={meta.taken_by}
+          captureMeta={meta}
           onTakenByChange={(name) => {
             updateMeta('taken_by', name);
             if (!name.trim()) setOrderCameraOpen(false);

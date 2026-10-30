@@ -1,5 +1,9 @@
 # React + Vite
 
+## Continuidad de captura y piloto Android
+
+La versión web 1.14.1 guarda borradores de cámara inmediatamente, recupera errores transitorios, limita solicitudes colgadas y confirma los envíos por etapas. Requiere la migración aditiva `20261029090000_capture_registration.sql` antes de publicarse. La app Android nativa para captura está en `android-camera/`; conserva la web para gestión. El [roadmap de implementación y validación](docs/camera-reliability-roadmap.md) distingue lo implementado, lo probado y lo pendiente de medir en el Moto G15.
+
 ## Versión 1.14
 
 Páginas consultadas en el servidor, resúmenes de métricas, prioridad de cámara y miniaturas en segundo plano. Requiere activar el backend antes de publicar el frontend: [implementación, despliegue y validación](docs/performance-1.14.md).
