@@ -78,6 +78,34 @@ class CameraFlowTest {
         waitFor("confirm author") { clickable("Listo")?.isEnabled == true }
         clickable("Listo")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
+    private fun screenshot(name: String) {
+        instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+            File(application.cacheDir, name).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+    }
+
+    @Test fun rearLensChooserRemainsAvailableWithoutChangingSavedCaptures() {
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand("pm grant ${application.packageName} ${Manifest.permission.CAMERA}"))
+            .bufferedReader().use { it.readText() }
+        val before = application.repository.dao.pending().map { it.id }.toSet()
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val author = "QA lentes"
+            setAuthor(author)
+            waitFor("lens selector") { clickable("Lentes")?.isEnabled == true }
+            clickable("Lentes")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            waitFor("rear lens choices") { findText("Cámaras traseras") != null && clickable("Principal · 1×") != null }
+            screenshot("lens-choices.png")
+            clickable("Principal · 1×")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            waitFor("ready after selecting principal") { clickable("Sacar ticket")?.isEnabled == true }
+            assertEquals(before, application.repository.dao.pending().map { row -> row.id }.toSet())
+            val diagnostic = Diagnostics.export(application).readText()
+            val inventory = org.json.JSONObject(diagnostic).getJSONObject("cameras")
+            assertTrue(inventory.getInt("rearLogicalCount") > 0)
+            assertTrue(inventory.getJSONArray("lenses").length() > 0)
+            assertFalse(diagnostic.contains(author))
+        }
+    }
 
     @Test fun pendingUpdateStaysVisibleOfflineWithoutChangingSavedCaptures() {
         assertTrue(BuildConfig.DEBUG)
@@ -112,11 +140,21 @@ class CameraFlowTest {
             val author = "QA-${UUID.randomUUID().toString().take(8)}"
             setAuthor(author)
             waitFor("ready shutter") { clickable("Sacar ticket")?.isEnabled == true }
+            waitFor("ticket stage") { findText("Foto del ticket · paso 1 de 2") != null }
+            val flash = android.graphics.Rect()
+            val initialScreen = android.graphics.Rect()
+            findText("Flash")!!.getBoundsInScreen(flash)
+            instrumentation.uiAutomation.rootInActiveWindow!!.getBoundsInScreen(initialScreen)
+            assertTrue("Flash must be at the lower right", flash.centerX() > initialScreen.left + initialScreen.width() * .7f && flash.top > initialScreen.top + initialScreen.height() * .75f)
+            assertTrue("Flash must remain on screen", flash.bottom <= initialScreen.bottom)
+            screenshot("ticket-stage.png")
             assertTrue(clickable("Sacar ticket")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             waitFor("durable incomplete ticket") { application.repository.dao.draft()?.author == author }
             val ticket = application.repository.dao.draft()!!
             assertTrue(File(ticket.ticketPath).length() > 0)
             waitFor("bag shutter") { clickable("Sacar bolsa")?.isEnabled == true }
+            waitFor("bag stage") { findText("Foto de la bolsa · paso 2 de 2") != null }
+            screenshot("bag-stage.png")
             assertTrue(clickable("Sacar bolsa")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             waitFor("durable complete pair") { application.repository.dao.get(ticket.id)?.evidencePath?.isNotBlank() == true }
             val pair = application.repository.dao.get(ticket.id)!!

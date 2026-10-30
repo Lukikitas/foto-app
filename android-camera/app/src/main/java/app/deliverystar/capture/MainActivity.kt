@@ -58,12 +58,19 @@ import java.time.format.DateTimeFormatter
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -120,8 +127,8 @@ private fun shareDiagnostics(context: Context) {
     LaunchedEffect(Unit) { model.checkUpdates() }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         Row(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { tab = 0 }) { Text("Cámara", color = if (tab == 0) Accent else MaterialTheme.colorScheme.onSurface, fontWeight = if (tab == 0) FontWeight.Bold else FontWeight.Normal) }
-            TextButton(onClick = { tab = 1 }) {
+            TextButton(onClick = { tab = 0 }, enabled = !model.busy) { Text("Cámara", color = if (tab == 0) Accent else MaterialTheme.colorScheme.onSurface, fontWeight = if (tab == 0) FontWeight.Bold else FontWeight.Normal) }
+            TextButton(onClick = { tab = 1 }, enabled = !model.busy) {
                 Text("Envíos", color = if (tab == 1) Accent else MaterialTheme.colorScheme.onSurface)
                 if (pending > 0) Badge(Modifier.padding(start = 6.dp), containerColor = Accent) { Text(pending.toString()) }
             }
@@ -179,20 +186,22 @@ private fun shareDiagnostics(context: Context) {
     LaunchedEffect(model.message) { if (model.message.contains("guardado")) haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
     var repeatAvailable by remember(model.lastPair?.id) { mutableStateOf(model.lastPair != null) }
     var repeatMenu by remember { mutableStateOf(false) }
+    var lensMenu by remember { mutableStateOf(false) }
     val shutterLabel = if (model.busy) "Guardando…" else if (model.draft == null) "Sacar ticket" else "Sacar bolsa"
+    val takingTicket = model.draft == null
+    LaunchedEffect(session.lensNotice) { if (session.lensNotice.isNotBlank()) { delay(6_000); session.clearLensNotice() } }
     LaunchedEffect(model.lastPair?.id) { repeatMenu = false; model.lastPair?.let { delay(maxOf(0, it.reviewUntil - System.currentTimeMillis())); repeatAvailable = false } }
     Column(modifier.imePadding()) {
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color.Black), contentAlignment = Alignment.Center) {
             if (granted) AndroidView(factory = { preview }, modifier = Modifier.fillMaxSize().onSizeChanged { frameSize = it })
             else Button(onClick = { requestPermission.launch(Manifest.permission.CAMERA) }) { Text("Permitir cámara") }
-            Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (model.draft == null) "1 · Ticket" else "2 · Bolsa", Modifier.background(Overlay, RoundedCornerShape(8.dp)).padding(10.dp), color = Color.White, style = MaterialTheme.typography.labelLarge)
-                TextButton(onClick = editAuthor, enabled = !model.busy && model.draft == null, colors = ButtonDefaults.textButtonColors(contentColor = Color.White, disabledContentColor = Color.LightGray)) {
+            Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.End) {
+                CaptureStageIndicator(takingTicket)
+                TextButton(onClick = editAuthor, enabled = !model.busy && takingTicket,
+                    colors = ButtonDefaults.textButtonColors(containerColor = Overlay, contentColor = Color.White, disabledContainerColor = Overlay, disabledContentColor = Color.LightGray),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)) {
                     Text(model.author.ifBlank { "Nombre" }.take(20), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Spacer(Modifier.weight(1f))
-                if (session.hasFlash) TextButton(onClick = session::toggleTorch, enabled = session.ready && !model.busy,
-                    colors = ButtonDefaults.textButtonColors(containerColor = Overlay, contentColor = if (session.torch) Color(0xFFFFDA73) else Color.White)) { Text(if (session.torch) "Flash ✓" else "Flash") }
             }
             if (model.busy) CircularProgressIndicator(color = Color.White)
             if (session.error.isNotBlank()) Column(Modifier.background(Overlay).padding(12.dp)) {
@@ -200,13 +209,14 @@ private fun shareDiagnostics(context: Context) {
                 TextButton(onClick = { session.bind(context, owner, preview) }) { Text("Reiniciar cámara") }
             }
             Column(Modifier.align(Alignment.BottomCenter).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                val notice = model.error.ifBlank { model.qualityWarning.ifBlank { model.message } }
+                val notice = model.error.ifBlank { session.lensNotice.ifBlank { model.qualityWarning.ifBlank { model.message } } }
                 if (notice.isNotBlank()) Text(notice, Modifier.background(Overlay, RoundedCornerShape(8.dp)).padding(8.dp),
                     color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (session.wideRatio > 0f) LensButton("%.1f×".format(java.util.Locale.US, session.wideRatio), session.zoom < .95f, session.ready && !model.busy) { session.selectWide(context, owner, preview) }
-                LensButton("1×", abs(session.zoom - 1f) < .1f, session.ready && !model.busy) { session.selectNormal(context, owner, preview) }
-                if (session.maxZoom >= 2f) LensButton("2×", abs(session.zoom - 2f) < .1f, session.ready && !model.busy) { session.requestZoom(2f) }
+                LensButton("1×", session.isPrincipal && abs(session.zoom - 1f) < .1f, session.ready && !model.busy) { session.selectNormal(context, owner, preview) }
+                if (session.maxZoom >= 2f) LensButton("2×", session.isPrincipal && abs(session.zoom - 2f) < .1f, session.ready && !model.busy) { session.selectNormal(context, owner, preview, 2f) }
+                LensButton("Lentes", !session.isPrincipal, session.lenses.isNotEmpty() && !model.busy) { lensMenu = true }
                 }
             }
         }
@@ -222,7 +232,8 @@ private fun shareDiagnostics(context: Context) {
                 Box(Modifier.size(66.dp).border(3.dp, if (enabled) Accent else Color.Gray, CircleShape).padding(5.dp).background(if (enabled) Accent else Color.Gray, CircleShape))
                 Text(shutterLabel, style = MaterialTheme.typography.labelMedium)
             }
-            Box(Modifier.width(92.dp), contentAlignment = Alignment.Center) {
+            Column(Modifier.width(92.dp).fillMaxHeight().padding(vertical = 4.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.SpaceBetween) {
+            Box(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
                 if (model.draft != null) TextButton(onClick = model::repeatTicket, enabled = !model.busy) { Text("Repetir") }
                 else if (repeatAvailable && model.lastPair != null) {
                     TextButton(onClick = { repeatMenu = true }, enabled = !model.busy) { Text("Repetir") }
@@ -232,9 +243,55 @@ private fun shareDiagnostics(context: Context) {
                     }
                 }
             }
+                OutlinedButton(onClick = session::toggleTorch, enabled = session.hasFlash && session.ready && !model.busy,
+                    modifier = Modifier.fillMaxWidth().height(48.dp).semantics {
+                        contentDescription = "Flash"
+                        stateDescription = if (!session.hasFlash) "No disponible en esta lente" else if (session.torch) "Activado" else "Desactivado"
+                    }, contentPadding = PaddingValues(4.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = if (session.torch) Accent else Color.Transparent,
+                        contentColor = if (session.torch) Color.White else MaterialTheme.colorScheme.onSurface)) {
+                    Text(if (session.torch) "Flash ✓" else "Flash", style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
     }
     previewPath?.let { PhotoDialog(it) { previewPath = null } }
+    if (lensMenu) AlertDialog(onDismissRequest = { lensMenu = false }, title = { Text("Cámaras traseras") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            session.lenses.forEach { lens ->
+                val available = lens.key !in session.unavailableLenses
+                Row(Modifier.fillMaxWidth().clickable(enabled = available, role = Role.RadioButton) {
+                    lensMenu = false; session.selectLens(context, owner, preview, lens.key)
+                }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = session.selectedLensKey == lens.key && (lens != session.lenses.first() || session.zoom >= .95f), onClick = null, enabled = available)
+                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                        Text(lens.label, color = if (available) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (!available) Text("No disponible", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            if (session.lenses.none { it.ratio in .1f.. .94f } && session.wideRatio > 0f) {
+                TextButton(onClick = { lensMenu = false; session.selectWide(context, owner, preview) }) {
+                    Text("Gran angular · %.1f×".format(java.util.Locale.US, session.wideRatio))
+                }
+            } else if (session.lenses.size == 1) Text("No se detectó otra lente disponible.", style = MaterialTheme.typography.bodySmall)
+        }
+    }, confirmButton = { TextButton(onClick = { lensMenu = false }) { Text("Cerrar") } })
+}
+
+@Composable private fun CaptureStageIndicator(ticket: Boolean) {
+    Row(Modifier.fillMaxWidth().background(Overlay, RoundedCornerShape(10.dp)).padding(3.dp).clearAndSetSemantics {
+        contentDescription = if (ticket) "Foto del ticket · paso 1 de 2" else "Foto de la bolsa · paso 2 de 2"
+        liveRegion = LiveRegionMode.Polite
+    }, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        listOf("1 · TICKET", "2 · BOLSA").forEachIndexed { index, label ->
+            val active = (index == 0) == ticket
+            Box(Modifier.weight(1f).height(42.dp).background(if (active) Accent else Color.Transparent, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                Text(label, color = if (active) Color.White else Color.White.copy(alpha = .62f), style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
+            }
+        }
+    }
 }
 
 @Composable private fun LensButton(label: String, selected: Boolean, enabled: Boolean, action: () -> Unit) {

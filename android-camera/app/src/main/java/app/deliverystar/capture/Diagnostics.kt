@@ -24,6 +24,7 @@ object Diagnostics {
                 .put("versionCode", BuildConfig.VERSION_CODE)
                 .put("manufacturer", android.os.Build.MANUFACTURER).put("model", android.os.Build.MODEL)
                 .put("androidApi", android.os.Build.VERSION.SDK_INT)
+                .put("cameras", runCatching { JSONObject(context.getSharedPreferences("diagnostics", Context.MODE_PRIVATE).getString("cameras", "{}")!!) }.getOrDefault(JSONObject()))
                 .put("events", JSONArray(context.getSharedPreferences("diagnostics", Context.MODE_PRIVATE).getString("events", "[]"))).toString(2))
         }
     }

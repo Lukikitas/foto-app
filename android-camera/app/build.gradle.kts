@@ -18,8 +18,8 @@ android {
         applicationId = "app.deliverystar.capture"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0-pilot"
+        versionCode = 3
+        versionName = "0.3.0-pilot"
         resValue("string", "app_name", "Delivery Star · Fotos")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", quoted(setting("SUPABASE_URL")))

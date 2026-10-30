@@ -1,11 +1,6 @@
 package app.deliverystar.capture
 
 import android.content.Context
-import android.hardware.camera2.CameraCharacteristics
-import android.os.Build
-import androidx.camera.camera2.interop.Camera2CameraInfo
-import androidx.camera.camera2.interop.Camera2Interop
-import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import android.util.Size
 import android.view.ScaleGestureDetector
 import android.view.MotionEvent
@@ -35,7 +30,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-@androidx.annotation.OptIn(markerClass = [ExperimentalCamera2Interop::class])
 class CameraSession {
     var ready by mutableStateOf(false); private set
     var error by mutableStateOf(""); private set
@@ -46,10 +40,13 @@ class CameraSession {
     var hasFlash by mutableStateOf(false); private set
     var lensCount by mutableIntStateOf(0); private set
     var wideRatio by mutableFloatStateOf(0f); private set
-    private data class Lens(val info: CameraInfo, val physical: String?, val ratio: Float)
-    private var wide: Lens? = null
-    private var useWide = false
-    private var wideRejected = false
+    var lenses by mutableStateOf<List<CameraLensOption>>(emptyList()); private set
+    var selectedLensKey by mutableStateOf(""); private set
+    var unavailableLenses by mutableStateOf<Set<String>>(emptySet()); private set
+    var lensNotice by mutableStateOf(""); private set
+    val isPrincipal get() = selectedLensKey == lenses.firstOrNull()?.key
+    private var defaultMinimum = 1f
+    private var requestedZoom: Float? = null
     private var scale = 1f
     private var camera: Camera? = null
     private var capture: ImageCapture? = null
@@ -77,38 +74,21 @@ class CameraSession {
             if (token != generation) return@cameraReady
             runCatching {
                 val service = future.get(); provider = service
-                val cameras = service.availableCameraInfos.filter { CameraSelector.DEFAULT_BACK_CAMERA.filter(listOf(it)).isNotEmpty() }
-                lensCount = cameras.size
-                check(cameras.isNotEmpty()) { "No hay una cámara trasera disponible." }
-                val normal = cameras.minByOrNull { kotlin.math.abs(runCatching { it.intrinsicZoomRatio }.getOrDefault(1f) - 1f) }!!
-                val candidates = cameras.filter { it != normal }.mapNotNull { info ->
-                    val ratio = runCatching { info.intrinsicZoomRatio }.getOrDefault(1f)
-                    if (ratio in .1f.. .94f) Lens(info, null, ratio) else null
-                }.toMutableList()
-                if (Build.VERSION.SDK_INT >= 28) runCatching {
-                    val normalInfo = Camera2CameraInfo.from(normal)
-                    val focal = normalInfo.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.minOrNull() ?: 0f
-                    val width = normalInfo.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)?.width ?: 0f
-                    for (physical in normal.physicalCameraInfos) {
-                        val info = Camera2CameraInfo.from(physical)
-                        val ratio = LensGeometry.relativeZoom(info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.minOrNull() ?: 0f,
-                            info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)?.width ?: 0f, focal, width)
-                        if (ratio in .1f.. .94f) candidates.add(Lens(normal, info.cameraId, ratio))
-                    }
-                }.onFailure { Diagnostics.record(context, "camera.wide.enumeration.failed") }
-                wide = if (wideRejected) null else candidates.minByOrNull { it.ratio }
-                val selected = if (useWide) wide else null
-                val chosen = selected?.info ?: normal
-                scale = selected?.ratio ?: 1f
-                val selector = CameraSelector.Builder().addCameraFilter { infos -> infos.filter { it == chosen } }.build()
+                if (lenses.isEmpty()) {
+                    lenses = CameraLenses.discover(context, service.availableCameraInfos)
+                    selectedLensKey = lenses.first().key
+                    lensCount = lenses.size
+                }
+                val selected = lenses.firstOrNull { it.key == selectedLensKey } ?: lenses.first()
+                selectedLensKey = selected.key
+                scale = selected.ratio.takeIf { it > 0f } ?: 1f
+                val selector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                    .addCameraFilter { infos -> infos.filter { it == selected.info } }
+                    .apply { selected.physicalId?.let { setPhysicalCameraId(it) } }.build()
                 val previewBuilder = Preview.Builder()
                 val captureBuilder = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .setJpegQuality(95).setResolutionSelector(ResolutionSelector.Builder()
                         .setResolutionStrategy(ResolutionStrategy(Size(2560, 1920), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)).build())
-                if (Build.VERSION.SDK_INT >= 28) selected?.physical?.let { id ->
-                    Camera2Interop.Extender(previewBuilder).setPhysicalCameraId(id)
-                    Camera2Interop.Extender(captureBuilder).setPhysicalCameraId(id)
-                }
                 val preview = previewBuilder.build().also { it.surfaceProvider = view.surfaceProvider }
                 val imageCapture = captureBuilder.build()
                 val group = UseCaseGroup.Builder().addUseCase(preview).addUseCase(imageCapture)
@@ -119,22 +99,24 @@ class CameraSession {
                 observedInfo = bound.cameraInfo; observedOwner = owner
                 hasFlash = bound.cameraInfo.hasFlashUnit()
                 bound.cameraInfo.zoomState.observe(owner) { state ->
+                    if (token != generation) return@observe
                     zoom = state.zoomRatio * scale; minZoom = state.minZoomRatio * scale; maxZoom = state.maxZoomRatio * scale
-                    wideRatio = if (!useWide && state.minZoomRatio < .95f) state.minZoomRatio else wide?.ratio ?: 0f
+                    if (isPrincipal) defaultMinimum = state.minZoomRatio
+                    wideRatio = if (defaultMinimum < .95f) defaultMinimum else
+                        lenses.filter { it.key !in unavailableLenses && it.ratio in .1f.. .94f }.minOfOrNull { it.ratio } ?: 0f
+                    requestedZoom?.let { wanted -> requestedZoom = null; requestZoom(wanted) }
                 }
                 bound.cameraInfo.cameraState.observe(owner) { state ->
+                    if (token != generation) return@observe
                     ready = state.type == androidx.camera.core.CameraState.Type.OPEN
                     if (state.error != null) {
                         ready = false
-                        if (useWide) {
-                            useWide = false; wideRejected = true
-                            Diagnostics.record(context, "camera.wide.unavailable")
-                            view.post { if (token == generation) bind(context, owner, view) }
-                        } else error = "La cámara se interrumpió. Tocá Reiniciar cámara."
+                        if (!isPrincipal) view.post { if (token == generation) returnToPrincipal(context, owner, view) }
+                        else error = "La cámara se interrumpió. Tocá Reiniciar cámara."
                     }
                     else if (state.type == androidx.camera.core.CameraState.Type.OPEN) { ready = true; error = "" }
                 }
-                bound.cameraInfo.torchState.observe(owner) { state -> torch = state == TorchState.ON }
+                bound.cameraInfo.torchState.observe(owner) { state -> if (token == generation) torch = state == TorchState.ON }
                 val gestures = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     override fun onScale(detector: ScaleGestureDetector): Boolean { requestZoom(zoom * detector.scaleFactor); return true }
                 })
@@ -149,23 +131,38 @@ class CameraSession {
                 }
             }.onFailure {
                 ready = false
-                if (useWide) {
-                    useWide = false; wideRejected = true
-                    Diagnostics.record(context, "camera.wide.unavailable")
-                    bind(context, owner, view)
-                } else error = "No se pudo iniciar la cámara. Revisá el permiso y tocá Reiniciar cámara."
+                if (lenses.isNotEmpty() && !isPrincipal) returnToPrincipal(context, owner, view)
+                else error = "No se pudo iniciar la cámara. Revisá el permiso y tocá Reiniciar cámara."
             }
         }, ContextCompat.getMainExecutor(context))
     }
-    fun nextLens(context: Context, owner: LifecycleOwner, view: PreviewView) {
-        if (zoom < .95f) selectNormal(context, owner, view) else selectWide(context, owner, view)
+    private fun returnToPrincipal(context: Context, owner: LifecycleOwner, view: PreviewView) {
+        unavailableLenses = unavailableLenses + selectedLensKey
+        selectedLensKey = lenses.first().key; requestedZoom = 1f
+        lensNotice = "Esta lente no se pudo abrir. Volvimos a la principal."
+        Diagnostics.record(context, "camera.lens.unavailable")
+        bind(context, owner, view)
+    }
+    fun clearLensNotice() { lensNotice = "" }
+    fun selectLens(context: Context, owner: LifecycleOwner, view: PreviewView, key: String) {
+        val lens = lenses.firstOrNull { it.key == key && it.key !in unavailableLenses } ?: return
+        lensNotice = ""
+        val target = lens.ratio.takeIf { it > 0f } ?: 1f
+        if (selectedLensKey == key) requestZoom(target)
+        else { selectedLensKey = key; requestedZoom = target; bind(context, owner, view) }
     }
     fun selectWide(context: Context, owner: LifecycleOwner, view: PreviewView) {
-        if (!useWide && minZoom < .95f) requestZoom(minZoom)
-        else if (wide != null) { useWide = true; bind(context, owner, view) }
+        if (defaultMinimum < .95f) {
+            if (isPrincipal) requestZoom(defaultMinimum)
+            else { selectedLensKey = lenses.first().key; requestedZoom = defaultMinimum; bind(context, owner, view) }
+        } else lenses.filter { it.key !in unavailableLenses && it.ratio in .1f.. .94f }.minByOrNull { it.ratio }
+            ?.let { selectLens(context, owner, view, it.key) }
     }
-    fun selectNormal(context: Context, owner: LifecycleOwner, view: PreviewView) {
-        if (useWide) { useWide = false; bind(context, owner, view) } else requestZoom(1f)
+    fun selectNormal(context: Context, owner: LifecycleOwner, view: PreviewView, desiredZoom: Float = 1f) {
+        val main = lenses.firstOrNull() ?: return
+        lensNotice = ""
+        if (isPrincipal) requestZoom(desiredZoom)
+        else { selectedLensKey = main.key; requestedZoom = desiredZoom; bind(context, owner, view) }
     }
     fun requestZoom(value: Float) { camera?.cameraControl?.setZoomRatio(value.coerceIn(minZoom, maxZoom) / scale) }
     fun toggleTorch() {
