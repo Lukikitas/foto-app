@@ -12,6 +12,7 @@ import InstallPrompt from './components/InstallPrompt';
 import ConfirmationHost from './components/ConfirmationHost';
 import NavIcon from './components/NavIcon';
 import UpdatePrompt from './components/UpdatePrompt';
+import TemporaryClosure from './components/TemporaryClosure';
 const PhotoGallery = lazy(() => import('./components/PhotoGallery'));
 import PhotoUploader from './components/PhotoUploader';
 import NativeCameraEntry from './components/NativeCameraEntry';
@@ -50,6 +51,10 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
+  return import.meta.env.VITE_APP_TEMPORARILY_CLOSED !== 'false' ? <TemporaryClosure /> : <OperationalApp />;
+}
+
+function OperationalApp() {
   const nativeCapture = usesNativeCamera();
   const [metricsDirty,setMetricsDirty] = useState(false);
   const [focusedCase,setFocusedCase] = useState(null);

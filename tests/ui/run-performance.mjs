@@ -7,6 +7,7 @@ import { IDBFactory } from 'fake-indexeddb';
 // React DOM integration, no real browser, camera, credentials or remote writes.
 process.env.VITE_SUPABASE_URL='https://fixture.supabase.co';
 process.env.VITE_SUPABASE_ANON_KEY='fixture-only';
+process.env.VITE_APP_TEMPORARILY_CLOSED='false';
 const dom = new JSDOM('<div id="root"></div>',{url:'http://localhost/tests/ui/performance.html',pretendToBeVisual:true});
 const pageSize=process.argv.includes('--mobile')?30:100;
 for(const key of ['window','document','navigator','localStorage','sessionStorage','HTMLElement','Element','MutationObserver','Event','MouseEvent'])

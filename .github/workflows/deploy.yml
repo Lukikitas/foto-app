@@ -90,6 +90,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_CLOUD_OCR_ENABLED: ${{ vars.VITE_CLOUD_OCR_ENABLED }}
           VITE_NATIVE_CAMERA_ENABLED: ${{ vars.VITE_NATIVE_CAMERA_ENABLED }}
+          VITE_APP_TEMPORARILY_CLOSED: ${{ vars.VITE_APP_TEMPORARILY_CLOSED }}
 
       - name: Verify Android download before publishing the camera handoff
         run: node scripts/verify-android-pilot.mjs

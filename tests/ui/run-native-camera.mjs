@@ -8,9 +8,13 @@ import { IDBFactory } from 'fake-indexeddb';
 // production credentials, camera hardware or an actual native-app redirect.
 const android = !process.argv.includes('--desktop');
 const rollback = process.argv.includes('--rollback');
+const closed = process.argv.includes('--closed');
 process.env.VITE_SUPABASE_URL = 'https://fixture.supabase.co';
 process.env.VITE_SUPABASE_ANON_KEY = 'fixture-only';
 process.env.VITE_NATIVE_CAMERA_ENABLED = rollback ? 'false' : 'true';
+// In closure mode leave the flag absent: the production default must be closed.
+if (closed) delete process.env.VITE_APP_TEMPORARILY_CLOSED;
+else process.env.VITE_APP_TEMPORARILY_CLOSED = 'false';
 let handoffs = 0;
 const virtualConsole = new VirtualConsole();
 virtualConsole.on('jsdomError', error => {
@@ -29,6 +33,7 @@ window.matchMedia = () => ({ matches: android, addEventListener() {}, removeEven
 window.scrollTo = () => {};
 window.HTMLElement.prototype.scrollIntoView = () => {};
 window.fetch = globalThis.fetch;
+if (closed) Object.defineProperty(navigator, 'onLine', { value: false });
 const previousFetch = globalThis.fetch;
 const previousSocket = globalThis.WebSocket;
 let cameraRequests = 0;
@@ -43,11 +48,38 @@ const nav = label => document.querySelector(`.app-nav__btn[aria-label="${label}"
 async function click(node) { assert.ok(node); await act(async () => node.click()); }
 try {
   const queueStore = await server.ssrLoadModule('/src/lib/uploadQueueStore.js');
-  queueStore.useQueueStoreForTests(queueStore.createMemoryQueueStore());
+  if (!closed) queueStore.useQueueStoreForTests(queueStore.createMemoryQueueStore());
   const drafts = await server.ssrLoadModule('/src/lib/captureDraftStore.js');
   const original = { id: 'pending-web-ticket', createdAt: 1700000000000, ticketFile: new Blob(['exact ticket bytes']), meta: { taken_by: 'QA pending web' } };
   await drafts.saveCaptureDraft(original);
+  let pair;
+  if (closed) {
+    const queue = await server.ssrLoadModule('/src/lib/uploadQueue.js');
+    await queue.enqueue({ id: 'closed-web-pair', createdAt: 1700000000001,
+      file: new File(['exact bag bytes'], 'bag.jpg', {type:'image/jpeg'}), ticketFile: new File(['exact pair ticket bytes'], 'ticket.jpg', {type:'image/jpeg'}),
+      kind: 'order', orderDigits: '1234', meta: { taken_by: 'QA preserved pair' } });
+    pair = await queueStore.getQueueRecord('closed-web-pair');
+  }
   await act(async () => { await server.ssrLoadModule('/tests/ui/performance.jsx'); });
+  if (closed) {
+    await until(() => document.querySelector('.temporary-closure'), 'web closure on entry');
+    assert.equal(document.querySelector('h1').textContent, 'La app se encuentra momentáneamente cerrada');
+    assert.ok(document.body.textContent.includes('Gracias por haberla usado y por ayudarnos en su desarrollo.'));
+    assert.equal(document.querySelector('.app-nav'), null, 'Normal app navigation must not mount');
+    assert.equal(document.querySelector('input[type="file"]'), null);
+    assert.equal(document.querySelector('a[href^="intent:"]'), null, 'Closure must not launch native capture');
+    await click([...document.querySelectorAll('button')].find(button => button.textContent === 'Ver envíos pendientes'));
+    await until(() => document.querySelector('.upload-queue__order')?.textContent.includes('1234'), 'existing pair accessible');
+    const stored = await queueStore.getQueueRecord(pair.id);
+    assert.equal(stored.createdAt, pair.createdAt);
+    assert.deepEqual(stored.meta, pair.meta);
+    assert.equal(await stored.file.text(), await pair.file.text());
+    assert.equal(await stored.ticket.text(), await pair.ticket.text());
+    assert.equal(await (await drafts.getCaptureDraft(original.id)).ticketFile.text(), await original.ticketFile.text());
+    assert.equal(handoffs, 0);
+    assert.equal(cameraRequests, 0);
+    console.log(`PASS ${android ? 'mobile' : 'desktop'} web closure: notice, blocked navigation/capture, original ticket and queued pair preserved in IndexedDB`);
+  } else {
   await until(() => nav('Sacar foto'), 'app navigation');
   if (!android) await click(nav('Sacar foto'));
   const native = android && !rollback;
@@ -103,6 +135,7 @@ try {
   assert.equal(await recovered.ticketFile.text(), await original.ticketFile.text());
   assert.equal(cameraRequests, 0);
   console.log(`PASS ${native ? 'Android native handoff' : rollback ? 'Android web-camera rollback' : 'desktop web camera'}: navigation, download fallback, gallery and original pending ticket preserved`);
+  }
 } finally {
   await act(async () => document.dispatchEvent(new Event('unmount-fixture')));
   await act(async () => { await sleep(200); });

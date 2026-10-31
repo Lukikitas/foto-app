@@ -160,6 +160,16 @@
   order: var(--nav-order, 0);
 }
 
+.temporary-closure { min-height: 100svh; display: flex; flex-direction: column; }
+.temporary-closure__main { width: min(100%, 680px); margin: auto; padding: 56px 24px; text-align: center; }
+.temporary-closure__brand { color: var(--accent); font-size: .9rem; font-weight: 750; letter-spacing: .08em; margin: 0 0 28px; }
+.temporary-closure h1 { margin: 0 0 24px; font-size: clamp(1.85rem, 5vw, 2.6rem); line-height: 1.2; font-weight: 750; }
+.temporary-closure__thanks { font-size: 1.1rem; line-height: 1.65; margin: 0 0 28px; }
+.temporary-closure__hint { color: var(--text-muted); line-height: 1.6; margin-bottom: 24px; }
+.temporary-closure__queue { margin-top: 24px; text-align: left; overflow-wrap: anywhere; }
+.temporary-closure__queue .upload-queue { margin: 0; }
+.temporary-closure__footer { padding: 16px 24px max(20px, env(safe-area-inset-bottom)); text-align: center; color: var(--text-muted); font-size: .8rem; }
+
 .native-camera-entry { width: min(100%, 560px); margin: 0 auto; padding: 20px 16px; }
 .native-camera-entry h1 { margin: 0 0 8px; font-size: 1.6rem; }
 .native-camera-entry > p { margin: 0 0 20px; }
