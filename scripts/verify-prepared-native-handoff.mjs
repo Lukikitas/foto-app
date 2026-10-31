@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { basename, dirname } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { nativeCameraLinks, NATIVE_CAMERA_PACKAGE } from '../src/lib/nativeCamera.js';
 
 // Offline preparation check. Public availability is a separate release gate,
 // verified by verify-android-pilot.mjs before the eventual Pages deployment.
 const manifest = JSON.parse(await readFile('public/manual/piloto-android/update.json', 'utf8'));
-const folder = 'output/native-handoff-20261030.local';
+const defaultFolder = 'output/native-handoff-20261030.local';
 const filename = `Delivery-Star-Fotos-${manifest.versionName}.apk`;
-const apkPath = process.argv[2] || `${folder}/${filename}`;
+const apkPath = process.argv[2] || `${defaultFolder}/${filename}`;
+const folder = dirname(apkPath);
 assert.equal(basename(apkPath), filename);
 const bytes = await readFile(apkPath);
 const hash = createHash('sha256').update(bytes).digest('hex');

@@ -8,6 +8,8 @@ No se borran registros ni archivos. El procesamiento de capturas ya guardadas se
 
 Las pruebas de cierre comprueban la ausencia de accesos operativos y conservan la verificación de bytes, autor y fecha del ticket y los pendientes. El resto de este documento registra la primera entrega; el acceso a pendientes descrito allí fue retirado en esta revisión. Las versiones antiguas requieren aceptar la actualización web o instalar el APK nuevo para aplicar el cambio.
 
+Validación de esta revisión: CI de aplicación `41170652752` aprobado (frontend, base y servicios), CI Android `41170540370` aprobado, compilación local debug/release, pruebas JVM y lint aprobados. Las dos pruebas instrumentadas de cierre pasaron en 42,815 segundos: actualización futura sin conexión y apertura desde ícono/enlaces en frío y caliente, con ticket original intacto. El APK firmado tiene 45.037.781 bytes y SHA-256 `a308ff8b428d702d924ee168ed51ccd22f0dd0aff1477bcdac3ccbbead08920f`; certificado de los pilotos anteriores y alineación de 16 KiB verificados. Evidencia en `output/closure-notice-only-20261031.local/`.
+
 Versión Android 0.5.0-pilot, `versionCode=5`, solicitada el 31/10/2026.
 
 Al abrir desde el ícono o desde la web, la pantalla de inicio muestra:
