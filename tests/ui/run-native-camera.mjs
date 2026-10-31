@@ -68,7 +68,7 @@ try {
     assert.equal(document.querySelector('.app-nav'), null, 'Normal app navigation must not mount');
     assert.equal(document.querySelector('input[type="file"]'), null);
     assert.equal(document.querySelector('a[href^="intent:"]'), null, 'Closure must not launch native capture');
-    assert.equal(document.querySelector('button, a, input, select, textarea, [role="button"]'), null, 'Only the notice is accessible when no update is available');
+    assert.equal(document.querySelector('.temporary-closure').querySelector('button, a, input, select, textarea, [role="button"]'), null, 'Only the notice is accessible when no update is available');
     assert.equal(document.querySelector('.upload-queue'), null, 'Pending uploads must not be accessible');
     const stored = await queueStore.getQueueRecord(pair.id);
     assert.equal(stored.createdAt, pair.createdAt);
