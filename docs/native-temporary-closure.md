@@ -1,5 +1,13 @@
 # Cierre temporal de Delivery Star · Fotos
 
+## Estado actual — solo aviso (web 1.14.4 y Android 0.6.0-pilot)
+
+Por la última indicación, se retira todo acceso a envíos, fotos, gestión y diagnóstico. Quedan únicamente el cierre y el agradecimiento, más el aviso de una nueva actualización cuando esté disponible. Se elimina también el botón manual de comprobación de Android; la comprobación automática al abrir o retomar sigue activa. La página pública de descarga solo ofrece actualizar, sin enlaces para abrir la app o gestión.
+
+No se borran registros ni archivos. El procesamiento de capturas ya guardadas se conserva sin exponer la cola en la interfaz. La actualización web mantiene la comprobación de persistencia antes de activar el service worker. Los enlaces nativos en frío y caliente siguen mostrando el aviso.
+
+Las pruebas de cierre comprueban la ausencia de accesos operativos y conservan la verificación de bytes, autor y fecha del ticket y los pendientes. El resto de este documento registra la primera entrega; el acceso a pendientes descrito allí fue retirado en esta revisión. Las versiones antiguas requieren aceptar la actualización web o instalar el APK nuevo para aplicar el cambio.
+
 Versión Android 0.5.0-pilot, `versionCode=5`, solicitada el 31/10/2026.
 
 Al abrir desde el ícono o desde la web, la pantalla de inicio muestra:

@@ -68,8 +68,8 @@ try {
     assert.equal(document.querySelector('.app-nav'), null, 'Normal app navigation must not mount');
     assert.equal(document.querySelector('input[type="file"]'), null);
     assert.equal(document.querySelector('a[href^="intent:"]'), null, 'Closure must not launch native capture');
-    await click([...document.querySelectorAll('button')].find(button => button.textContent === 'Ver envíos pendientes'));
-    await until(() => document.querySelector('.upload-queue__order')?.textContent.includes('1234'), 'existing pair accessible');
+    assert.equal(document.querySelector('button, a, input, select, textarea, [role="button"]'), null, 'Only the notice is accessible when no update is available');
+    assert.equal(document.querySelector('.upload-queue'), null, 'Pending uploads must not be accessible');
     const stored = await queueStore.getQueueRecord(pair.id);
     assert.equal(stored.createdAt, pair.createdAt);
     assert.deepEqual(stored.meta, pair.meta);

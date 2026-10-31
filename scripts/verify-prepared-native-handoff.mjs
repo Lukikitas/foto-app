@@ -22,8 +22,13 @@ const page = new JSDOM(await readFile('public/manual/piloto-android/index.html',
 assert.equal(page.querySelector('a.download')?.href, manifest.downloadUrl);
 assert.equal(page.querySelector('code')?.textContent, hash);
 const links = nativeCameraLinks('https://delivery.star-app.com.ar');
-assert.equal(page.querySelector('.open-camera')?.href, links.open);
 const gradle = await readFile('android-camera/app/build.gradle.kts', 'utf8');
+if (gradle.includes('buildConfigField("boolean", "CAPTURE_TEMPORARILY_CLOSED", "true")')) {
+  assert.equal(page.querySelector('.open-camera'), null, 'The closed app must not offer an entry point');
+  assert.equal(page.querySelectorAll('a').length, 1, 'Only updating is available during closure');
+} else {
+  assert.equal(page.querySelector('.open-camera')?.href, links.open);
+}
 assert.equal(Number(gradle.match(/versionCode = (\d+)/)?.[1]), manifest.versionCode);
 assert.equal(gradle.match(/versionName = "([^"]+)"/)?.[1], manifest.versionName);
 assert.ok(gradle.includes(`applicationId = "${NATIVE_CAMERA_PACKAGE}"`));

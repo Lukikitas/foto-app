@@ -34,15 +34,14 @@ class TemporaryClosureTest {
         }
         fail("Timed out: $label")
     }
-    private fun click(text: String) {
-        var node = find(text)
-        while (node != null && !node.isClickable) node = node.parent
-        assertTrue("Missing enabled control: $text", node?.isEnabled == true && node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-    }
     private fun assertClosed() {
         waitFor("closure notice") { find(title) != null }
         assertNotNull(find("Gracias por haberla usado y por ayudarnos en su desarrollo. Cada prueba y cada aporte nos ayudaron a mejorarla."))
-        assertNotNull(find("Buscar actualizaciones"))
+        assertNull(find("Buscar actualizaciones"))
+        assertNull(find("Ver envíos pendientes"))
+        assertNull(find("Recientes"))
+        assertNull(find("Gestión ↗"))
+        assertNull(find("Compartir diagnóstico"))
         assertNull(find("Sacar ticket"))
         assertNull(find("Sacar bolsa"))
         assertNull(find("Quién saca las fotos"))
@@ -66,9 +65,6 @@ class TemporaryClosureTest {
                     File(app.cacheDir, "temporary-closure.png").outputStream().use { output -> image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output) }
                     image.recycle()
                 }
-                click("Ver envíos pendientes")
-                waitFor("pending history") { find("Recientes") != null }
-                assertNull(find("Sacar ticket"))
                 app.startActivity(link)
                 assertClosed()
                 assertEquals("DRAFT", app.repository.dao.get(ticket.id)?.state)

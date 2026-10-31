@@ -18,8 +18,8 @@ android {
         applicationId = "app.deliverystar.capture"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0-pilot"
+        versionCode = 6
+        versionName = "0.6.0-pilot"
         buildConfigField("boolean", "CAPTURE_TEMPORARILY_CLOSED", "true")
         resValue("string", "app_name", "Delivery Star · Fotos")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

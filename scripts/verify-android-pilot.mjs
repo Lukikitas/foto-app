@@ -49,7 +49,8 @@ if (process.argv.includes('--live')) {
   const liveDocument = new JSDOM(await pageResponse.text()).window.document;
   assert.equal(liveDocument.querySelector('a.download')?.href, downloadUrl);
   assert.equal(liveDocument.querySelector('code')?.textContent.trim(), expectedHash);
-  assert.ok(liveDocument.body.textContent.includes('Compartir diagnóstico'));
+  assert.equal(liveDocument.querySelector('h1')?.textContent, document.querySelector('h1')?.textContent);
+  assert.equal(liveDocument.querySelectorAll('a').length, document.querySelectorAll('a').length);
   const manifestResponse = await fetch(new URL('update.json', pageUrl), {
     headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(30_000),
   });
