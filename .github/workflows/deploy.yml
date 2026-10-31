@@ -93,6 +93,8 @@ jobs:
 
       - name: Verify Android download before publishing the camera handoff
         run: node scripts/verify-android-pilot.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

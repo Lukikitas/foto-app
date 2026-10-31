@@ -19,10 +19,13 @@ assert.ok(downloadUrl.endsWith(`/Delivery-Star-Fotos-${manifest.versionName}.apk
 const path = new URL(downloadUrl).pathname.split('/');
 const tag = path[5];
 const filename = path[6];
+// CI runners can exhaust the shared anonymous API quota. Authenticate only
+// metadata access; the actual APK download below must remain unauthenticated.
+const metadataToken = process.env.GITHUB_TOKEN;
 const jsonResponse = await fetch(`https://api.github.com/repos/Lukikitas/foto-app/releases/tags/${encodeURIComponent(tag)}`, {
-  headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(30_000),
+  headers: { Accept: 'application/vnd.github+json', ...(metadataToken ? { Authorization: `Bearer ${metadataToken}` } : {}) }, signal: AbortSignal.timeout(30_000),
 });
-assert.equal(jsonResponse.status, 200, 'The pilot release must be readable without authentication');
+assert.equal(jsonResponse.status, 200, `GitHub release metadata must be readable (API requests remaining: ${jsonResponse.headers.get('x-ratelimit-remaining') ?? 'unknown'})`);
 const release = await jsonResponse.json();
 assert.equal(release.draft, false);
 assert.equal(release.prerelease, true);
@@ -55,7 +58,7 @@ if (process.argv.includes('--live')) {
   pageVerified = true;
 }
 const report = { at: new Date().toISOString(), pageUrl, pageVerified, downloadUrl,
-  authenticated: false, prerelease: true, versionCode: manifest.versionCode, bytes, sha256: expectedHash };
+  authenticated: false, metadataAuthenticated: Boolean(metadataToken), prerelease: true, versionCode: manifest.versionCode, bytes, sha256: expectedHash };
 const folder = 'output/android-camera-20261029.local';
 await mkdir(folder, { recursive: true });
 await writeFile(`${folder}/public-pilot-verification.json`, JSON.stringify(report, null, 2));
