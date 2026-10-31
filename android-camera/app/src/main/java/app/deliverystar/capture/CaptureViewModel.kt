@@ -55,6 +55,7 @@ class CaptureViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     fun take(session: CameraSession) {
+        if (BuildConfig.CAPTURE_TEMPORARILY_CLOSED) return
         if (busy || loading || !session.ready) return
         if (author.trim().isEmpty()) { error = "Elegí quién está sacando las fotos."; return }
         busy = true; error = ""; message = ""; qualityWarning = ""; repository.capturing = true

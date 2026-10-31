@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.window.Dialog
@@ -108,7 +110,10 @@ class MainActivity : ComponentActivity() {
                 background = Color(0xFFEFE8E0), surface = Color(0xFFF7F3EE), onSurface = Color(0xFF1C1D20),
                 onSurfaceVariant = Color(0xFF4E535B), outline = Color(0xFFC3B8AC), error = Color(0xFFB42318))
             MaterialTheme(colorScheme = colors, shapes = Shapes(small = RoundedCornerShape(8.dp), medium = RoundedCornerShape(10.dp), large = RoundedCornerShape(12.dp))) {
-                Surface(Modifier.fillMaxSize(), color = colors.background) { CaptureApp(model, webEntry) }
+                Surface(Modifier.fillMaxSize(), color = colors.background) {
+                    if (BuildConfig.CAPTURE_TEMPORARILY_CLOSED) TemporaryClosureScreen(model, webEntry)
+                    else CaptureApp(model, webEntry)
+                }
             }
         }
     }
@@ -121,6 +126,54 @@ private fun shareDiagnostics(context: Context) {
             type = "application/json"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }, "Compartir diagnóstico"))
     }.onFailure { Toast.makeText(context, "No se pudo preparar el diagnóstico. Revisá el espacio.", Toast.LENGTH_LONG).show() }
+}
+
+@Composable private fun TemporaryClosureScreen(model: CaptureViewModel, webEntry: Int) {
+    val context = LocalContext.current
+    val owner = LocalLifecycleOwner.current
+    var showQueue by remember { mutableStateOf(false) }
+    LaunchedEffect(webEntry) { showQueue = false }
+    DisposableEffect(owner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) model.checkUpdates() }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(Unit) { model.checkUpdates() }
+    BackHandler(enabled = showQueue) { showQueue = false }
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        model.update?.let { update ->
+            Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Actualización pendiente · ${update.name}", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.url))) }) { Text("Actualizar") }
+            }
+        }
+        if (showQueue) {
+            TextButton(onClick = { showQueue = false }) { Text("Volver al aviso") }
+            QueueScreen(model, Modifier.weight(1f))
+        } else {
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("DELIVERY STAR · FOTOS", color = Accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(24.dp))
+                Text("La app se encuentra momentáneamente cerrada", style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(20.dp))
+                Text("Gracias por haberla usado y por ayudarnos en su desarrollo. Cada prueba y cada aporte nos ayudaron a mejorarla.",
+                    style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(24.dp))
+                Text("Las fotos y los envíos pendientes se conservan. Podés consultar su estado desde acá.",
+                    style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(24.dp))
+                OutlinedButton(onClick = { showQueue = true }) { Text("Ver envíos pendientes") }
+            }
+        }
+        TextButton(onClick = { model.checkUpdates(true) }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Buscar actualizaciones") }
+        Text("Delivery Star · ${BuildConfig.VERSION_NAME}", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 12.dp),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (model.updateNotice.isNotBlank()) AlertDialog(onDismissRequest = model::clearUpdateNotice,
+        title = { Text("Actualizaciones") }, text = { Text(model.updateNotice) },
+        confirmButton = { TextButton(onClick = model::clearUpdateNotice) { Text("Cerrar") } })
 }
 
 @Composable private fun CaptureApp(model: CaptureViewModel, webEntry: Int) {

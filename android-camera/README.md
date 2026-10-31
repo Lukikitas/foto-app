@@ -2,6 +2,8 @@
 
 Aplicación nativa de captura y envío. Kotlin + Compose, CameraX, Room y WorkManager. Android 8/API 26 o superior. La galería, reclamos y métricas siguen en https://delivery.star-app.com.ar.
 
+La versión **0.5.0** aplica el [cierre temporal solicitado](../docs/native-temporary-closure.md): aviso y agradecimiento al abrir, nuevas capturas deshabilitadas, pendientes y futuras actualizaciones disponibles. Instalar encima conserva los datos.
+
 La versión 0.4.0 preparada recibe `deliverystar://capture` desde la web. Abre Cámara y conserva autor, borrador y envíos, sin capturar automáticamente. El paquete del Intent está fijado y la descarga alternativa se muestra si falta una versión compatible. [Preparación y orden de publicación, sin deploy todavía](../docs/native-camera-web-handoff.md).
 
 ## Preparar y compilar

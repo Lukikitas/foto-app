@@ -19,6 +19,7 @@ class CameraFlowTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val application = ApplicationProvider.getApplicationContext<CaptureApplication>()
     @Before fun isolateIncompleteTestDraft() {
+        org.junit.Assume.assumeFalse("Capture is intentionally closed in this release; TemporaryClosureTest covers its entry points", BuildConfig.CAPTURE_TEMPORARILY_CLOSED)
         assertTrue(BuildConfig.DEBUG)
         assertEquals("https://android-test.invalid", BuildConfig.SUPABASE_URL)
         application.repository.dao.draft()?.let { draft ->
