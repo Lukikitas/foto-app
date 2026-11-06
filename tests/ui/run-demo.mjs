@@ -61,14 +61,34 @@ try {
   await until(() => document.querySelectorAll('.photo-card').length === 3, 'example files');
   await click(nav('Sacar foto'));
   await until(() => document.querySelector('.native-camera-entry'), 'native capture handoff');
-  assert.equal(handoffs, 1, 'photo navigation must open Android or the download page');
-  assert.match(document.querySelector('.native-camera-entry .uploader__hero-camera-btn').href, /package=app\.deliverystar\.capture\.demo;/);
+  assert.equal(handoffs, 0, 'first visit lets the photographer enter a name');
+  const authorField = document.querySelector('.native-camera-entry .photographer input');
+  const openCamera = () => document.querySelector('.native-camera-entry .uploader__hero-camera-btn');
+  assert.equal(openCamera().getAttribute('aria-disabled'), 'true');
+  await click(openCamera());
+  assert.equal(handoffs, 0, 'an empty photographer cannot launch the camera');
+  assert.match(document.querySelector('[role="alert"]').textContent, /Ingresá quién/);
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(authorField, 'María Demo');
+    authorField.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await until(() => openCamera().getAttribute('aria-disabled') === 'false', 'photographer enables the camera');
+  if (mobile) {
+    assert.match(openCamera().href, /package=app\.deliverystar\.capture\.demo;/);
+    assert.match(openCamera().href, /S.capture_author=Mar%C3%ADa%20Demo;/);
+  } else assert.equal(openCamera().href, 'http://127.0.0.1:4174/demo/camara/');
+  await click(openCamera());
+  assert.equal(handoffs, 1, 'named capture opens the native camera or download page');
+  assert.equal(localStorage.getItem('foto-app-taken-by'), 'María Demo');
   assert.equal(document.querySelector('.native-camera-entry__download').href, 'http://127.0.0.1:4174/demo/camara/');
   assert.equal(document.querySelector('video'), null);
   await click(nav('Ajustes'));
   await until(() => document.querySelector('.settings__retention-field') || document.querySelector('.settings'), 'settings');
   await act(async () => { await sleep(150); });
   assert.equal(document.querySelector('[role="alert"]'), null);
+  await click(nav('Sacar foto'));
+  await until(() => document.querySelector('.native-camera-entry .photographer input')?.value === 'María Demo', 'photographer survives navigation');
+  assert.equal(handoffs, 2, 'a known photographer launches directly on later photo navigation');
   if (!mobile) {
     await click(nav('Pendientes'));
     await act(async () => { await sleep(200); });

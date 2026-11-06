@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeCameraLinks, usesNativeCamera, NATIVE_CAMERA_PACKAGE, DEMO_CAMERA_PACKAGE } from './nativeCamera.js';
+import { nativeCameraLinks, normalizeCameraAuthor, usesNativeCamera, NATIVE_CAMERA_PACKAGE, DEMO_CAMERA_PACKAGE } from './nativeCamera.js';
 
 test('Android capture opens only our package and supplies the same-origin download fallback', () => {
   for (const origin of ['https://delivery.star-app.com.ar', 'http://localhost:5173', 'http://10.0.2.2:5173']) {
@@ -32,4 +32,18 @@ test('demo handoff pins the separate demo APK and its local download page', () =
     assert.equal(links.open, `intent://capture#Intent;scheme=deliverystar;package=${DEMO_CAMERA_PACKAGE};S.browser_fallback_url=${encodeURIComponent(links.download)};end`);
     assert.ok(!links.open.includes('/manual/piloto-android/'));
   }
+});
+
+test('photographer passes as one encoded Intent extra without changing the route or fallback', () => {
+  for (const author of ['  María   López  ', 'Ana;S.browser_fallback_url=https://other.example/#Intent;end']) {
+    const links = nativeCameraLinks('https://delivery.star-app.com.ar', { demo: true, author });
+    const extra = links.open.split(';').find(part => part.startsWith('S.capture_author='));
+    assert.equal(decodeURIComponent(extra.slice('S.capture_author='.length)), normalizeCameraAuthor(author));
+    assert.equal(links.open.split(';').filter(part => part.startsWith('S.browser_fallback_url=')).length, 1);
+    assert.equal(links.download, 'https://delivery.star-app.com.ar/demo/camara/');
+    assert.ok(links.open.startsWith('intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo;'));
+  }
+  assert.equal(normalizeCameraAuthor('  María\n\tLópez\u0000  '), 'María López');
+  assert.equal(normalizeCameraAuthor('A'.repeat(120)).length, 80);
+  assert.ok(!nativeCameraLinks('https://delivery.star-app.com.ar', { author: '  ' }).open.includes('capture_author'));
 });

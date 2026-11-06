@@ -27,20 +27,24 @@
   <h1>La cámara, lista para mostrar.</h1>
   <p class="lead">Instalá la app Android para recorrer la captura de ticket y bolsa, los lentes, el flash y las fotos guardadas en el celular.</p>
   <a class="button" href="./Delivery-Star-Camara-DEMO.apk" download>Descargar cámara DEMO para Android</a>
-  <p class="meta">Android 8 o posterior · Se instala como Delivery Star · DEMO.</p>
+  <p class="meta">Versión 0.7.0 · Android 8 o posterior · Se instala como Delivery Star · DEMO.</p>
+  <p class="meta">Si ya tenés la demo, instalá esta actualización sin desinstalarla para recibir el nombre que ingresás en la web.</p>
   <a class="button secondary" id="open-camera" href="intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo;end">Ya la instalé: abrir cámara</a>
   <div class="note"><strong>Solo presentación.</strong> Las fotos quedan en este teléfono. Esta versión no se conecta a Supabase ni envía capturas. Se instala separada del piloto existente.</div>
   <h2>Cómo empezar</h2>
   <ol>
     <li>Abrí el APK desde Descargas e instalá <strong>Delivery Star · DEMO</strong>.</li>
     <li>Abrí la app y permití usar la cámara. Podés mostrar Ticket → Bolsa → miniaturas → Envios sin conexión.</li>
-    <li>Volvé a la web y tocá <strong>Sacar foto</strong>. Android abrirá la cámara demo instalada.</li>
+    <li>Volvé a la web, ingresá quién saca la foto y tocá <strong>Sacar foto</strong>. Android abrirá la cámara demo con ese nombre.</li>
   </ol>
   <p class="meta">Desde una computadora o un iPhone podés recorrer la demo web. La cámara nativa se instala en Android.</p>
   <p><a href="/">← Volver a la demo web</a></p>
 </main>
 <script>
   const download = new URL('/demo/camara/', window.location.origin).href;
-  document.getElementById('open-camera').href = 'intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo;S.browser_fallback_url=' + encodeURIComponent(download) + ';end';
+  let author = '';
+  try { author = (localStorage.getItem('foto-demo:foto-app-taken-by') || '').trim().replace(/\s+/gu, ' ').replace(/\p{Cc}/gu, '').slice(0, 80); } catch { /* Optional preference. */ }
+  const authorExtra = author ? 'S.capture_author=' + encodeURIComponent(author) + ';' : '';
+  document.getElementById('open-camera').href = 'intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo;S.browser_fallback_url=' + encodeURIComponent(download) + ';' + authorExtra + 'end';
 </script>
 </body></html>

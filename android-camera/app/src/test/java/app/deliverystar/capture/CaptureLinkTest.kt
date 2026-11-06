@@ -4,6 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CaptureLinkTest {
+    @Test fun webAuthorIsPlainBoundedText() {
+        assertEquals("", CaptureLink.normalizeAuthor(null))
+        assertEquals("María López", CaptureLink.normalizeAuthor("  María\n\tLópez\u0000  "))
+        assertEquals(80, CaptureLink.normalizeAuthor("a".repeat(200)).length)
+    }
     @Test fun onlyTheCaptureNavigationRouteIsAccepted() {
         val view = "android.intent.action.VIEW"
         assertTrue(CaptureLink.matches(view, "deliverystar://capture"))

@@ -5,14 +5,20 @@ export const DEMO_CAMERA_DOWNLOAD_PATH = '/demo/camara/';
 
 // No installation probing or timed redirects: the browser resolves the pinned
 // Android package and uses the HTTPS fallback if it cannot open the app.
-export function nativeCameraLinks(origin, { demo = import.meta.env?.MODE === 'demo' } = {}) {
+export function normalizeCameraAuthor(value) {
+  return String(value || '').trim().replace(/\s+/gu, ' ').replace(/\p{Cc}/gu, '').slice(0, 80);
+}
+
+export function nativeCameraLinks(origin, { demo = import.meta.env?.MODE === 'demo', author = '' } = {}) {
   const base = new URL(origin);
   if (!['https:', 'http:'].includes(base.protocol)) throw new TypeError('Invalid web origin');
   const download = new URL(demo ? DEMO_CAMERA_DOWNLOAD_PATH : NATIVE_CAMERA_DOWNLOAD_PATH, base.origin).href;
   const cameraPackage = demo ? DEMO_CAMERA_PACKAGE : NATIVE_CAMERA_PACKAGE;
+  const name = normalizeCameraAuthor(author);
+  const authorExtra = name ? `S.capture_author=${encodeURIComponent(name)};` : '';
   return {
     download,
-    open: `intent://capture#Intent;scheme=deliverystar;package=${cameraPackage};S.browser_fallback_url=${encodeURIComponent(download)};end`,
+    open: `intent://capture#Intent;scheme=deliverystar;package=${cameraPackage};S.browser_fallback_url=${encodeURIComponent(download)};${authorExtra}end`,
   };
 }
 

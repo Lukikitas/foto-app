@@ -85,6 +85,12 @@ try {
   const native = android && !rollback;
   await until(() => native ? document.querySelector('.native-camera-entry') : document.querySelector('.uploader'), 'capture screen');
   if (native) {
+    const authorField = document.querySelector('.native-camera-entry .photographer input');
+    assert.ok(authorField, 'Native entry includes the photographer field');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(authorField, 'QA web author');
+      authorField.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     const open = document.querySelector('.native-camera-entry a[href^="intent:"]');
     assert.ok(open);
     const fallback = document.querySelector('.native-camera-entry__download');

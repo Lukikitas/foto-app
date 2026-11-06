@@ -17,6 +17,7 @@ const PhotoGallery = lazy(() => import('./components/PhotoGallery'));
 import PhotoUploader from './components/PhotoUploader';
 import NativeCameraEntry from './components/NativeCameraEntry';
 import { nativeCameraLinks, usesNativeCamera } from './lib/nativeCamera';
+import { getLastTakenBy } from './lib/storage';
 import UploadQueueStatus from './components/UploadQueueStatus';
 import './App.css';
 
@@ -79,7 +80,7 @@ function OperationalApp() {
   const [tab, setTab] = useState(() => (!DEMO && isPhoneViewport() ? TABS.capture : TABS.metrics));
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
-  const [sessionAuthor, setSessionAuthor] = useState('');
+  const [sessionAuthor, setSessionAuthor] = useState(getLastTakenBy);
   const [metricsRefreshKey, setMetricsRefreshKey] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(true);
 
@@ -135,12 +136,12 @@ function OperationalApp() {
     if (next === TABS.pending) setPendingVisited(true);
     setPendingReturn(fromPending);
     setTab(next);
-    if (next === TABS.capture && (nativeCapture || DEMO)) {
-      const links = nativeCameraLinks(window.location.origin);
+    if (next === TABS.capture && (nativeCapture || DEMO) && sessionAuthor.trim()) {
+      const links = nativeCameraLinks(window.location.origin, { author: sessionAuthor });
       window.location.assign(nativeCapture ? links.open : links.download);
     }
     return true;
-  },[desktop,metricsDirty,pendingDirty,tab,nativeCapture]);
+  },[desktop,metricsDirty,pendingDirty,tab,nativeCapture,sessionAuthor]);
   const manageMetricCase=useCallback(item=>{setFocusedCase(item?.id ? item : null);void navigate(item?.id ? TABS.history : TABS.complaints);},[navigate]);
   const requestCruzar=useCallback(()=>setTab(TABS.complaints),[]);
   const requestHistory=useCallback(()=>setTab(TABS.history),[]);
@@ -222,7 +223,7 @@ function OperationalApp() {
             <DailyPendingPage active={desktop && tab === TABS.pending} onLoadDay={openPendingDay} onLoadComplaints={openPendingComplaints} onCase={openPendingCase} onDirtyChange={setPendingDirty} />
           </Suspense></div>}
           {tab === TABS.capture && (
-            DEMO || nativeCapture ? <NativeCameraEntry /> : <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
+            DEMO || nativeCapture ? <NativeCameraEntry author={sessionAuthor} onAuthorChange={setSessionAuthor} /> : <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
           )}
           {tab === TABS.orders && (
             <Suspense fallback={<p className="gallery__state">Cargando galería…</p>}><PhotoGallery

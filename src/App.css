@@ -172,6 +172,10 @@
 .native-camera-entry > p { margin: 0 0 20px; }
 .native-camera-entry .uploader__hero-camera-btn { text-decoration: none; margin-bottom: 16px; }
 .native-camera-entry .uploader__hero-icon-ring svg { width: 36px; height: 36px; }
+.native-camera-entry .uploader__hero-icon-ring .app-nav__icon { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: 0 0 36px; }
+.native-camera-entry .uploader__hero-icon-ring svg { display: block; flex: 0 0 36px; }
+.native-camera-entry .photographer { margin: 24px 0; }
+.native-camera-entry .uploader__hero-camera-btn[aria-disabled="true"] { opacity: .6; box-shadow: none; }
 .native-camera-entry .native-camera-entry__hint { font-size: .9rem; line-height: 1.5; margin: 12px 0; opacity: .8; }
 .native-camera-entry__download { display: inline-block; padding: 12px 0; color: inherit; text-underline-offset: 4px; }
 .native-camera-entry a:focus-visible { outline: 3px solid var(--accent, #e4002b); outline-offset: 4px; }

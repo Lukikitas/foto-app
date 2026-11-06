@@ -85,8 +85,10 @@ private val Overlay = Color(0xB3000000)
 
 class MainActivity : ComponentActivity() {
     private var webEntry by mutableIntStateOf(0)
+    private var webAuthor by mutableStateOf("")
     private fun receiveCaptureLink(incoming: Intent?) {
         if (CaptureLink.matches(incoming?.action, incoming?.dataString)) {
+            webAuthor = CaptureLink.normalizeAuthor(incoming?.getStringExtra(CaptureLink.AUTHOR_EXTRA))
             webEntry++
             Diagnostics.record(this, "web.camera.open")
         }
@@ -112,7 +114,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = colors, shapes = Shapes(small = RoundedCornerShape(8.dp), medium = RoundedCornerShape(10.dp), large = RoundedCornerShape(12.dp))) {
                 Surface(Modifier.fillMaxSize(), color = colors.background) {
                     if (BuildConfig.CAPTURE_TEMPORARILY_CLOSED) TemporaryClosureScreen(model)
-                    else CaptureApp(model, webEntry)
+                    else CaptureApp(model, webEntry, webAuthor)
                 }
             }
         }
@@ -159,16 +161,18 @@ private fun shareDiagnostics(context: Context) {
     }
 }
 
-@Composable private fun CaptureApp(model: CaptureViewModel, webEntry: Int) {
+@Composable private fun CaptureApp(model: CaptureViewModel, webEntry: Int, webAuthor: String) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var tab by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf(false) }
     var editAuthor by remember { mutableStateOf(model.author.isBlank()) }
     var handledEntry by remember { mutableIntStateOf(0) }
-    LaunchedEffect(webEntry, model.busy) {
-        if (webEntry > handledEntry && !model.busy) {
+    LaunchedEffect(webEntry, model.busy, model.loading) {
+        if (webEntry > handledEntry && !model.busy && !model.loading) {
             tab = 0
+            model.applyWebAuthor(webAuthor)
+            if (model.author.isNotBlank()) editAuthor = false
             handledEntry = webEntry
         }
     }

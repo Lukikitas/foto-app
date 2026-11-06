@@ -2,8 +2,11 @@ package app.deliverystar.capture
 
 import java.net.URI
 
-/** A navigation request only. Never accepts authors, photos, URLs or commands. */
+/** Navigation route only. A plain author name may arrive in a separate typed extra. */
 object CaptureLink {
+    const val AUTHOR_EXTRA = "capture_author"
+    fun normalizeAuthor(value: String?): String = value.orEmpty().trim().replace(Regex("\\s+"), " ")
+        .filterNot { it.isISOControl() }.take(80)
     fun matches(action: String?, rawUri: String?): Boolean {
         if (action != "android.intent.action.VIEW" || rawUri == null || rawUri.length > 256) return false
         return runCatching {

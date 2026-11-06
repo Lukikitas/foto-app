@@ -17,7 +17,7 @@ import java.io.File
 class CaptureViewModel(application: Application) : AndroidViewModel(application) {
     val repository = (application as CaptureApplication).repository
     private val prefs = application.getSharedPreferences("capture-settings", Application.MODE_PRIVATE)
-    var author by mutableStateOf(prefs.getString("author", if (BuildConfig.DEMO_MODE) "Equipo demo" else "") ?: "")
+    var author by mutableStateOf(prefs.getString("author", "") ?: "")
     var themeMode by mutableStateOf(prefs.getString("appearance", "system") ?: "system"); private set
     fun cycleTheme() { themeMode = when (themeMode) { "system" -> "light"; "light" -> "dark"; else -> "system" }; prefs.edit().putString("appearance", themeMode).apply() }
     var draft by mutableStateOf<Capture?>(null); private set
@@ -45,6 +45,14 @@ class CaptureViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     fun clearUpdateNotice() { updateNotice = "" }
+
+    fun applyWebAuthor(requested: String): Boolean {
+        val name = CaptureLink.normalizeAuthor(requested)
+        if (name.isBlank() || busy || loading || draft != null) return false
+        author = name
+        prefs.edit().putString("author", name).apply()
+        return true
+    }
 
     init {
         viewModelScope.launch {

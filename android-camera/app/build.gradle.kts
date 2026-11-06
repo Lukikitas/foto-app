@@ -18,8 +18,8 @@ android {
         applicationId = "app.deliverystar.capture"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.6.0-pilot"
+        versionCode = 7
+        versionName = "0.7.0-pilot"
         buildConfigField("boolean", "CAPTURE_TEMPORARILY_CLOSED", "true")
         buildConfigField("boolean", "DEMO_MODE", "false")
         resValue("string", "app_name", "Delivery Star · Fotos")
