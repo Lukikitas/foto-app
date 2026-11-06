@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Cámara demo · Delivery Star</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; background: #161616; color: #f1f1f1; }
+    * { box-sizing: border-box; }
+    body { margin: 0; line-height: 1.65; }
+    main { max-width: 680px; margin: auto; padding: 42px 24px; }
+    .brand { color: #ff8299; font-size: .85rem; font-weight: 750; letter-spacing: .08em; }
+    h1 { line-height: 1.15; font-size: clamp(2rem, 6vw, 3rem); }
+    .lead { color: #c3c6ce; font-size: 1.1rem; }
+    .button { display: block; padding: 16px; margin: 18px 0; border-radius: 12px; text-align: center; text-decoration: none; font-weight: 700; background: #e4002b; color: white; }
+    .secondary { background: transparent; border: 1px solid #555; }
+    .note { padding: 18px; border: 1px solid #444; border-radius: 12px; }
+    .meta { font-size: .85rem; color: #b3b7be; }
+    li { margin-bottom: 12px; }
+    a { color: #ff8299; }
+    a:focus-visible { outline: 3px solid #ff8299; outline-offset: 4px; }
+  </style>
+</head>
+<body><main>
+  <p class="brand">DELIVERY STAR · DEMOSTRACIÓN</p>
+  <h1>La cámara, lista para mostrar.</h1>
+  <p class="lead">Instalá la app Android para recorrer la captura de ticket y bolsa, los lentes, el flash y las fotos guardadas en el celular.</p>
+  <a class="button" href="./Delivery-Star-Camara-DEMO.apk" download>Descargar cámara DEMO para Android</a>
+  <p class="meta">Android 8 o posterior · Se instala como Delivery Star · DEMO.</p>
+  <a class="button secondary" id="open-camera" href="intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo;end">Ya la instalé: abrir cámara</a>
+  <div class="note"><strong>Solo presentación.</strong> Las fotos quedan en este teléfono. Esta versión no se conecta a Supabase ni envía capturas. Se instala separada del piloto existente.</div>
+  <h2>Cómo empezar</h2>
+  <ol>
+    <li>Abrí el APK desde Descargas e instalá <strong>Delivery Star · DEMO</strong>.</li>
+    <li>Abrí la app y permití usar la cámara. Podés mostrar Ticket → Bolsa → miniaturas → Envios sin conexión.</li>
+    <li>Volvé a la web y tocá <strong>Sacar foto</strong>. Android abrirá la cámara demo instalada.</li>
+  </ol>
+  <p class="meta">Desde una computadora o un iPhone podés recorrer la demo web. La cámara nativa se instala en Android.</p>
+  <p><a href="/">← Volver a la demo web</a></p>
+</main>
+<script>
+  const download = new URL('/demo/camara/', window.location.origin).href;
+  document.getElementById('open-camera').href = 'intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo;S.browser_fallback_url=' + encodeURIComponent(download) + ';end';
+</script>
+</body></html>

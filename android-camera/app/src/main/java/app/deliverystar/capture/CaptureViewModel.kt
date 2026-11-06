@@ -17,7 +17,7 @@ import java.io.File
 class CaptureViewModel(application: Application) : AndroidViewModel(application) {
     val repository = (application as CaptureApplication).repository
     private val prefs = application.getSharedPreferences("capture-settings", Application.MODE_PRIVATE)
-    var author by mutableStateOf(prefs.getString("author", "") ?: "")
+    var author by mutableStateOf(prefs.getString("author", if (BuildConfig.DEMO_MODE) "Equipo demo" else "") ?: "")
     var themeMode by mutableStateOf(prefs.getString("appearance", "system") ?: "system"); private set
     fun cycleTheme() { themeMode = when (themeMode) { "system" -> "light"; "light" -> "dark"; else -> "system" }; prefs.edit().putString("appearance", themeMode).apply() }
     var draft by mutableStateOf<Capture?>(null); private set
@@ -27,12 +27,13 @@ class CaptureViewModel(application: Application) : AndroidViewModel(application)
     var message by mutableStateOf(""); private set
     var error by mutableStateOf(""); private set
     var qualityWarning by mutableStateOf(""); private set
-    var update by mutableStateOf(AppUpdates.cached(application)); private set
+    var update by mutableStateOf(if (BuildConfig.DEMO_MODE) null else AppUpdates.cached(application)); private set
     var updateNotice by mutableStateOf(""); private set
     private var updateCheckAt = 0L
     private var checkingUpdate = false
 
     fun checkUpdates(force: Boolean = false) {
+        if (BuildConfig.DEMO_MODE) return
         if (checkingUpdate || !force && System.currentTimeMillis() - updateCheckAt < 15 * 60_000) return
         checkingUpdate = true; updateCheckAt = System.currentTimeMillis()
         viewModelScope.launch {

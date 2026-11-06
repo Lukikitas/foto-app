@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeCameraLinks, usesNativeCamera, NATIVE_CAMERA_PACKAGE } from './nativeCamera.js';
+import { nativeCameraLinks, usesNativeCamera, NATIVE_CAMERA_PACKAGE, DEMO_CAMERA_PACKAGE } from './nativeCamera.js';
 
 test('Android capture opens only our package and supplies the same-origin download fallback', () => {
   for (const origin of ['https://delivery.star-app.com.ar', 'http://localhost:5173', 'http://10.0.2.2:5173']) {
@@ -22,5 +22,14 @@ test('native handoff is Android only and can be rolled back without changing sto
   assert.equal(usesNativeCamera('Mozilla/5.0 (Linux; Android 8.0; Mobile)'), true);
   for (const ua of ['', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)']) {
     assert.equal(usesNativeCamera(ua), false);
+  }
+});
+
+test('demo handoff pins the separate demo APK and its local download page', () => {
+  for (const origin of ['https://demo.example.com', 'http://localhost:4174']) {
+    const links = nativeCameraLinks(origin, { demo: true });
+    assert.equal(links.download, `${origin}/demo/camara/`);
+    assert.equal(links.open, `intent://capture#Intent;scheme=deliverystar;package=${DEMO_CAMERA_PACKAGE};S.browser_fallback_url=${encodeURIComponent(links.download)};end`);
+    assert.ok(!links.open.includes('/manual/piloto-android/'));
   }
 });

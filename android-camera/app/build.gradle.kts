@@ -21,6 +21,7 @@ android {
         versionCode = 6
         versionName = "0.6.0-pilot"
         buildConfigField("boolean", "CAPTURE_TEMPORARILY_CLOSED", "true")
+        buildConfigField("boolean", "DEMO_MODE", "false")
         resValue("string", "app_name", "Delivery Star · Fotos")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", quoted(setting("SUPABASE_URL")))
@@ -45,6 +46,17 @@ android {
             versionNameSuffix = "-test"
             buildConfigField("String", "SUPABASE_URL", quoted("https://android-test.invalid"))
             buildConfigField("String", "SUPABASE_ANON_KEY", quoted("test-only"))
+        }
+        create("demo") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".demo"
+            versionNameSuffix = "-demo"
+            resValue("string", "app_name", "Delivery Star · DEMO")
+            buildConfigField("boolean", "CAPTURE_TEMPORARILY_CLOSED", "false")
+            buildConfigField("boolean", "DEMO_MODE", "true")
+            buildConfigField("String", "SUPABASE_URL", quoted(""))
+            buildConfigField("String", "SUPABASE_ANON_KEY", quoted(""))
+            matchingFallbacks += listOf("debug")
         }
         release {
             isMinifyEnabled = true

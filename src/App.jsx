@@ -50,23 +50,33 @@ const NAV_ITEMS = [
   { id: TABS.settings, label: 'Ajustes', short: 'Ajustes', icon: 'settings' },
 ];
 
+const DEMO = import.meta.env.MODE === 'demo';
+
+function restartDemo() {
+  try {
+    localStorage.removeItem('foto-app-metrics-view');
+    localStorage.removeItem('foto-app-metrics-period');
+  } catch { /* The demo also works when browser storage is unavailable. */ }
+  window.location.reload();
+}
+
 export default function App() {
-  return import.meta.env.VITE_APP_TEMPORARILY_CLOSED !== 'false' ? <TemporaryClosure /> : <OperationalApp />;
+  return !DEMO && import.meta.env.VITE_APP_TEMPORARILY_CLOSED !== 'false' ? <TemporaryClosure /> : <OperationalApp />;
 }
 
 function OperationalApp() {
-  const nativeCapture = usesNativeCamera();
+  const nativeCapture = usesNativeCamera(undefined, DEMO ? 'true' : undefined);
   const [metricsDirty,setMetricsDirty] = useState(false);
   const [focusedCase,setFocusedCase] = useState(null);
   const [metricsRequest, setMetricsRequest] = useState(null);
   const [complaintLoadRequest, setComplaintLoadRequest] = useState(null);
   const [desktop, setDesktop] = useState(() => !isPhoneViewport());
-  const [metricsVisited,setMetricsVisited]=useState(()=>!isPhoneViewport());
+  const [metricsVisited,setMetricsVisited]=useState(()=>DEMO || !isPhoneViewport());
   const [complaintsVisited,setComplaintsVisited]=useState(false);
   const [pendingVisited, setPendingVisited] = useState(false);
   const [pendingReturn, setPendingReturn] = useState(false);
   const [pendingDirty, setPendingDirty] = useState(false);
-  const [tab, setTab] = useState(() => (isPhoneViewport() ? TABS.capture : TABS.metrics));
+  const [tab, setTab] = useState(() => (!DEMO && isPhoneViewport() ? TABS.capture : TABS.metrics));
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState(getTheme);
   const [sessionAuthor, setSessionAuthor] = useState('');
@@ -84,6 +94,7 @@ function OperationalApp() {
   }, []);
 
   useEffect(() => {
+    if (DEMO) return;
     setUploadCompleteHandler(() => {
       setRefreshKey((k) => k + 1);
     });
@@ -92,6 +103,7 @@ function OperationalApp() {
   }, []);
 
   useEffect(() => {
+    if (DEMO) return;
     let stop;
     const abort = new AbortController();
     const timer = setTimeout(() => {
@@ -103,6 +115,7 @@ function OperationalApp() {
   }, []);
 
   useEffect(() => {
+    if (DEMO) return;
     let lastPurge = 0;
     const purge = () => {
       if (document.visibilityState === 'hidden' || Date.now() - lastPurge < 60 * 60 * 1000) return;
@@ -122,7 +135,10 @@ function OperationalApp() {
     if (next === TABS.pending) setPendingVisited(true);
     setPendingReturn(fromPending);
     setTab(next);
-    if (next === TABS.capture && nativeCapture) window.location.assign(nativeCameraLinks(window.location.origin).open);
+    if (next === TABS.capture && (nativeCapture || DEMO)) {
+      const links = nativeCameraLinks(window.location.origin);
+      window.location.assign(nativeCapture ? links.open : links.download);
+    }
     return true;
   },[desktop,metricsDirty,pendingDirty,tab,nativeCapture]);
   const manageMetricCase=useCallback(item=>{setFocusedCase(item?.id ? item : null);void navigate(item?.id ? TABS.history : TABS.complaints);},[navigate]);
@@ -195,17 +211,18 @@ function OperationalApp() {
 
       <div className="app__shell">
         <ConfirmationHost />
-        <UpdatePrompt />
-        <InstallPrompt />
+        {!DEMO && <UpdatePrompt />}
+        {!DEMO && <InstallPrompt />}
 
         <main className={`app__main${tab === TABS.capture ? ' app__main--capture' : ''}`}>
-          <UploadQueueStatus />
+          {DEMO && <aside className="demo-banner" aria-label="Modo demostración"><strong>Modo demo</strong><span>Datos ficticios coherentes · solo presentación</span><button className="btn btn--ghost btn--small" onClick={restartDemo}>Reiniciar recorrido</button></aside>}
+          {!DEMO && <UploadQueueStatus />}
           {desktop && pendingReturn && (tab === TABS.metrics || complaintsOpen) && <button className="btn btn--ghost pending-return" onClick={() => navigate(TABS.pending)}>← Volver a pendientes</button>}
           {pendingVisited && <div hidden={!desktop || tab !== TABS.pending}><Suspense fallback={<p className="gallery__state">Cargando pendientes…</p>}>
             <DailyPendingPage active={desktop && tab === TABS.pending} onLoadDay={openPendingDay} onLoadComplaints={openPendingComplaints} onCase={openPendingCase} onDirtyChange={setPendingDirty} />
           </Suspense></div>}
           {tab === TABS.capture && (
-            nativeCapture ? <NativeCameraEntry /> : <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
+            DEMO || nativeCapture ? <NativeCameraEntry /> : <PhotoUploader author={sessionAuthor} onAuthorChange={setSessionAuthor} />
           )}
           {tab === TABS.orders && (
             <Suspense fallback={<p className="gallery__state">Cargando galería…</p>}><PhotoGallery

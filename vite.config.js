@@ -48,13 +48,47 @@ function tesseractAssets() {
   }
 }
 
+function cameraDemoDownload() {
+  const apk = path.join(root, 'output/demo/Delivery-Star-Camara-DEMO.apk')
+  const route = '/demo/camara/Delivery-Star-Camara-DEMO.apk'
+  return {
+    name: 'camera-demo-download',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (request.url?.split('?')[0] !== route) return next()
+        if (!fs.existsSync(apk)) { response.statusCode = 404; response.end('Primero compilá el APK demo.'); return }
+        response.setHeader('Content-Type', 'application/vnd.android.package-archive')
+        response.setHeader('Content-Disposition', 'attachment; filename="Delivery-Star-Camara-DEMO.apk"')
+        response.setHeader('Content-Length', fs.statSync(apk).size)
+        if (request.method === 'HEAD') { response.end(); return }
+        fs.createReadStream(apk).pipe(response)
+      })
+    },
+    writeBundle(options) {
+      const folder = path.resolve(options.dir, 'demo/camara')
+      fs.mkdirSync(folder, { recursive: true })
+      fs.copyFileSync(apk, path.join(folder, 'Delivery-Star-Camara-DEMO.apk'))
+      fs.copyFileSync(path.join(root, 'src/demo/sw.js'), path.resolve(options.dir, 'sw.js'))
+    },
+  }
+}
+
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // Dominio propio de GitHub Pages: https://delivery.star-app.com.ar/
   base: '/',
+  cacheDir: mode === 'demo' ? 'node_modules/.vite-demo' : 'node_modules/.vite',
+  resolve: mode === 'demo' ? { alias: [{
+    find: /^(?:\.\.?\/)+(?:lib\/)?supabase(?:\.js)?$/,
+    replacement: path.join(root, 'src/demo/client.js'),
+  }, {
+    find: /^(?:\.\.?\/)+(?:components\/)?UpdatePrompt(?:\.jsx)?$/,
+    replacement: path.join(root, 'src/demo/DisabledUpdatePrompt.jsx'),
+  }] } : undefined,
   // Android/QA reports are not application entrypoints.
   optimizeDeps: { entries: ['index.html'] },
   build: {
+    outDir: mode === 'demo' ? 'dist-demo' : 'dist',
     rolldownOptions: {
       output: { codeSplitting: { groups: [
         { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
@@ -64,8 +98,9 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    ...(mode === 'demo' ? [cameraDemoDownload()] : []),
     tesseractAssets(),
-    VitePWA({
+    ...(mode === 'demo' ? [] : [VitePWA({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.js',
@@ -115,6 +150,6 @@ export default defineConfig({
           },
         ],
       },
-    }),
+    })]),
   ],
-})
+}))

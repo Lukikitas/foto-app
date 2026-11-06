@@ -8406,3 +8406,6 @@ button.metrics-agg:focus-visible {
 .metrics-sheet__group { display: flex; flex-direction: column; }
 .metrics-sheet__row { flex: 1; align-content: center; }
 .metrics-sheet__row strong { justify-self: end; text-align: right; }
+.demo-banner { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem 1rem; border: 1px solid var(--accent); background: var(--surface); padding: .7rem 1rem; border-radius: .8rem; margin-bottom: 1.2rem; font-size: .85rem; }
+.demo-banner strong { color: var(--accent); }
+.demo-banner span { flex: 1; min-width: 180px; }

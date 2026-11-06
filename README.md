@@ -1,5 +1,9 @@
 # React + Vite
 
+## Demo para presentación
+
+La demo se publica en https://delivery.star-app.com.ar/. `npm run demo` la abre localmente en http://127.0.0.1:4174/, con 70 días de datos ficticios coherentes y sin acceso a Supabase. Usa las pantallas reales de métricas, galería, reclamos e historial. «Sacar foto» abre la cámara demo instalada en Android o su página de descarga. El APK verificado se descarga automáticamente si no está compilado localmente. `npm run build:demo` genera la copia independiente en `dist-demo/`, incluido el APK. [Recorrido y detalles](docs/demo.md).
+
 ## Continuidad de captura y piloto Android
 
 La versión web 1.14.1 guarda borradores de cámara inmediatamente, recupera errores transitorios, limita solicitudes colgadas y confirma los envíos por etapas. Requiere la migración aditiva `20261029090000_capture_registration.sql`; `20261029220000_capture_path_guard.sql` protege además las subidas concurrentes de clientes anteriores. La app Android nativa para captura está en `android-camera/`; conserva la web para gestión. El [roadmap de implementación y validación](docs/camera-reliability-roadmap.md) distingue lo implementado, lo probado y lo pendiente de medir en el Moto G15.

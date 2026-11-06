@@ -188,15 +188,16 @@ private fun shareDiagnostics(context: Context) {
                 if (pending > 0) Badge(Modifier.padding(start = 6.dp), containerColor = Accent) { Text(pending.toString()) }
             }
             Spacer(Modifier.weight(1f))
-            if (BuildConfig.DEBUG) Text("PRUEBAS", style = MaterialTheme.typography.labelSmall, color = Accent)
+            if (BuildConfig.DEMO_MODE) Text("DEMO", style = MaterialTheme.typography.labelSmall, color = Accent)
+            else if (BuildConfig.DEBUG) Text("PRUEBAS", style = MaterialTheme.typography.labelSmall, color = Accent)
             Box {
                 TextButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "Opciones" }) { Text("⋮", style = MaterialTheme.typography.headlineSmall) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Quién saca las fotos") }, enabled = !model.busy && model.draft == null, onClick = { menu = false; editAuthor = true })
                     DropdownMenuItem(text = { Text("Aspecto: ${when (model.themeMode) { "light" -> "Claro"; "dark" -> "Oscuro"; else -> "Sistema" }}") }, onClick = { model.cycleTheme() })
-                    DropdownMenuItem(text = { Text("Gestión web ↗") }, onClick = { menu = false; context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) })
+                    DropdownMenuItem(text = { Text("Gestión web ↗") }, enabled = !BuildConfig.DEMO_MODE, onClick = { menu = false; context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) })
                     DropdownMenuItem(text = { Text("Compartir diagnóstico") }, onClick = { menu = false; shareDiagnostics(context) })
-                    DropdownMenuItem(text = { Text("Buscar actualizaciones") }, onClick = { menu = false; model.checkUpdates(true) })
+                    DropdownMenuItem(text = { Text("Buscar actualizaciones") }, enabled = !BuildConfig.DEMO_MODE, onClick = { menu = false; model.checkUpdates(true) })
                     DropdownMenuItem(text = { Text("Delivery Star · ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall) }, enabled = false, onClick = {})
                 }
             }
@@ -207,6 +208,8 @@ private fun shareDiagnostics(context: Context) {
                 TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.url))) }, enabled = !model.busy) { Text("Actualizar") }
             }
         }
+        if (BuildConfig.DEMO_MODE) Text("Demostración · fotos locales · sin envíos", Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer).padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
         if (tab == 0) CameraScreen(model, { editAuthor = true }, Modifier.weight(1f)) else QueueScreen(model, Modifier.weight(1f))
     }
     if (editAuthor) AlertDialog(onDismissRequest = { if (model.author.isNotBlank()) editAuthor = false },
@@ -401,7 +404,7 @@ private fun shareDiagnostics(context: Context) {
                         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(row.displayCode.ifBlank { if (row.state == "DRAFT") "Falta la bolsa" else "Pedido guardado" }, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                                Text(when (row.state) { "DRAFT" -> "Ticket"; "REVIEW" -> "Guardado"; "UPLOADING" -> "Enviando…"; "SENT" -> if (row.ticketExpired) "Ticket vencido" else "Enviado"; "ERROR" -> "Revisar"; else -> "Pendiente" },
+                                Text(if (BuildConfig.DEMO_MODE) { if (row.state == "DRAFT") "Ticket local" else "Demo local" } else when (row.state) { "DRAFT" -> "Ticket"; "REVIEW" -> "Guardado"; "UPLOADING" -> "Enviando…"; "SENT" -> if (row.ticketExpired) "Ticket vencido" else "Enviado"; "ERROR" -> "Revisar"; else -> "Pendiente" },
                                     style = MaterialTheme.typography.labelMedium, color = if (row.state == "ERROR") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Text("${row.author} · ${formatter.format(Instant.ofEpochMilli(row.createdAt))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -23,6 +23,7 @@ import org.json.JSONArray
 class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     companion object { private val processing = Mutex() }
     override suspend fun doWork(): Result = processing.withLock {
+        if (BuildConfig.DEMO_MODE) return@withLock Result.success()
         val app = applicationContext as CaptureApplication
         processCapture(app.repository, CaptureApi(), inputData.getString("captureId"))
     }

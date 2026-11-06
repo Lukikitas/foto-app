@@ -68,6 +68,7 @@ class CaptureRepository(private val context: Context, val dao: CaptureDao) {
         schedule(id)
     }
     fun schedule(id: String, delay: Long = 0) {
+        if (BuildConfig.DEMO_MODE) return
         val request = OneTimeWorkRequestBuilder<UploadWorker>()
             .setInputData(workDataOf("captureId" to id))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

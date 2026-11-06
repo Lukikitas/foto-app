@@ -5,6 +5,12 @@ on:
     branches: [restore-e44b86f]
   workflow_dispatch:
     inputs:
+      web_mode:
+        description: Versión web a publicar en el dominio habitual
+        type: choice
+        options: [demo, operational]
+        default: demo
+        required: true
       deploy_backend:
         description: Desplegar las funciones de rendimiento antes de publicar
         type: boolean
@@ -27,7 +33,7 @@ concurrency:
 
 jobs:
   backend:
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy_backend
+    if: github.event_name == 'workflow_dispatch' && inputs.web_mode == 'operational' && inputs.deploy_backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -83,7 +89,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Validate demonstration
+        if: github.event_name != 'workflow_dispatch' || inputs.web_mode != 'operational'
+        run: npm run test:demo
+
+      - name: Build demonstration with verified Android APK
+        if: github.event_name != 'workflow_dispatch' || inputs.web_mode != 'operational'
+        run: npm run build:demo
+
+      - name: Build operational frontend
+        if: github.event_name == 'workflow_dispatch' && inputs.web_mode == 'operational'
         run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -93,6 +108,7 @@ jobs:
           VITE_APP_TEMPORARILY_CLOSED: ${{ vars.VITE_APP_TEMPORARILY_CLOSED }}
 
       - name: Verify Android download before publishing the camera handoff
+        if: github.event_name == 'workflow_dispatch' && inputs.web_mode == 'operational'
         run: node scripts/verify-android-pilot.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -100,7 +116,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: ${{ github.event_name == 'workflow_dispatch' && inputs.web_mode == 'operational' && 'dist' || 'dist-demo' }}
 
   deploy:
     needs: build

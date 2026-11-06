@@ -2,6 +2,16 @@
 
 Aplicación nativa de captura y envío. Kotlin + Compose, CameraX, Room y WorkManager. Android 8/API 26 o superior. La galería, reclamos y métricas siguen en https://delivery.star-app.com.ar.
 
+## APK de demostración sin base de datos
+
+`gradlew.bat :app:assembleDemo` genera `app/build/outputs/apk/demo/app-demo.apk`. Se instala como **Delivery Star · DEMO**, con identificador independiente `app.deliverystar.capture.demo`. No reemplaza el piloto instalado y usa su propio almacenamiento local.
+
+Esta variante reactiva las pantallas reales de Cámara, Ticket/Bolsa, lentes, zoom, flash, miniaturas, repetición, fotos ampliadas, Envios y Opciones. Las capturas quedan solamente en ese APK de demostración. La banda superior lo identifica como demo; el autor inicial es «Equipo demo» y se puede cambiar. No hace falta configurar Supabase: URL y clave están vacías, el APK no tiene permiso de Internet, no programa subidas y no consulta actualizaciones. Los estados de la lista se muestran como «Demo local».
+
+Para presentarla en el teléfono: instalar el APK, abrir **Delivery Star · DEMO** y permitir la cámara. Se puede mostrar Ticket → Bolsa → miniaturas → Envios sin conexión. Los controles y el encuadre dependen de las cámaras que Android exponga en ese dispositivo. No se modifica la configuración de cierre del piloto ni se publica una actualización.
+
+Validación de compilación: `gradlew.bat :app:assembleDemo :app:lintDemo :app:testDebugUnitTest`. Revisar también que el manifiesto final del APK no incluya `android.permission.INTERNET`.
+
 La versión **0.5.0** aplica el [cierre temporal solicitado](../docs/native-temporary-closure.md): aviso y agradecimiento al abrir, nuevas capturas deshabilitadas, pendientes y futuras actualizaciones disponibles. Instalar encima conserva los datos.
 
 La versión 0.4.0 preparada recibe `deliverystar://capture` desde la web. Abre Cámara y conserva autor, borrador y envíos, sin capturar automáticamente. El paquete del Intent está fijado y la descarga alternativa se muestra si falta una versión compatible. [Preparación y orden de publicación, sin deploy todavía](../docs/native-camera-web-handoff.md).
