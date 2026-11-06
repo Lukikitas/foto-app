@@ -2,13 +2,15 @@
 import { createRoot } from 'react-dom/client';
 import { useState, lazy, Suspense } from 'react';
 import { performanceView } from '../../src/lib/performanceViews';
-import { emptyStore } from '../../src/lib/metrics';
+import { argentinaToday, emptyStore } from '../../src/lib/metrics';
 import { parseHistory } from '../../src/lib/complaintHistory';
 import '../../src/index.css';
 import '../../src/App.css';
-const photos = Array.from({length:10000},(_,index) => ({id:String(index),name:`PEYA${10000+index}`,created_at:'2026-10-09T12:00:00Z',file_path:`orders/pedidosya/${index}.jpg`,public_url:'/pwa-192.png',thumbnail_path:null,taken_by:'Equipo de prueba',aggregator:'pedidosya',has_complaint:false,is_refutado:false,notes:''}));
-const metrics = {...emptyStore(),updatedAt:'2026-10-09T12:00:00Z',days:{'2026-10-09':{pedidosya:{orders:10000,complaints:250,awt:400}}}};
-const history = parseHistory({items:Object.fromEntries(photos.slice(0,250).map((photo,index) => [photo.name+'|2026-10-09',{id:photo.name+'|2026-10-09',orderCode:photo.name,day:'2026-10-09',photoId:photo.id,photoName:photo.name,photoUrl:photo.public_url,aggregator:'pedidosya',amount:index%5?1000:null,status:['queja','refutado','refutado_aceptado','refutado_rechazado','no_refutable'][index%5]}]))});
+const day = argentinaToday();
+const capturedAt = `${day}T12:00:00Z`;
+const photos = Array.from({length:10000},(_,index) => ({id:String(index),name:`PEYA${10000+index}`,created_at:capturedAt,file_path:`orders/pedidosya/${index}.jpg`,public_url:'/pwa-192.png',thumbnail_path:null,taken_by:'Equipo de prueba',aggregator:'pedidosya',has_complaint:false,is_refutado:false,notes:''}));
+const metrics = {...emptyStore(),updatedAt:capturedAt,days:{[day]:{pedidosya:{orders:10000,complaints:250,awt:400}}}};
+const history = parseHistory({items:Object.fromEntries(photos.slice(0,250).map((photo,index) => [photo.name+'|'+day,{id:photo.name+'|'+day,orderCode:photo.name,day,photoId:photo.id,photoName:photo.name,photoUrl:photo.public_url,aggregator:'pedidosya',amount:index%5?1000:null,status:['queja','refutado','refutado_aceptado','refutado_rechazado','no_refutable'][index%5]}]))});
 const counts = new Map();
 const originalFetch = window.fetch.bind(window);
 window.WebSocket = class extends EventTarget {
@@ -28,7 +30,7 @@ window.fetch = async (input, options = {}) => {
   if(options.signal?.aborted)throw new DOMException('Aborted','AbortError');
   const args = options.body ? JSON.parse(options.body) : {};
   const response = data => new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
-  if(path==='foto_metrics_header')return response({data:{...metrics,days:undefined},availableLastDay:'2026-10-09',revision:1});
+  if(path==='foto_metrics_header')return response({data:{...metrics,days:undefined},availableLastDay:day,revision:1});
   if(path==='performance-data')return response(performanceView({ ...args,metrics,history,photos }));
   if(path==='foto_gallery_page') {
     const filtered=photos.filter(photo=>(!args.filters.search || photo.name.includes(args.filters.search)) && args.filters.kind!=='files');
