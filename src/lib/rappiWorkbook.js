@@ -1,15 +1,15 @@
-import { normalizeStoreName, parseWorkbookDate } from './peyaWorkbook.js';
+import { parseWorkbookDate } from './peyaWorkbook.js';
+import { normalizeStoreName, rappiStoreName, resolveImportStore } from './importStore.js';
 import { parseMoneyAmount } from './complaintSheet.js';
 import { complaintDay, complaintHistoryId, isPendingComplaintDetails, normalizeHistoryItem, parseHistory } from './complaintHistory.js';
 import { compactCode } from './complaintMatch.js';
 import { enumerateDays, upsertDayStats } from './metrics.js';
 
 export const RAPPI_SHEET = 'Reclamos - Órdenes';
-export function detectRappiStoreAccount(value) {
+export function detectRappiStoreAccount(value, storeName) {
   const normalized = normalizeStoreName(value);
-  if (normalized === 'KFC TURBO-LA PLATA') return 'rappi_turbo';
-  if (normalized === 'KFC-LA PLATA') return 'rappi';
-  return null;
+  if (!normalized || (storeName && rappiStoreName(normalized) !== rappiStoreName(storeName))) return null;
+  return /\bTURBO\b/.test(normalized) ? 'rappi_turbo' : 'rappi';
 }
 function value(sheet, address) {
   const cell = sheet[address];
@@ -18,7 +18,7 @@ function value(sheet, address) {
 }
 const text = v => String(v ?? '').trim();
 const header = v => text(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ');
-export function parseRappiWorkbook(book) {
+export function parseRappiWorkbook(book, { storeName: requestedStore = '' } = {}) {
   const sheet = book.Sheets[RAPPI_SHEET];
   if (!sheet) throw new Error('Falta la hoja ' + RAPPI_SHEET + '.');
   const required = { B: 'ORDEN ID', D: 'TIENDA', E: 'FECHA', F: 'MOTIVO', J: 'DETALLE DEL MOTIVO', M: 'COMPENSACION AL CLIENTE PAGADA POR EL RESTAURANTE', N: 'COMENTARIOS' };
@@ -34,9 +34,10 @@ export function parseRappiWorkbook(book) {
   let duplicates = 0;
   let matchedLocal = false;
   const lastRow = Number(sheet['!ref']?.match(/(\d+)$/)?.[1] || 0);
+  const storeName = resolveImportStore(Array.from({ length: Math.max(0, lastRow - 8) }, (_, i) => value(sheet, 'D' + (i + 9))), requestedStore, rappiStoreName);
   for (let row = 9; row <= lastRow; row++) {
     const local = text(value(sheet, 'D' + row));
-    const aggregator = detectRappiStoreAccount(local);
+    const aggregator = detectRappiStoreAccount(local, storeName);
     if (!aggregator) {
       if (local) excluded++;
       continue;
@@ -68,14 +69,14 @@ export function parseRappiWorkbook(book) {
       } else { seen.set(complaint.id, { signature, row }); complaints.push(complaint); }
     } catch (cause) { throw new Error(RAPPI_SHEET + ', fila ' + row + ': ' + cause.message, { cause }); }
   }
-  if (!matchedLocal) throw new Error('No se encontraron reclamos de KFC - LA PLATA. No se modificó ningún dato.');
+  if (!matchedLocal) throw new Error('No se encontraron reclamos del local seleccionado. No se modificó ningún dato.');
   const aggregators = [...new Set(complaints.map(c => c.aggregator))];
   const daily = aggregators.flatMap(aggregator => enumerateDays(from, to).map(day => ({
     day,
     aggregator,
     complaints: complaints.filter(c => c.day === day && c.aggregator === aggregator).length,
   })));
-  return { aggregators, complaints, daily, from, to, excluded, duplicates, missingAmounts: complaints.filter(c => c.amount == null).length };
+  return { storeName, aggregators, complaints, daily, from, to, excluded, duplicates, missingAmounts: complaints.filter(c => c.amount == null).length };
 }
 export function mergeRappiMetrics(store, report) {
   return report.daily.reduce((next, row) => upsertDayStats(next, row.day, row.aggregator, {

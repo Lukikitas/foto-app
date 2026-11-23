@@ -41,7 +41,7 @@ test('photographer passes as one encoded Intent extra without changing the route
     assert.equal(decodeURIComponent(extra.slice('S.capture_author='.length)), normalizeCameraAuthor(author));
     assert.equal(links.open.split(';').filter(part => part.startsWith('S.browser_fallback_url=')).length, 1);
     assert.equal(links.download, 'https://delivery.star-app.com.ar/demo/camara/');
-    assert.ok(links.open.startsWith('intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo;'));
+    assert.ok(links.open.startsWith('intent://capture#Intent;scheme=deliverystar;package=app.deliverystar.capture.demo.star;'));
   }
   assert.equal(normalizeCameraAuthor('  María\n\tLópez\u0000  '), 'María López');
   assert.equal(normalizeCameraAuthor('A'.repeat(120)).length, 80);

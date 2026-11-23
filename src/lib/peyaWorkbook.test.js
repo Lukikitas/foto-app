@@ -1,21 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { read, write } from '../vendor/xlsx.mjs';
-import { parsePeyaWorkbook, mergePeyaHistory, mergePeyaMetrics, normalizeStoreName, PEYA_SHEETS } from './peyaWorkbook.js';
+import { parsePeyaWorkbook as parseWorkbook, mergePeyaHistory, mergePeyaMetrics, normalizeStoreName, PEYA_SHEETS } from './peyaWorkbook.js';
 import { emptyHistory } from './complaintHistory.js';
 import { emptyStore } from './metrics.js';
 import { executePeyaImport } from './peyaImportFlow.js';
 
 function put(sheet, address, value) { sheet[address] = { t: typeof value === 'number' ? 'n' : 's', v: value }; }
+const parsePeyaWorkbook = (book, options = {}) => parseWorkbook(book, { storeName: 'LOCAL - CENTRO', ...options });
 function fixture() {
   const complaints = { '!ref': 'A1:L10' };
   for (const [c,v] of Object.entries({C:'Partner_Name',F:'Motivo',L:'Monto'})) put(complaints,c+'1',v);
-  for (const [c,v] of Object.entries({B:2287321383,C:'KFC -   LA PLATA',D:46282,E:0.5,F:'missing item',G:'Faltó una papa',H:'Combo',I:'Extra',L:3780})) put(complaints,c+'2',v);
-  put(complaints,'C3','KFC OTRO LOCAL'); put(complaints,'B3',9876543210);
+  for (const [c,v] of Object.entries({B:2287321383,C:'LOCAL -   CENTRO',D:46282,E:0.5,F:'missing item',G:'Faltó una papa',H:'Combo',I:'Extra',L:3780})) put(complaints,c+'2',v);
+  put(complaints,'C3','LOCAL OTRO LOCAL'); put(complaints,'B3',9876543210);
   const orders = { '!ref': 'T1:AB100' };
   const awt = { '!ref': 'H1:P100' };
-  put(orders,'U61','Partner_Name'); put(orders,'U62','KFC - LA PLATA');
-  put(awt,'I2','Partner Name'); put(awt,'I3','KFC – LA PLATA');
+  put(orders,'U61','Partner_Name'); put(orders,'U62','LOCAL - CENTRO');
+  put(awt,'I2','Partner Name'); put(awt,'I3','LOCAL – CENTRO');
   const orderCols=['V','W','X','Y','Z','AA','AB'];
   const awtCols=['J','K','L','M','N','O','P'];
   for(let i=0;i<7;i++) {
@@ -23,8 +24,8 @@ function fixture() {
     put(awt,awtCols[i]+'2',46282+i); put(awt,awtCols[i]+'3',[33,3,13,31,10,9,33][i]);
   }
   // Different tables on the same sheet must not be mistaken for the requested table.
-  put(orders,'U6','KFC - LA PLATA'); put(orders,'V6',999);
-  put(awt,'I95','KFC - LA PLATA'); put(awt,'J95',999);
+  put(orders,'U6','LOCAL - CENTRO'); put(orders,'V6',999);
+  put(awt,'I95','LOCAL - CENTRO'); put(awt,'J95',999);
   return { SheetNames: ['Reclamos - Órdenes','Resumen por tienda','AWT 5'], Sheets: {'Reclamos - Órdenes':complaints,'Resumen por tienda':orders,'AWT 5':awt} };
 }
 const report = () => parsePeyaWorkbook(fixture());
@@ -38,7 +39,7 @@ test('real layout, exact normalized local and cached formulas', () => {
   assert.deepEqual(result.daily.map(r=>r.orders),[168,230,239,247,138,135,153]);
   assert.deepEqual(result.daily.map(r=>r.awt),[33,3,13,31,10,9,33]);
   assert.deepEqual(result.daily.map(r=>r.complaints),[1,0,0,0,0,0,0]);
-  assert.equal(normalizeStoreName(' KFC —   La Plata '),'KFC-LA PLATA');
+  assert.equal(normalizeStoreName(' LOCAL —   Centro '),'LOCAL-CENTRO');
 });
 test('reader round trip through XLSX bytes preserves zero formula results', () => {
   const book=fixture(); book.Sheets['Reclamos - Órdenes'].L2={t:'n',f:'1-1',v:0};
@@ -51,14 +52,14 @@ test('blank counts mean zero; optional fields and zero amounts are preserved', (
   const result=parsePeyaWorkbook(book); assert.equal(result.daily[0].orders,0); assert.equal(result.daily[0].awt,0); assert.deepEqual(result.complaints[0].fields,{});
 });
 test('similar store names are excluded', () => {
-  const book=fixture();put(book.Sheets['Reclamos - Órdenes'],'C2','KFC - LA PLATA II');
+  const book=fixture();put(book.Sheets['Reclamos - Órdenes'],'C2','LOCAL - CENTRO II');
   assert.equal(parsePeyaWorkbook(book).complaints.length,0);
 });
 test('missing and ambiguous sheets, missing local and mismatched dates fail', () => {
   const missing=fixture();delete missing.Sheets['AWT 5'];assert.throws(()=>parsePeyaWorkbook(missing),/AWT/);
   const alias=fixture();alias.Sheets.AWT5=alias.Sheets['AWT 5'];delete alias.Sheets['AWT 5'];assert.equal(parsePeyaWorkbook(alias).daily.length,7);
   alias.Sheets['AWT 5']=alias.Sheets.AWT5;assert.throws(()=>parsePeyaWorkbook(alias),/única/);
-  const absent=fixture();put(absent.Sheets['Resumen por tienda'],'U62','KFC OTRO');assert.throws(()=>parsePeyaWorkbook(absent),/sola fila/);
+  const absent=fixture();put(absent.Sheets['Resumen por tienda'],'U62','LOCAL OTRO');assert.throws(()=>parsePeyaWorkbook(absent),/local/);
   const dates=fixture();put(dates.Sheets['AWT 5'],'J2',46281);assert.throws(()=>parsePeyaWorkbook(dates),/no coinciden/);
 });
 test('invalid values and uncached formulas never silently become zero', () => {
@@ -125,4 +126,12 @@ test('legacy bulk details are refreshed from the latest report', () => {
   item.amount=123;item.combo='Producto corregido';item.reason='Motivo corregido';item.comment='Nota interna';
   const after=Object.values(mergePeyaHistory(initial,r).store.items)[0];
   assert.equal(after.amount,r.complaints[0].amount);assert.equal(after.combo,r.complaints[0].combo);assert.equal(after.reason,r.complaints[0].reason);assert.equal(after.comment,r.complaints[0].comment);
+});
+
+test('detects any single store and requires a choice for multiple stores', () => {
+  const book = fixture();
+  assert.equal(parseWorkbook(book).storeName, 'LOCAL-CENTRO');
+  put(book.Sheets['Resumen por tienda'], 'U63', 'Otra sucursal');
+  assert.throws(() => parseWorkbook(book), /varios locales/);
+  assert.equal(parsePeyaWorkbook(book).complaints.length, 1);
 });

@@ -12,3 +12,7 @@
 
 .rappi-import__account { display: flex; flex-direction: column; gap: .4rem; }
 .rappi-import__account select { padding: .5rem; color: inherit; background: var(--bg, #202020); border: 1px solid var(--border, #8885); border-radius: 6px; }
+
+.peya-import__store { display: grid; gap: .4rem; margin: .75rem 0; font-weight: 600; }
+.peya-import__store input { width: 100%; max-width: 32rem; }
+.peya-import__store small { font-weight: 400; color: var(--muted); }

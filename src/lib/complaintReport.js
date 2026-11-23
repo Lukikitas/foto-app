@@ -284,7 +284,7 @@ export function buildReportWorkbook(report) {
     {cells:[{value:"Pérdida confirmada",style:CELL_STYLES.TEXT_BORDER},{value:totals.finalLostAmount,style:CELL_STYLES.CURRENCY}]},
     {
       height: 28,
-      cells: [{ value: 'DELIVERY LA PLATA — INFORME EJECUTIVO DE RECLAMOS', style: CELL_STYLES.TITLE }],
+      cells: [{ value: 'STAR-APP DELIVERY — INFORME EJECUTIVO DE RECLAMOS', style: CELL_STYLES.TITLE }],
     },
     {
       height: 18,

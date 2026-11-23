@@ -74,7 +74,7 @@ try {
   });
   await until(() => openCamera().getAttribute('aria-disabled') === 'false', 'photographer enables the camera');
   if (mobile) {
-    assert.match(openCamera().href, /package=app\.deliverystar\.capture\.demo;/);
+    assert.match(openCamera().href, /package=app\.deliverystar\.capture\.demo\.star;/);
     assert.match(openCamera().href, /S.capture_author=Mar%C3%ADa%20Demo;/);
   } else assert.equal(openCamera().href, 'http://127.0.0.1:4174/demo/camara/');
   await click(openCamera());

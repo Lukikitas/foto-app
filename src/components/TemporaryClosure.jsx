@@ -15,7 +15,7 @@ export default function TemporaryClosure() {
     <div className="temporary-closure">
       <UpdatePrompt />
       <main className="temporary-closure__main" aria-labelledby="closure-title">
-        <p className="temporary-closure__brand">DELIVERY STAR</p>
+        <p className="temporary-closure__brand"><img className="app-brand-star" src="/favicon.svg" alt="" /> DELIVERY STAR</p>
         <h1 id="closure-title">La app se encuentra momentáneamente cerrada</h1>
         <p className="temporary-closure__thanks">Gracias por haberla usado y por ayudarnos en su desarrollo. Cada prueba y cada aporte nos ayudaron a mejorarla.</p>
       </main>

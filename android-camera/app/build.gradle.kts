@@ -18,8 +18,8 @@ android {
         applicationId = "app.deliverystar.capture"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.7.0-pilot"
+        versionCode = 8
+        versionName = "0.7.1-pilot"
         buildConfigField("boolean", "CAPTURE_TEMPORARILY_CLOSED", "true")
         buildConfigField("boolean", "DEMO_MODE", "false")
         resValue("string", "app_name", "Delivery Star · Fotos")
@@ -49,9 +49,10 @@ android {
         }
         create("demo") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".demo"
+            applicationIdSuffix = ".demo.star"
             versionNameSuffix = "-demo"
-            resValue("string", "app_name", "Delivery Star · DEMO")
+            resValue("string", "app_name", "Delivery Star · DEMO Estrella")
+            signingConfig = signingConfigs.findByName("pilot") ?: signingConfigs.getByName("debug")
             buildConfigField("boolean", "CAPTURE_TEMPORARILY_CLOSED", "false")
             buildConfigField("boolean", "DEMO_MODE", "true")
             buildConfigField("String", "SUPABASE_URL", quoted(""))

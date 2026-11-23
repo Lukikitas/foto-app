@@ -64,7 +64,7 @@ La tira de la cámara muestra el frame congelado que se vio al disparar. Cuando 
 
 ### Manual de uso
 
-La app incluye una guía corta para el equipo (sacar fotos, galería, marcar quejas, refutado, repetir fotos y corregir autores) en `public/manual/index.html`. Se abre desde **Ajustes → Manual de uso** o directo en `/manual/index.html` (el archivo explícito, así funciona igual en `npm run dev`, en GitHub Pages y desde cualquier dispositivo) y tiene el botón «Guardar/Imprimir» para quedarse con el PDF en el celu. Es una página autocontenida con portada, índice, estilos A4 de impresión (contenido continuo sin páginas a medio llenar) y capturas propias en `public/manual/img/`; no se precachea el service worker y queda fuera del fallback de navegación (junto a `presentacion/`), así que `/manual/…` sirve la guía y no la app.
+La app incluye una guía corta para el equipo (sacar fotos, galería, marcar quejas, refutado, repetir fotos y corregir autores) en `public/manual/index.html`. Se abre desde **Ajustes → Manual de uso** o directo en `/manual/index.html` (el archivo explícito, así funciona igual en `npm run dev`, en GitHub Pages y desde cualquier dispositivo) y tiene el botón «Guardar/Imprimir» para quedarse con el PDF en el celu. Es una página autocontenida con portada, índice, estilos A4 de impresión (contenido continuo sin páginas a medio llenar) e imágenes de demostración sin datos reales en `public/manual/img/`; no se precachea el service worker y queda fuera del fallback de navegación (junto a `presentacion/`), así que `/manual/…` sirve la guía y no la app.
 
 Validación: `npm test` (291 pruebas), `npm run lint`, `npm run build`.
 
@@ -123,7 +123,7 @@ If you are developing a production application, we recommend using TypeScript wi
 
 Disponible en Reclamos y Métricas → Cargar. Seleccionar un .xlsx, revisar la vista previa y pulsar Importar. La carga por texto/CSV/Google Sheets y los formularios manuales siguen disponibles.
 
-Solo se importa KFC - LA PLATA (espacios, mayúsculas y guiones normalizados):
+Se importa el local indicado en «Local del reporte», normalizando espacios, mayúsculas y guiones. Si el reporte contiene un solo local, se detecta automáticamente; si contiene varios, hay que indicar cuál importar:
 
 - Reclamos - Órdenes: B pedido, C local, D fecha, E hora, F motivo, G comentario, H producto, I nombre opcional, L monto.
 - Resumen por tienda: U local, fechas V61:AB61 y cantidades en la fila del local dentro de esa tabla.
@@ -141,7 +141,7 @@ Pruebas: npm test. Build: npm run build. El archivo de referencia de septiembre 
 
 En Reclamos o Métricas → Cargar, seleccionar el Excel de Rappi. Rappi o Rappi Turbo se detectan por la columna Tienda y pueden revisarse antes de guardar. Ambos usan el mismo formato, pero se guardan como cuentas independientes.
 
-Se lee únicamente Reclamos - Órdenes: encabezados en fila 8, datos desde fila 9. B: pedido; D: tienda; E: fecha; F: motivo; J: detalle del motivo; M: compensación pagada por el restaurante; N: comentario. C, G, H, I, K y L se ignoran. A y O están vacías en el formato de referencia. Se filtra el nombre completo KFC - LA PLATA normalizando espacios, mayúsculas y guiones.
+Se lee únicamente Reclamos - Órdenes: encabezados en fila 8, datos desde fila 9. B: pedido; D: tienda; E: fecha; F: motivo; J: detalle del motivo; M: compensación pagada por el restaurante; N: comentario. C, G, H, I, K y L se ignoran. A y O están vacías en el formato de referencia. Se filtra el nombre completo del local indicado; si no se indica, se exige un solo local. La palabra «Turbo» en el nombre de tienda identifica esa cuenta y se agrupa con el mismo local sin «Turbo».
 
 El período se toma de C5 y F5. Se reemplaza solo la cantidad diaria de quejas de la cuenta elegida, incluidos días sin quejas dentro del reporte; pedidos totales, AWT y otras cuentas permanecen intactos. Si no se reconoce el local o el formato, no se escribe nada.
 
@@ -151,7 +151,7 @@ Verificado con el archivo de referencia: 24 reclamos, 11 con monto cero y $208.0
 
 ### Reintegros de PedidosYa
 
-Desde Reclamos o Métricas → Carga, «Importar refutados aceptados» admite .xls/.xlsx. Lee únicamente Reintegros: B (pedido), D (DS) y E (KFC - La Plata, nombre completo normalizado). SI/NO y otros locales se ignoran. La vista previa no escribe; confirmar cambia solo el estado de quejas existentes de PedidosYa a refutado_aceptado, preservando fechas, montos, fotos y correcciones. Los pedidos ausentes o con varias coincidencias se informan y no se crean ni modifican. Reimportar no duplica; ante un error puede reintentarse. No modifica métricas ni el lote de cruce con fotos.
+Desde Reclamos o Métricas → Carga, «Importar refutados aceptados» admite .xls/.xlsx. Lee únicamente Reintegros: B (pedido), D (DS) y E (sucursal, nombre completo normalizado). SI/NO y otros locales se ignoran. Se debe indicar el local cuando hay varias sucursales en el archivo. La vista previa no escribe; confirmar cambia solo el estado de quejas existentes de PedidosYa a refutado_aceptado, preservando fechas, montos, fotos y correcciones. Los pedidos ausentes o con varias coincidencias se informan y no se crean ni modifican. Reimportar no duplica; ante un error puede reintentarse. No modifica métricas ni el lote de cruce con fotos.
 
 ## Versión 1.11.0
 

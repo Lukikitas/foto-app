@@ -1,4 +1,4 @@
-export async function readPeyaFile(file) {
+export async function readPeyaFile(file, options = {}) {
   if (!/\.xlsx$/i.test(file.name)) throw new Error('Seleccioná un archivo .xlsx de PedidosYa.');
   const data = await file.arrayBuffer();
   return new Promise((resolve, reject) => {
@@ -9,6 +9,6 @@ export async function readPeyaFile(file) {
       else resolve(result.report);
     };
     worker.onerror = () => { worker.terminate(); reject(new Error('No se pudo procesar el Excel. Volvé a seleccionar el archivo.')); };
-    worker.postMessage(data, [data]);
+    worker.postMessage({ buffer: data, options }, [data]);
   });
 }

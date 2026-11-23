@@ -1,19 +1,19 @@
 :root,
 :root[data-theme='light'] {
-  --kfc-red: #e4002b;
-  --kfc-red-hover: #c10024;
-  --kfc-black: #202124;
-  --kfc-cream: #efe8e0;
+  --brand-red: #e4002b;
+  --brand-red-hover: #c10024;
+  --brand-black: #202124;
+  --brand-cream: #efe8e0;
 
   --text: #4e535b;
   --text-h: #1c1d20;
   --text-muted: #7c828b;
-  --bg: var(--kfc-cream);
+  --bg: var(--brand-cream);
   --surface: #f7f3ee;
   --border: #d9d0c6;
   --border-strong: #c3b8ac;
-  --accent: var(--kfc-red);
-  --accent-hover: var(--kfc-red-hover);
+  --accent: var(--brand-red);
+  --accent-hover: var(--brand-red-hover);
   --accent-bg: rgba(228, 0, 43, 0.08);
   --accent-border: rgba(228, 0, 43, 0.28);
   --danger: #b42318;
