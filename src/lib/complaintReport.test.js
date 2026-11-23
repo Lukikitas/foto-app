@@ -189,7 +189,7 @@ test('generateReportHtml generates executive HTML with print-color-adjust, KPIs,
 
   const html = generateReportHtml(report, { includeDetail: true });
   assert.ok(html.includes('<!DOCTYPE html>'));
-  assert.ok(html.includes('STAR-APP Delivery'));
+  assert.ok(html.includes('Delivery La Plata'));
   assert.ok(html.includes('print-color-adjust: exact'));
   assert.ok(html.includes('kpi-grid'));
   assert.ok(html.includes('status-panel'));

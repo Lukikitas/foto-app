@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build an editable widescreen PowerPoint of the STAR-APP Delivery deck."""
+"""Build an editable widescreen PowerPoint of the Delivery La Plata deck."""
 
 from pathlib import Path
 
@@ -13,7 +13,7 @@ from pptx.util import Inches, Pt
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "public" / "presentacion"
-OUT = ASSETS / "STAR-APP-Delivery.pptx"
+OUT = ASSETS / "Delivery-La-Plata.pptx"
 
 BG = RGBColor(0x11, 0x11, 0x13)
 CARD = RGBColor(0x1A, 0x1B, 0x1E)
@@ -128,7 +128,7 @@ def picture(slide, path, x, y, w, h):
     return slide.shapes.add_picture(str(path), x, y, w, h)
 
 
-def footer(slide, left="STAR-APP Delivery", right="delivery.star-app.com.ar"):
+def footer(slide, left="KFC · Delivery La Plata", right="delivery.star-app.com.ar"):
     box, tf = textbox(slide, MARGIN, Inches(7.18), Inches(6.5), Inches(0.24))
     write_paragraph(tf.paragraphs[0], left, 10, False, MUTED, space_after=0)
     box, tf = textbox(slide, Inches(7.2), Inches(7.18), Inches(5.6), Inches(0.24))
@@ -162,8 +162,8 @@ def build():
 
     # 1 Cover
     s = blank_slide(prs)
-    kicker(s, "Gestión de delivery · Presentación")
-    title(s, "STAR-APP Delivery", y=Inches(0.55), size=40, w=Inches(6.4))
+    kicker(s, "KFC · Dirección · Lucas Rodriguez")
+    title(s, "Delivery La Plata", y=Inches(0.55), size=40, w=Inches(6.4))
     box, tf = textbox(s, MARGIN, Inches(1.35), Inches(6.4), Inches(1.15))
     write_paragraph(
         tf.paragraphs[0],
@@ -180,7 +180,7 @@ def build():
             "Dos fotos en el mostrador: ticket y bolsa. El código no se tipea.",
             "Cada reclamo se cruza con la foto y se prepara para refutar en un toque.",
             "Tablero de pedidos, quejas, AWT y plata en disputa, recuperada o perdida.",
-            "Un mismo flujo para registrar y controlar pedidos en cualquier local.",
+            "Ya está en uso en La Plata. El mismo flujo se puede abrir en cualquier local.",
         ],
         15,
     )
@@ -265,7 +265,7 @@ def build():
     kicker(s, "Mostrador")
     title(s, "Pensada para el celular, en el momento de armar el pedido.")
     picture(s, ASSETS / "02-captura-mobile.png", Inches(0.55), Inches(1.35), Inches(2.55), Inches(5.5))
-    picture(s, ASSETS / "02-captura-mobile.png", Inches(3.3), Inches(1.35), Inches(2.55), Inches(5.5))
+    picture(s, ASSETS / "10-camara-mobile.png", Inches(3.3), Inches(1.35), Inches(2.55), Inches(5.5))
     box, tf = textbox(s, Inches(6.15), Inches(1.5), Inches(6.7), Inches(5.2))
     bullets(
         tf,
@@ -354,7 +354,7 @@ def build():
     # 9 Expansion
     s = blank_slide(prs)
     kicker(s, "Red de locales")
-    title(s, "Un mismo flujo para todos tus locales.")
+    title(s, "De La Plata a todos los locales, sin un sistema nuevo.")
     card(s, MARGIN, Inches(1.35), Inches(6.1), Inches(2.85))
     box, tf = textbox(s, Inches(0.68), Inches(1.48), Inches(5.7), Inches(0.26))
     write_paragraph(tf.paragraphs[0], "QUÉ HAY QUE HACER", 11, True, RED, space_after=0)
@@ -384,7 +384,7 @@ def build():
             "Misma evidencia, mismos estados, mismas métricas en cada punto de venta.",
             "La plata en disputa se ve. La recuperada también. Se puede comparar local contra local.",
             "Menos pedidos “sin foto” en la red = menos descuentos que se dan por no poder refutar.",
-            "Cada sucursal puede aplicar el mismo proceso de registro y control.",
+            "No se paga una app distinta por sucursal. Se replica lo que ya funciona en La Plata.",
         ],
         12,
     )
@@ -400,7 +400,7 @@ def build():
     box, tf = textbox(s, MARGIN, Inches(1.35), Inches(6.2), Inches(1.1))
     write_paragraph(
         tf.paragraphs[0],
-        "Registrá pedidos, leé códigos, cruzá reclamos y medí quejas y AWT. Aplicá el mismo hábito en cada local.",
+        "La Plata ya registra pedidos, lee códigos, cruza reclamos y mide quejas y AWT. Expandirlo es copiar ese hábito, no armar otro proyecto.",
         16,
         False,
         TEXT,
@@ -435,7 +435,7 @@ def build():
     tf._txBody.bodyPr.set("anchor", "ctr")
 
     box, tf = textbox(s, MARGIN, Inches(6.25), Inches(6.2), Inches(0.4))
-    write_paragraph(tf.paragraphs[0], "Archivo editable: STAR-APP-Delivery.pptx", 13, False, MUTED, space_after=0)
+    write_paragraph(tf.paragraphs[0], "Archivo editable: Delivery-La-Plata.pptx", 13, False, MUTED, space_after=0)
 
     picture(s, ASSETS / "03-lightbox.png", Inches(6.85), Inches(1.3), Inches(6.0), Inches(5.5))
     footer(s)

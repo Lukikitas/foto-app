@@ -421,7 +421,6 @@
         figure img { background: #fff; }
         a { color: inherit; text-decoration: none; }
       }
-    .split:not(:has(figure)) { grid-template-columns: 1fr; }
     </style>
   </head>
   <body>
@@ -436,7 +435,7 @@
         <div class="cover__brand">
           <img src="../pwa-192.png" alt="Ícono de STAR-APP" />
           <div>
-            <p class="cover__kicker">STAR-APP Delivery</p>
+            <p class="cover__kicker">STAR-APP Delivery · La Plata</p>
             <p style="margin: 0; font-weight: 700;">Equipo de fotografía y reclamos</p>
           </div>
         </div>
@@ -479,7 +478,7 @@
             </ol>
           </div>
           <figure>
-            <img src="../demo/ticket.svg" alt="Ticket ilustrativo de un local de ejemplo" onerror="this.closest('figure').style.display='none'" />
+            <img src="img/camara-ticket.png" alt="Foto del ticket con el código dentro del recuadro" onerror="this.closest('figure').style.display='none'" />
             <figcaption>El código tiene que quedar completo dentro del recuadro: eso es lo que lee la app.</figcaption>
           </figure>
         </div>
@@ -526,7 +525,7 @@
             </ul>
           </div>
           <figure>
-            <img src="img/galeria-filtros.png" alt="Galería de pedidos con datos ficticios" onerror="this.closest('figure').style.display='none'" />
+            <img src="img/galeria-filtros.png" alt="Galería de pedidos con el panel de Filtros abierto" onerror="this.closest('figure').style.display='none'" />
             <figcaption>En «Filtros», el checkbox «Página (100)» marca las 100 de una sola vez.</figcaption>
           </figure>
         </div>
@@ -556,7 +555,10 @@
               cruzalo en <span class="ui">Reclamos</span> y la app completa motivo y monto sola.
             </p>
           </div>
-
+          <figure>
+            <img src="img/editar-reclamo.png" alt="Formulario Editar pedido con la casilla Pedido con reclamo" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>«Pedido con reclamo» es la casilla que convierte el pedido en una queja.</figcaption>
+          </figure>
         </div>
       </section>
       <section class="manual-section" id="s4">
@@ -603,8 +605,8 @@
             </p>
           </div>
           <figure>
-            <img src="img/refutar-ver-queja-app.jpeg" alt="Historial de quejas con datos ficticios" onerror="this.closest('figure').style.display='none'" />
-            <figcaption>Historial de ejemplo para revisar quejas y preparar refutaciones.</figcaption>
+            <img src="img/refutar-ver-queja-app.jpeg" alt="Quejas en la app con el botón Preparar para refutar y el plazo Vence en 3 d" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>La queja en la app: badge Queja, plazo «Vence en 3 d» y «Preparar para refutar».</figcaption>
           </figure>
         </div>
 
@@ -617,23 +619,38 @@
         <ol class="steps steps--shots">
           <li>
             Abrí el portal (<span class="ui">«Abrir portal»</span>) y en <span class="ui">Pedidos</span> buscá el número de pedido — lo tenés copiado.
-
+            <figure class="step-shot">
+              <img src="img/refutar-abrir-portal.jpeg" alt="Portal PedidosYa Partner en Pedidos con el número de pedido buscado" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>Portal → Pedidos: buscá el número.</figcaption>
+            </figure>
           </li>
           <li>
             Tocá el pedido para abrir su ficha: ahí están los reclamos, las deducciones y <span class="ui">«Ayuda con este pedido»</span>.
-
+            <figure class="step-shot">
+              <img src="img/refutar-ver-ficha.jpeg" alt="Ficha del pedido en el portal con reclamos, deducciones y Ayuda con este pedido" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>La ficha del pedido, con sus reclamos y deducciones.</figcaption>
+            </figure>
           </li>
           <li>
             Tocá <span class="ui">«Ayuda con este pedido»</span> y elegí <span class="ui">«Reclamar cargos por devolución a usuarios»</span>.
-
+            <figure class="step-shot">
+              <img src="img/refutar-reclamar.jpeg" alt="Ayuda en línea con la opción Reclamar cargos por devolución a usuarios" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>«Reclamar cargos por devolución a usuarios».</figcaption>
+            </figure>
           </li>
           <li>
             Revisá «Reclama un reembolso» y tocá <span class="ui">«Crear caso para disputa»</span>. La respuesta llega en un plazo de 72 h.
-
+            <figure class="step-shot">
+              <img src="img/refutar-crear-caso.jpeg" alt="Artículo Reclama un reembolso con el botón Crear caso para disputa" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>«Reclama un reembolso» → «Crear caso para disputa».</figcaption>
+            </figure>
           </li>
           <li>
             Cargá la foto descargada con <span class="ui">«Cargar archivo»</span>, escribí el detalle en Comentarios, marcá la casilla de confirmación y enviá.
-
+            <figure class="step-shot">
+              <img src="img/refutar-subir-datos.jpeg" alt="Formulario del caso con Cargar archivo, campo Comentarios y casilla de confirmación" onerror="this.closest('figure').style.display='none'" />
+              <figcaption>Foto, detalle y confirmación del caso.</figcaption>
+            </figure>
           </li>
         </ol>
 
@@ -647,8 +664,8 @@
             </ol>
           </div>
           <figure class="figure--compact">
-            <img src="img/historial-estados.png" alt="Historial con datos ficticios" onerror="this.closest('figure').style.display='none'" />
-            <figcaption>Historial de ejemplo con estados y plazos de reclamos.</figcaption>
+            <img src="img/historial-estados.png" alt="Historial con una queja aceptada y otra por vencer" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>Una queja ya resuelta (Ref. aceptado) y otra por vencer con «Vence mañana».</figcaption>
           </figure>
         </div>
       </section>
@@ -668,8 +685,8 @@
             </ol>
           </div>
           <figure>
-            <img src="../demo/evidencia.svg" alt="Ejemplo ilustrativo de bolsa y ticket" onerror="this.closest('figure').style.display='none'" />
-            <figcaption>Evidencia ilustrativa: bolsa completa y ticket visible.</figcaption>
+            <img src="img/camara-bolsa.png" alt="Paso de la bolsa: miniaturas del par y Repetir ticket" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>Paso de la bolsa: miniaturas TICKET/BOLSA del par y «Repetir ticket».</figcaption>
           </figure>
         </div>
 

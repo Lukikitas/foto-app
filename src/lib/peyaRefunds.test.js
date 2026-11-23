@@ -1,17 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { read, write, utils } from '../vendor/xlsx.mjs';
-import { parsePeyaRefunds as parseWorkbook, applyPeyaRefunds, executePeyaRefunds } from './peyaRefunds.js';
-const parsePeyaRefunds = (book, options = {}) => parseWorkbook(book, { storeName: 'LOCAL - CENTRO', ...options });
+import { parsePeyaRefunds, applyPeyaRefunds, executePeyaRefunds } from './peyaRefunds.js';
 function book(rows = []) { return { Sheets: { Reintegros: utils.aoa_to_sheet([['', 'Número de pedido', '', 'Orden entregada al repartidor', 'Sucursal'], ...rows]) } }; }
-const row = (code, ds = 'DS', local = 'LOCAL - Centro') => ['', code, '', ds, local];
+const row = (code, ds = 'DS', local = 'KFC - La Plata') => ['', code, '', ds, local];
 const report = codes => ({ orders: codes.map((code, i) => ({ code, row: i + 2 })) });
 const item = (id, code, extra = {}) => ({ id, orderCode: code, aggregator: 'pedidosya', status: 'refutado', amount: 1800, comment: 'Manual', photoId: 'photo', manualEdit: true, day: '2026-09-07', fields: { original: 'yes' }, ...extra });
 
 test('filtra nombre completo y DS, ignora otras columnas y deduplica', () => {
- const b = book([row(2266590265), row('2266590265', ' ds ', ' local –  CENTRO '), row(2222222222, 'SI'), row(3333333333, 'NO'), row(4444444444, 'DS', 'LOCAL - CENTRO NORTE')]);
+ const b = book([row(2266590265), row('2266590265', ' ds ', ' kfc –  LA PLATA '), row(2222222222, 'SI'), row(3333333333, 'NO'), row(4444444444, 'DS', 'KFC - LA PLATA NORTE')]);
  b.Sheets.Reintegros.F2 = { t: 'e', v: 7 };
- assert.deepEqual(parsePeyaRefunds(b), { storeName: 'LOCAL-CENTRO', orders: [{ code: '2266590265', row: 2 }], ignored: 2, excluded: 1, duplicates: 1, localRows: 4 });
+ assert.deepEqual(parsePeyaRefunds(b), { orders: [{ code: '2266590265', row: 2 }], ignored: 2, excluded: 1, duplicates: 1, localRows: 4 });
 });
 test('rechaza hojas, encabezados, códigos y celdas DS inválidos', () => {
  assert.throws(() => parsePeyaRefunds({ Sheets: {} }), /Reintegros/);
@@ -55,11 +54,4 @@ test('lectura fallida no escribe y la mutación usa el historial más reciente',
  const old = { items: { a: item('a', '2266590265') } }; const fresh = { items: {} };
  const result = await executePeyaRefunds(report(['2266590265']), { loadHistory: async () => old, mutateHistory: async fn => fn(fresh) });
  assert.equal(result.updated, 0); assert.equal(result.summary.missing.length, 1);
-});
-
-test('detecta una sucursal genérica y bloquea reintegros mezclados sin selección', () => {
-  assert.equal(parseWorkbook(book([row('2266590265', 'DS', 'Mi comercio - Sur')])).orders.length, 1);
-  const mixed = book([row('2266590265'), row('2222222222', 'DS', 'Otra sucursal')]);
-  assert.throws(() => parseWorkbook(mixed), /varios locales/);
-  assert.equal(parsePeyaRefunds(mixed).orders.length, 1);
 });

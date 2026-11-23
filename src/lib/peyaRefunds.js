@@ -1,4 +1,4 @@
-import { normalizeStoreName, resolveImportStore } from './importStore.js';
+import { normalizeStoreName } from './peyaWorkbook.js';
 import { compactCode } from './complaintMatch.js';
 import { COMPLAINT_STATUSES } from './complaintHistory.js';
 
@@ -14,7 +14,7 @@ export function peyaRefundOrderCode(value) {
   const code = compactCode(value).replace(/^PEYA/, '');
   return /^\d{4,12}$/.test(code) ? code : '';
 }
-export function parsePeyaRefunds(book, { storeName: requestedStore = '' } = {}) {
+export function parsePeyaRefunds(book) {
   const sheet = book.Sheets?.[REFUNDS_SHEET];
   if (!sheet) throw new Error('Falta la hoja Reintegros.');
   const headers = { B: 'NUMERO DE PEDIDO', D: 'ORDEN ENTREGADA AL REPARTIDOR', E: 'SUCURSAL' };
@@ -28,11 +28,10 @@ export function parsePeyaRefunds(book, { storeName: requestedStore = '' } = {}) 
   let duplicates = 0;
   let localRows = 0;
   const last = Number(sheet['!ref']?.match(/(\d+)$/)?.[1] || 0);
-  const storeName = resolveImportStore(Array.from({ length: Math.max(0, last - 1) }, (_, i) => cell(sheet, 'E' + (i + 2))), requestedStore);
   for (let row = 2; row <= last; row++) {
     const local = cell(sheet, 'E' + row);
     if (!text(local)) continue;
-    if (normalizeStoreName(local) !== storeName) { excluded++; continue; }
+    if (normalizeStoreName(local) !== 'KFC-LA PLATA') { excluded++; continue; }
     localRows++;
     if (text(cell(sheet, 'D' + row)).toUpperCase() !== 'DS') { ignored++; continue; }
     const raw = cell(sheet, 'B' + row);
@@ -42,7 +41,7 @@ export function parsePeyaRefunds(book, { storeName: requestedStore = '' } = {}) 
     seen.add(code);
     orders.push({ code, row });
   }
-  return { storeName, orders, excluded, ignored, duplicates, localRows };
+  return { orders, excluded, ignored, duplicates, localRows };
 }
 function isPeyaHistory(item) {
   if (item.aggregator && item.aggregator !== 'pedidosya') return false;

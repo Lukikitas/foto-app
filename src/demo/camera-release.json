@@ -1,6 +1,6 @@
 {
-  "url": "https://github.com/Lukikitas/foto-app/releases/download/android-camera-demo-v0.7.1/Delivery-Star-Camara-DEMO.apk",
-  "sha256": "627a8b656ad67d7358c1d62abae3be88e5b0f9ca0535e3f9066af39b14b91bbb",
-  "bytes": 58734980,
-  "packageName": "app.deliverystar.capture.demo.star"
+  "url": "https://github.com/Lukikitas/foto-app/releases/download/android-camera-demo-v0.7.0/Delivery-Star-Camara-DEMO.apk",
+  "sha256": "790f9c389222a988a2557b212af21ffb2de53b2ec07a577ed031fecd77532db6",
+  "bytes": 58735116,
+  "packageName": "app.deliverystar.capture.demo"
 }

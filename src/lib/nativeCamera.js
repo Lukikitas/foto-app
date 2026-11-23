@@ -1,6 +1,6 @@
 export const NATIVE_CAMERA_PACKAGE = 'app.deliverystar.capture';
 export const NATIVE_CAMERA_DOWNLOAD_PATH = '/manual/piloto-android/';
-export const DEMO_CAMERA_PACKAGE = 'app.deliverystar.capture.demo.star';
+export const DEMO_CAMERA_PACKAGE = 'app.deliverystar.capture.demo';
 export const DEMO_CAMERA_DOWNLOAD_PATH = '/demo/camara/';
 
 // No installation probing or timed redirects: the browser resolves the pinned

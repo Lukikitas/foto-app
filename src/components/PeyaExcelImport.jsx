@@ -1,4 +1,3 @@
-import ImportStoreField from './ImportStoreField';
 import { useRef, useState } from 'react';
 import { loadMetricsStore } from '../lib/metricsStore';
 import { loadComplaintHistory } from '../lib/complaintHistoryStore';
@@ -9,7 +8,6 @@ import './PeyaExcelImport.css';
 
 export default function PeyaExcelImport({ disabled = false, onBusy }) {
   const input = useRef(null);
-  const [storeName, setStoreName] = useState('');
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +20,7 @@ export default function PeyaExcelImport({ disabled = false, onBusy }) {
     setError(''); setNotice(''); setPreview(null); working(true);
     try {
       const { readPeyaFile } = await import('../lib/peyaWorkbookReader');
-      const report = await readPeyaFile(file, { storeName });
+      const report = await readPeyaFile(file);
       const [metrics, history] = await Promise.all([loadMetricsStore({ strict: true }), loadComplaintHistory({ force: true, strict: true })]);
       const changes = mergePeyaHistory(history, report);
       setPreview({ report, metrics, filename: file.name, added: changes.added, updated: changes.updated });
@@ -41,17 +39,16 @@ export default function PeyaExcelImport({ disabled = false, onBusy }) {
   return (
     <section className="peya-import" aria-label="Importar Excel PedidosYa">
       <div className="peya-import__heading">
-        <div><h3>Excel PedidosYa</h3><p>Reclamos, pedidos y AWT del local seleccionado.</p></div>
+        <div><h3>Excel PedidosYa</h3><p>Reclamos, pedidos y AWT · Solo KFC - LA PLATA</p></div>
         <button type="button" className="btn btn--ghost" disabled={disabled || busy} onClick={() => input.current?.click()}>Importar Excel PedidosYa</button>
         <input ref={input} type="file" accept=".xlsx" hidden onChange={select} />
       </div>
-      <ImportStoreField value={storeName} disabled={disabled || busy} onChange={value => { setStoreName(value); setPreview(null); setError(''); }} />
       {busy && <p role="status">Procesando… El archivo puede tardar unos segundos.</p>}
       {error && <p className="message message--error" role="alert">{error}</p>}
       {notice && <p className="message message--success" role="status">{notice}</p>}
       {preview && <div className="peya-import__preview">
-        <h4>Vista previa · {preview.filename} · Local: {preview.report.storeName}</h4>
-        <p>{preview.report.complaints.length} reclamos del local: {preview.added} nuevos y {preview.updated} existentes. {preview.report.excluded} filas de otros locales excluidas. {preview.report.duplicates} duplicados idénticos omitidos.</p>
+        <h4>Vista previa · {preview.filename}</h4>
+        <p>{preview.report.complaints.length} reclamos de La Plata: {preview.added} nuevos y {preview.updated} existentes. {preview.report.excluded} filas de otros locales excluidas. {preview.report.duplicates} duplicados idénticos omitidos.</p>
         <p>Se reemplazarán los valores diarios de PedidosYa. Los datos presentes del Excel reemplazarán los anteriores al confirmar en Gestionar, incluidos los montos. Los vacíos, estados y fotos se conservan.</p>
         <div className="peya-import__table"><table>
           <caption>Valores actuales → valores del Excel</caption>

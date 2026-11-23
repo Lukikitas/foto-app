@@ -1,4 +1,3 @@
-import ImportStoreField from './ImportStoreField';
 import { useRef, useState } from 'react';
 import { loadMetricsStore } from '../lib/metricsStore';
 import { loadComplaintHistory } from '../lib/complaintHistoryStore';
@@ -10,7 +9,6 @@ import './PeyaExcelImport.css';
 
 export default function RappiExcelImport({ disabled = false, onBusy }) {
   const input = useRef(null);
-  const [storeName, setStoreName] = useState('');
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +21,7 @@ export default function RappiExcelImport({ disabled = false, onBusy }) {
     setError(''); setNotice(''); setPreview(null); working(true);
     try {
       const { readRappiFile } = await import('../lib/rappiWorkbookReader');
-      const report = await readRappiFile(file, { storeName });
+      const report = await readRappiFile(file);
       const [metrics, history] = await Promise.all([loadMetricsStore({ strict: true }), loadComplaintHistory({ force: true, strict: true })]);
       const changes = mergeRappiHistory(history, report);
       setPreview({ report, metrics, filename: file.name, added: changes.added, updated: changes.updated });
@@ -42,17 +40,16 @@ export default function RappiExcelImport({ disabled = false, onBusy }) {
   return (
     <section className="peya-import rappi-import" aria-label="Importar Excel Rappi">
       <div className="peya-import__heading">
-        <div><h3>Excel Rappi / Rappi Turbo</h3><p>La cuenta se detecta desde la columna Tienda; «Turbo» identifica Rappi Turbo.</p></div>
+        <div><h3>Excel Rappi / Rappi Turbo</h3><p>La cuenta se detecta automáticamente desde la columna Tienda. Solo se importa La Plata.</p></div>
         <button type="button" className="btn btn--ghost" disabled={disabled || busy} onClick={() => input.current?.click()}>Importar Excel Rappi</button>
         <input ref={input} type="file" accept=".xlsx" hidden onChange={select} />
       </div>
-      <ImportStoreField value={storeName} disabled={disabled || busy} onChange={value => { setStoreName(value); setPreview(null); setError(''); }} />
       {busy && <p role="status">Procesando el Excel…</p>}
       {error && <p className="message message--error" role="alert">{error}</p>}
       {notice && <p className="message message--success" role="status">{notice}</p>}
       {preview && <div className="peya-import__preview">
         <h4>Vista previa · {preview.report.aggregators.map(getAggregatorLabel).join(' + ')}</h4>
-        <p>{preview.filename} · Local: {preview.report.storeName} · {preview.report.from.split('-').reverse().join('/')} al {preview.report.to.split('-').reverse().join('/')}</p>
+        <p>{preview.filename} · {preview.report.from.split('-').reverse().join('/')} al {preview.report.to.split('-').reverse().join('/')}</p>
         <p>{preview.report.complaints.length} reclamos: {preview.added} nuevos y {preview.updated} existentes. {preview.report.excluded} filas de otros locales excluidas. {preview.report.duplicates} duplicados omitidos.</p>
         <p>Compensación del restaurante: <strong>{formatMoney(preview.report.complaints.reduce((sum, c) => sum + (c.amount || 0), 0))}</strong>. «$» significa cero. {preview.report.missingAmounts > 0 ? preview.report.missingAmounts + ' reclamos sin monto informado.' : ''}</p>
         <p>Fechas sin hora. Se actualizarán únicamente las quejas de esta cuenta en el período. Se conservan pedidos totales, AWT, refutaciones y fotos. Los datos presentes, incluidos montos, reemplazarán los anteriores al confirmar en Gestionar.</p>

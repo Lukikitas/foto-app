@@ -235,7 +235,7 @@ export function generateReportHtml(report, options = {}) {
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Informe de Métricas y Reclamos — STAR-APP Delivery</title>
+  <title>Informe de Métricas y Reclamos — Delivery La Plata</title>
   <style>
     /* ==========================================================================
        Print & Executive Document Styles
@@ -785,7 +785,7 @@ export function generateReportHtml(report, options = {}) {
 <body>
   <div class="no-print-bar">
     <div>
-      <strong>Vista previa para PDF / Impresión</strong> · STAR-APP Delivery
+      <strong>Vista previa para PDF / Impresión</strong> · Delivery La Plata
     </div>
     <div>
       <button class="btn-print" onclick="window.print()">Guardar como PDF / Imprimir</button>
@@ -798,7 +798,7 @@ export function generateReportHtml(report, options = {}) {
     <!-- Header -->
     <header class="report-header">
       <div class="report-brand">
-        <span class="report-brand-tag">STAR-APP DELIVERY</span>
+        <span class="report-brand-tag">DELIVERY LA PLATA</span>
         <h1 class="report-title">${escapeHtml(title)}</h1>
         <p class="report-subtitle">Control de calidad operativo, reclamos y efectividad de refutaciones</p>
       </div>
@@ -1153,7 +1153,7 @@ export function generateReportHtml(report, options = {}) {
 
     <!-- Footer -->
     <footer class="report-footer">
-      <div>STAR-APP Delivery · Sistema Oficial de Registro y Control de Métricas</div>
+      <div>Delivery La Plata · Sistema Oficial de Registro y Control de Métricas</div>
       <div>Generado el ${escapeHtml(emissionDate)} · Documento Confidencial</div>
     </footer>
   </div>

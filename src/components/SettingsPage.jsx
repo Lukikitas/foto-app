@@ -394,7 +394,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved, dat
     <section className="settings settings--rework">
       <header className="settings__header">
         <div><span className="settings__eyebrow">Preferencias del local</span><h2>Ajustes</h2><p>{activeCategory.description}</p></div>
-        <span className="settings__local">Tu operación <span>· STAR-APP Delivery</span></span>
+        <span className="settings__local">La Plata <span>· STAR-APP Delivery</span></span>
       </header>
       <nav className="settings__categories" aria-label="Categorías de ajustes">
         {CATEGORIES.map(item => <button key={item.id} type="button" className={category === item.id ? 'is-active' : ''}
@@ -519,7 +519,7 @@ export default function SettingsPage({ theme, onThemeChange, onTargetsSaved, dat
         <div className="settings__general-row"><div><h3>Diagnóstico de capturas y subidas</h3><p>Guardá el registro técnico de este celular para revisar trabas o envíos pendientes. No incluye fotos ni datos de pedidos.</p></div><button type="button" className="btn btn--ghost btn--small" onClick={downloadReliabilityReport}>Descargar diagnóstico</button></div>
         <div className="settings__general-row"><div><h3>Apariencia</h3><p>El tema se guarda en este dispositivo.</p></div><div className="settings__theme" role="group" aria-label="Tema de la app">{[{ id: 'light', label: 'Claro' }, { id: 'dark', label: 'Oscuro' }].map(item => <button key={item.id} aria-pressed={theme === item.id} className={theme === item.id ? 'is-active' : ''} onClick={() => onThemeChange(item.id)}>{item.label}</button>)}</div></div>
         <div className="settings__general-row"><div><h3>Manual de uso</h3><p>Fotos, galería, reclamos y refutaciones. Podés guardarlo como PDF.</p></div><a className="btn btn--ghost btn--small" href={`${import.meta.env.BASE_URL}manual/index.html`} target="_blank" rel="noopener noreferrer">Abrir manual ↗</a></div>
-        <div className="settings__general-row"><div><h3>STAR-APP Delivery <span className="settings__version-pill">v{APP_VERSION}</span></h3><p>Versión instalada</p></div><button ref={releaseButtonRef} className="btn btn--ghost btn--small" onClick={() => setReleaseOpen(true)}>Ver novedades</button></div>
+        <div className="settings__general-row"><div><h3>STAR-APP Delivery <span className="settings__version-pill">v{APP_VERSION}</span></h3><p>Local: La Plata · Versión instalada</p></div><button ref={releaseButtonRef} className="btn btn--ghost btn--small" onClick={() => setReleaseOpen(true)}>Ver novedades</button></div>
       </section>}
 
       {category === 'admin' && <section className="settings__card settings__administration">

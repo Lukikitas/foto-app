@@ -170,9 +170,8 @@ function OperationalApp() {
       <nav className="app-nav" aria-label="Navegacion principal">
         <div className="app-nav__top">
           <p className="app-nav__brand">
-            <img className="app-brand-star" src="/favicon.svg" alt="" />
             STAR-APP Delivery
-            <span>Gestión de delivery</span>
+            <span>Local: La Plata</span>
           </p>
           <button
             type="button"

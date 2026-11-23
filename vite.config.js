@@ -106,7 +106,7 @@ export default defineConfig(({ mode }) => ({
       filename: 'sw.js',
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'favicon.ico', 'pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png', 'apple-touch-icon.png'],
+      includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff2,wasm,gz}'],
         globIgnores: ['**/node_modules/**', '**/presentacion/**', '**/manual/**', '**/tesseract/**',
@@ -116,7 +116,7 @@ export default defineConfig(({ mode }) => ({
         rollupFormat: 'iife',
       },
       manifest: {
-        name: 'STAR-APP Delivery',
+        name: 'Delivery La Plata',
         short_name: 'Delivery',
         description: 'Registro de fotos y archivos de delivery',
         theme_color: '#E4002B',
@@ -135,10 +135,15 @@ export default defineConfig(({ mode }) => ({
             src: 'pwa-512.png',
             sizes: '512x512',
             type: 'image/png',
+          },
+          {
+            src: 'pwa-512.png',
+            sizes: '512x512',
+            type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'pwa-maskable-512.png',
+            src: 'pwa-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

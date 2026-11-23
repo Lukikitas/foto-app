@@ -8413,5 +8413,3 @@ button.metrics-agg:focus-visible {
 .demo-banner { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem 1rem; border: 1px solid var(--accent); background: var(--surface); padding: .7rem 1rem; border-radius: .8rem; margin-bottom: 1.2rem; font-size: .85rem; }
 .demo-banner strong { color: var(--accent); }
 .demo-banner span { flex: 1; min-width: 180px; }
-
-.app-brand-star { display: inline-block; width: 32px; height: 32px; vertical-align: middle; margin-right: .4rem; }
